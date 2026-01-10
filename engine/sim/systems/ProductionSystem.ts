@@ -57,11 +57,27 @@ export class ProductionSystem extends BaseSimSystem {
             // Pollution (Eco impact)
             ecoChange += (def.pollution > 0 ? (def.pollution * 0.05 / 10) : (def.pollution / 10));
 
+            // Power/Water efficiency
+            let powerEfficiency = 1.0;
+            let waterEfficiency = 1.0;
+
+            // Buildings with power consumption operate at 25% if grid has deficit
+            if (def.power?.consumes && state.powerGrid?.deficit > 0) {
+                powerEfficiency = 0.25;
+            }
+
+            // Buildings with water consumption operate at 50% if network has deficit
+            if (def.water?.consumes && state.waterNetwork?.deficit > 0) {
+                waterEfficiency = 0.5;
+            }
+
+            const utilityEfficiency = powerEfficiency * waterEfficiency;
+
             // Production
             if (def.productionType === 'MINERALS') {
-                mineralProd += (def.production || 0) * modifiers.production * 0.05;
+                mineralProd += (def.production || 0) * modifiers.production * utilityEfficiency * 0.05;
             } else if (def.productionType === 'AGT') {
-                totalIncome += (def.production || 0) * ecoMult * trustMult;
+                totalIncome += (def.production || 0) * ecoMult * trustMult * utilityEfficiency;
             }
         }
 

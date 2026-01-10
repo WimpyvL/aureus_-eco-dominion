@@ -757,5 +757,193 @@ export const BuildingsFactory = {
         g.add(voxel(0.3, 0.6, 0.3, mats.hazard, -1.2, 1.6, 0.4));
 
         return g;
+    },
+
+    // WORKSHOP - Construction speed boost facility (2x2)
+    [BuildingType.WORKSHOP]: () => {
+        const g = new THREE.Group();
+        // Foundation
+        g.add(voxel(2.0, 0.25, 2.0, mats.concrete, 0, 0, 0));
+
+        // Main building with corrugated metal walls
+        g.add(voxel(1.6, 1.8, 1.6, mats.metal, 0, 0.25, 0));
+
+        // Roof (slanted shed style)
+        g.add(voxel(1.8, 0.15, 1.8, mats.metalLight, 0, 2.05, 0));
+        g.add(voxel(1.6, 0.1, 1.6, mats.metalLight, 0, 2.2, -0.1));
+
+        // Large garage door (front)
+        g.add(voxel(1.0, 1.4, 0.1, mats.metalLight, 0, 0.25, 0.81));
+        g.add(voxel(0.9, 1.3, 0.05, mats.darkPipe, 0, 0.3, 0.83));
+
+        // Windows (sides)
+        g.add(voxel(0.08, 0.5, 0.6, mats.glass, 0.81, 1.0, 0));
+        g.add(voxel(0.08, 0.5, 0.6, mats.glass, -0.81, 1.0, 0));
+
+        // Workbenches inside
+        g.add(voxel(0.6, 0.5, 0.3, mats.wood, -0.5, 0.25, -0.5));
+        g.add(voxel(0.6, 0.5, 0.3, mats.wood, 0.5, 0.25, -0.5));
+
+        // Tool racks
+        g.add(voxel(0.08, 1.0, 0.4, mats.metal, -0.75, 0.8, -0.7));
+        g.add(voxel(0.08, 1.0, 0.4, mats.metal, 0.75, 0.8, -0.7));
+
+        // Hanging tools (colored accents)
+        g.add(voxel(0.05, 0.15, 0.05, mats.hazard, -0.75, 1.3, -0.6));
+        g.add(voxel(0.05, 0.2, 0.05, mats.blueMetal, -0.75, 1.3, -0.75));
+        g.add(voxel(0.05, 0.15, 0.05, mats.hazard, 0.75, 1.3, -0.6));
+
+        // Floor markings
+        g.add(voxel(1.4, 0.02, 0.15, mats.hazard, 0, 0.26, 0.3));
+
+        // Exterior details - AC unit
+        g.add(voxel(0.4, 0.3, 0.3, mats.metal, 0.7, 1.6, -0.85));
+
+        // Light fixture
+        g.add(voxel(0.3, 0.1, 0.3, mats.metal, 0, 1.95, 0));
+        g.add(voxel(0.15, 0.08, 0.15, mats.emissiveGreen, 0, 1.87, 0));
+
+        // Signage
+        g.add(voxel(0.5, 0.3, 0.08, mats.blueMetal, 0, 1.7, 0.85));
+
+        return g;
+    },
+
+    // STORAGE_DEPOT - Expanded mineral storage (2x2)
+    [BuildingType.STORAGE_DEPOT]: () => {
+        const g = new THREE.Group();
+        // Foundation
+        g.add(voxel(2.0, 0.2, 2.0, mats.concrete, 0, 0, 0));
+
+        // Main warehouse structure
+        g.add(voxel(1.8, 2.0, 1.8, mats.metalLight, 0, 0.2, 0));
+
+        // Corrugated roof
+        g.add(voxel(2.0, 0.15, 2.0, mats.metal, 0, 2.2, 0));
+
+        // Loading dock (front)
+        g.add(voxel(1.5, 0.3, 0.4, mats.concrete, 0, 0.2, 1.1));
+
+        // Large cargo doors
+        g.add(voxel(0.6, 1.5, 0.1, mats.hazard, -0.45, 0.2, 0.91));
+        g.add(voxel(0.6, 1.5, 0.1, mats.hazard, 0.45, 0.2, 0.91));
+
+        // Crates and containers inside (visible)
+        g.add(voxel(0.5, 0.5, 0.5, mats.wood, -0.5, 0.2, -0.4));
+        g.add(voxel(0.5, 0.5, 0.5, mats.blueMetal, 0.5, 0.2, -0.4));
+        g.add(voxel(0.4, 0.4, 0.4, mats.wood, -0.5, 0.7, -0.4));
+        g.add(voxel(0.6, 0.6, 0.6, mats.metal, 0, 0.2, -0.5));
+
+        // Forklift
+        g.add(voxel(0.3, 0.2, 0.5, mats.hazard, -0.2, 0.2, 0.5));
+        g.add(voxel(0.08, 0.5, 0.08, mats.metal, -0.3, 0.4, 0.3));
+        g.add(voxel(0.25, 0.08, 0.4, mats.metal, -0.2, 0.4, 0.7));
+
+        // Exterior shelving
+        g.add(voxel(0.08, 1.5, 0.5, mats.metal, -0.9, 0.8, 0));
+
+        // Inventory sign
+        g.add(voxel(0.6, 0.4, 0.08, mats.white, 0, 1.8, 0.92));
+        g.add(voxel(0.4, 0.25, 0.05, mats.emissiveCyan, 0, 1.85, 0.95));
+
+        // Ventilation
+        g.add(voxel(0.3, 0.3, 0.3, mats.metal, 0.7, 2.2, 0));
+
+        return g;
+    },
+
+    // GENERATOR - Fuel power generator
+    [BuildingType.GENERATOR]: () => {
+        const g = new THREE.Group();
+        // Foundation
+        g.add(voxel(1.0, 0.2, 1.0, mats.concrete, 0, 0, 0));
+
+        // Main generator housing
+        g.add(voxel(0.9, 1.0, 0.9, mats.metal, 0, 0.2, 0));
+
+        // Ventilation grilles (sides)
+        g.add(voxel(0.05, 0.6, 0.6, mats.darkPipe, 0.46, 0.5, 0));
+        g.add(voxel(0.05, 0.6, 0.6, mats.darkPipe, -0.46, 0.5, 0));
+
+        // Exhaust pipe
+        g.add(voxel(0.2, 1.5, 0.2, mats.metal, 0.3, 1.0, 0.3));
+        g.add(voxel(0.25, 0.1, 0.25, mats.darkPipe, 0.3, 2.5, 0.3));
+
+        // Control panel
+        g.add(voxel(0.3, 0.4, 0.1, mats.metal, 0, 0.8, 0.46));
+        g.add(voxel(0.1, 0.1, 0.05, mats.emissiveGreen, -0.08, 0.95, 0.48));
+        g.add(voxel(0.1, 0.1, 0.05, mats.emissiveRed, 0.08, 0.95, 0.48));
+
+        // Fuel tank
+        g.add(voxel(0.3, 0.5, 0.3, mats.hazard, -0.3, 0.2, -0.3));
+
+        // Power cables
+        g.add(voxel(0.6, 0.08, 0.08, mats.darkPipe, 0, 0.2, 0.55));
+
+        // Top housing
+        g.add(voxel(0.95, 0.15, 0.95, mats.metalLight, 0, 1.2, 0));
+
+        // Warning stripes
+        g.add(voxel(0.9, 0.08, 0.05, mats.hazard, 0, 0.3, 0.46));
+
+        return g;
+    },
+
+    // RESERVOIR - Large industrial water storage (3x3)
+    [BuildingType.RESERVOIR]: () => {
+        const g = new THREE.Group();
+
+        // Large concrete foundation
+        g.add(voxel(3.0, 0.3, 3.0, mats.concrete, 0, 0, 0));
+
+        // Concrete walls (rectangular basin)
+        g.add(voxel(3.0, 1.0, 0.2, mats.concrete, 0, 0.3, -1.4)); // Back wall
+        g.add(voxel(3.0, 1.0, 0.2, mats.concrete, 0, 0.3, 1.4));  // Front wall
+        g.add(voxel(0.2, 1.0, 2.8, mats.concrete, -1.4, 0.3, 0)); // Left wall
+        g.add(voxel(0.2, 1.0, 2.8, mats.concrete, 1.4, 0.3, 0));  // Right wall
+
+        // Water surface
+        g.add(voxel(2.6, 0.15, 2.6, mats.reservoirWater, 0, 0.9, 0));
+
+        // Metal gantry walkway across top
+        g.add(voxel(3.0, 0.1, 0.4, mats.metal, 0, 1.35, 0));
+        // Gantry supports
+        g.add(voxel(0.1, 0.8, 0.1, mats.metal, -1.3, 0.9, 0));
+        g.add(voxel(0.1, 0.8, 0.1, mats.metal, 1.3, 0.9, 0));
+
+        // Railings
+        g.add(voxel(3.0, 0.4, 0.05, mats.metalLight, 0, 1.55, 0.18));
+        g.add(voxel(3.0, 0.4, 0.05, mats.metalLight, 0, 1.55, -0.18));
+
+        // Pump station (corner)
+        g.add(voxel(0.8, 1.5, 0.8, mats.metal, -1.0, 0.3, -1.0));
+        g.add(voxel(0.85, 0.1, 0.85, mats.metalLight, -1.0, 1.8, -1.0));
+
+        // Pump pipes connecting to basin
+        g.add(voxel(0.15, 0.15, 0.6, mats.blueMetal, -1.0, 0.6, -0.4));
+        g.add(voxel(0.15, 0.6, 0.15, mats.blueMetal, -0.7, 0.4, -1.0));
+
+        // Control panel on pump station
+        g.add(voxel(0.3, 0.4, 0.1, mats.metal, -0.7, 1.0, -0.55));
+        g.add(voxel(0.15, 0.2, 0.05, mats.emissiveGreen, -0.7, 1.15, -0.5));
+
+        // Outlet pipes (side)
+        g.add(voxel(0.2, 0.2, 0.8, mats.blueMetal, 1.3, 0.5, 0.8));
+        g.add(voxel(0.3, 0.3, 0.5, mats.metal, 1.5, 0.4, 1.2));
+
+        // Water level gauge
+        g.add(voxel(0.08, 0.8, 0.08, mats.glass, 1.35, 0.7, -0.8));
+        g.add(voxel(0.1, 0.3, 0.1, mats.emissiveCyan, 1.35, 1.1, -0.8));
+
+        // Warning signage
+        g.add(voxel(0.4, 0.3, 0.05, mats.hazard, 0, 1.0, 1.43));
+
+        // Ladder access
+        g.add(voxel(0.08, 1.2, 0.15, mats.metal, 0.8, 0.6, 1.35));
+
+        // Overflow drain grate
+        g.add(voxel(0.4, 0.05, 0.4, mats.metalLight, 1.1, 0.35, 1.1));
+
+        return g;
     }
 }

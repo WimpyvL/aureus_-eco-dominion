@@ -385,8 +385,6 @@ export class IsoCameraSystem {
         this.updateCameraTransform();
     }
 
-    private zoomLevel = 7; // Start at max zoom out (7 scrolls from 15)
-
     public zoom(delta: number): void {
         // Step-based zoom: each tick is roughly 1 step
         const direction = delta > 0 ? 1 : -1;

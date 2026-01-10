@@ -19,7 +19,8 @@ import { Simulation } from '../engine/sim';
 import {
     AgentSystem, JobGenerationSystem, EnvironmentSystem, EconomySystem,
     ColonySystem, LogisticsSystem, EventSystem, MissionSystem,
-    ProductionSystem, ConstructionSystem
+    ProductionSystem, ConstructionSystem, EraSystem,
+    PowerGridSystem, WaterNetworkSystem
 } from '../engine/sim/systems';
 
 import { GameState, GameStep, Agent, GridTile, BuildingType, SfxType } from '../types';
@@ -99,7 +100,10 @@ export class AureusWorld extends BaseWorld {
         this.sim.addSystem(new LogisticsSystem());
         this.sim.addSystem(new EventSystem());
         this.sim.addSystem(new MissionSystem());
+        this.sim.addSystem(new PowerGridSystem());
+        this.sim.addSystem(new WaterNetworkSystem());
         this.sim.addSystem(new ProductionSystem());
+        this.sim.addSystem(new EraSystem());
 
         this.agentSystem = new AgentSystem(this.jobs, this.constructionSystem);
         this.sim.addSystem(this.agentSystem);
@@ -177,6 +181,13 @@ export class AureusWorld extends BaseWorld {
 
         const def = BUILDINGS[buildingType];
         if (!def) return;
+
+        // NEW: Era validation
+        if (!state.cheatsEnabled && !state.unlockedEras.includes(def.era)) {
+            console.warn(`Cannot place ${buildingType}: Era ${def.era} not unlocked`);
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+            return;
+        }
 
         // Validate placement
         const tile = state.grid[index];
@@ -273,6 +284,21 @@ export class AureusWorld extends BaseWorld {
             type: 'POSITIVE',
             timestamp: Date.now()
         });
+    }
+
+    buyBuilding(buildingType: string, cost: number): void {
+        const state = this.stateManager.getMutableState();
+
+        // Deduct cost
+        state.resources.agt -= cost;
+
+        // Add to inventory
+        if (!state.inventory[buildingType]) {
+            state.inventory[buildingType] = 0;
+        }
+        state.inventory[buildingType]++;
+
+        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
     }
 
     setAutoSell(enabled: boolean, threshold: number): void {

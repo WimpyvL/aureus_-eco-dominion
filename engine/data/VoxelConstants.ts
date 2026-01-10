@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import { BuildingType, BuildingDef, GameState, TechId, TechDefinition } from '../../types';
+import { BuildingType, BuildingDef, GameState, TechId, TechDefinition, Era, EraDef } from '../../types';
 
 export const COLORS = {
   BG: 0x87CEEB, // Sky Blue
@@ -24,7 +24,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     stats: '',
     buildTime: 0,
     maintenance: 0,
-    pollution: 0
+    pollution: 0,
+    era: Era.SETTLEMENT
   },
   [BuildingType.ROAD]: {
     type: BuildingType.ROAD,
@@ -35,7 +36,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     stats: 'Infrastructure',
     buildTime: 1,
     maintenance: 0,
-    pollution: 0
+    pollution: 0,
+    era: Era.SETTLEMENT,
   },
   [BuildingType.PIPE]: {
     type: BuildingType.PIPE,
@@ -46,7 +48,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     stats: 'Infrastructure',
     buildTime: 5,
     maintenance: 0.5,
-    pollution: 0
+    pollution: 0,
+    era: Era.INDUSTRY
   },
   [BuildingType.FENCE]: {
     type: BuildingType.FENCE,
@@ -57,7 +60,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     stats: 'Infrastructure',
     buildTime: 2,
     maintenance: 0.1,
-    pollution: 0
+    pollution: 0,
+    era: Era.GROWTH
   },
   [BuildingType.POND]: {
     type: BuildingType.POND,
@@ -68,7 +72,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     stats: 'Water Source',
     buildTime: 0,
     maintenance: 0,
-    pollution: -0.1
+    pollution: -0.1,
+    era: Era.INDUSTRY,
+    water: { produces: 5 },
   },
   [BuildingType.RESERVOIR]: {
     type: BuildingType.RESERVOIR,
@@ -81,9 +87,12 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     depth: 3,
     buildTime: 90,
     maintenance: 40,
-    pollution: 0.2, // Minor pollution from pumps
+    pollution: 0.2,
     production: 5,
-    productionType: 'TRUST' // Provides stability
+    productionType: 'TRUST',
+    era: Era.SUSTAINABILITY,
+    power: { consumes: 2 },
+    water: { produces: 50 },
   },
   [BuildingType.STAFF_QUARTERS]: {
     type: BuildingType.STAFF_QUARTERS,
@@ -95,10 +104,13 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     width: 2,
     depth: 2,
     buildTime: 15,
-    maintenance: 2, // Reduced for balance
+    maintenance: 2,
     pollution: 0.6,
-    production: 20, // Increased for better income
-    productionType: 'AGT'
+    production: 20,
+    productionType: 'AGT',
+    era: Era.SETTLEMENT,
+    power: { consumes: 1 },
+    water: { consumes: 1 },
   },
   [BuildingType.CANTEEN]: {
     type: BuildingType.CANTEEN,
@@ -112,6 +124,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     buildTime: 20,
     maintenance: 3,
     pollution: -0.5,
+    era: Era.SETTLEMENT,
+    power: { consumes: 2 },
+    water: { consumes: 2 },
   },
   [BuildingType.SOCIAL_HUB]: {
     type: BuildingType.SOCIAL_HUB,
@@ -125,6 +140,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     buildTime: 30,
     maintenance: 5,
     pollution: 0,
+    era: Era.GROWTH
   },
   [BuildingType.SECURITY_POST]: {
     type: BuildingType.SECURITY_POST,
@@ -138,7 +154,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     maintenance: 5,
     pollution: 0,
     production: 1,
-    productionType: 'TRUST'
+    productionType: 'TRUST',
+    era: Era.GROWTH
   },
   [BuildingType.WASH_PLANT]: {
     type: BuildingType.WASH_PLANT,
@@ -151,10 +168,13 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     depth: 2,
     buildTime: 45,
     dependency: BuildingType.STAFF_QUARTERS,
-    maintenance: 10, // Reduced for balance
+    maintenance: 10,
     pollution: 12.0,
-    production: 35, // Increased for better income
-    productionType: 'MINERALS'
+    production: 35,
+    productionType: 'MINERALS',
+    era: Era.SETTLEMENT,
+    power: { consumes: 5 },
+    water: { consumes: 5 },
   },
   [BuildingType.RECYCLING_PLANT]: {
     type: BuildingType.RECYCLING_PLANT,
@@ -170,7 +190,10 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     maintenance: 5,
     pollution: 1.0,
     production: 20,
-    productionType: 'MINERALS'
+    productionType: 'MINERALS',
+    era: Era.INDUSTRY,
+    power: { consumes: 8 },
+    water: { consumes: 3 },
   },
   [BuildingType.SOLAR_ARRAY]: {
     type: BuildingType.SOLAR_ARRAY,
@@ -178,12 +201,14 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     cost: 500,
     desc: 'High-density photovoltaic panels.',
     ecoReq: 0,
-    stats: 'Regens Eco',
+    stats: 'Regens Eco, +5 Power',
     width: 2,
     depth: 1,
     buildTime: 20,
     maintenance: 2,
-    pollution: -2.0 // Reduced from -3.0 for balance
+    pollution: -2.0,
+    era: Era.SETTLEMENT,
+    power: { produces: 5 },
   },
   [BuildingType.COMMUNITY_GARDEN]: {
     type: BuildingType.COMMUNITY_GARDEN,
@@ -198,7 +223,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     maintenance: 3,
     pollution: -1.5,
     production: 4,
-    productionType: 'TRUST'
+    productionType: 'TRUST',
+    era: Era.GROWTH
   },
   [BuildingType.WATER_WELL]: {
     type: BuildingType.WATER_WELL,
@@ -206,12 +232,14 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     cost: 1200,
     desc: 'Draws clean water from aquifers.',
     ecoReq: 5,
-    stats: '+2 Trust/s',
+    stats: '+2 Trust/s, +10 Water',
     buildTime: 40,
     maintenance: 5,
     pollution: 0,
     production: 2,
-    productionType: 'TRUST'
+    productionType: 'TRUST',
+    era: Era.SETTLEMENT,
+    water: { produces: 10 },
   },
   [BuildingType.WIND_TURBINE]: {
     type: BuildingType.WIND_TURBINE,
@@ -219,10 +247,12 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     cost: 2500,
     desc: 'Tall turbine harnessing renewable wind energy.',
     ecoReq: 10,
-    stats: 'Massive Eco Regen',
+    stats: 'Massive Eco Regen, +8 Power',
     buildTime: 90,
     maintenance: 3,
-    pollution: -6.0
+    pollution: -6.0,
+    era: Era.GROWTH,
+    power: { produces: 8 },
   },
   [BuildingType.LOCAL_SCHOOL]: {
     type: BuildingType.LOCAL_SCHOOL,
@@ -237,7 +267,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     maintenance: 25,
     pollution: 0.3,
     production: 25, // Increased production
-    productionType: 'TRUST'
+    productionType: 'TRUST',
+    era: Era.SUSTAINABILITY
   },
   [BuildingType.SAFARI_LODGE]: {
     type: BuildingType.SAFARI_LODGE,
@@ -252,7 +283,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     maintenance: 30,
     pollution: 1.5, // Less pollution for eco building
     production: 150, // Better production for cost
-    productionType: 'AGT'
+    productionType: 'AGT',
+    era: Era.PROSPERITY
   },
   [BuildingType.GREEN_TECH_LAB]: {
     type: BuildingType.GREEN_TECH_LAB,
@@ -265,7 +297,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     depth: 3,
     buildTime: 1000, // Very long build time
     maintenance: 50,
-    pollution: -40.0 // Massive eco benefit
+    pollution: -40.0, // Massive eco benefit
+    era: Era.PROSPERITY
   },
   [BuildingType.MINING_HEADFRAME]: {
     type: BuildingType.MINING_HEADFRAME,
@@ -281,7 +314,10 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     maintenance: 35,
     pollution: 25.0,
     production: 60,
-    productionType: 'MINERALS'
+    productionType: 'MINERALS',
+    era: Era.PROSPERITY,
+    power: { consumes: 25 },
+    water: { consumes: 2 },
   },
   [BuildingType.ORE_FOUNDRY]: {
     type: BuildingType.ORE_FOUNDRY,
@@ -297,7 +333,88 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     maintenance: 25,
     pollution: 18.0,
     production: 40,
-    productionType: 'MINERALS'
+    productionType: 'MINERALS',
+    era: Era.INDUSTRY,
+    power: { consumes: 15 },
+  },
+  [BuildingType.STORAGE_DEPOT]: {
+    type: BuildingType.STORAGE_DEPOT,
+    name: 'Storage Depot',
+    cost: 600,
+    desc: 'Expands mineral storage capacity by 500 units.',
+    ecoReq: 0,
+    stats: '+500 Storage',
+    width: 2,
+    depth: 2,
+    buildTime: 30,
+    maintenance: 1,
+    pollution: 0.2,
+    era: Era.SETTLEMENT
+  },
+  [BuildingType.WORKSHOP]: {
+    type: BuildingType.WORKSHOP,
+    name: 'Workshop',
+    cost: 900,
+    desc: 'Speeds up construction in nearby buildings by 25%.',
+    ecoReq: 0,
+    stats: '+25% Build Speed',
+    width: 2,
+    depth: 2,
+    buildTime: 45,
+    maintenance: 2,
+    pollution: 0.5,
+    era: Era.SETTLEMENT
+  },
+  [BuildingType.GENERATOR]: {
+    type: BuildingType.GENERATOR,
+    name: 'Fuel Generator',
+    cost: 1800,
+    desc: 'Provides power but produces pollution. Future power grid support.',
+    ecoReq: 0,
+    stats: '+10 Power',
+    buildTime: 40,
+    maintenance: 4,
+    pollution: 3.0,
+    era: Era.GROWTH,
+    power: { produces: 10 },
+  }
+};
+
+export const ERAS: Record<Era, EraDef> = {
+  [Era.SETTLEMENT]: {
+    id: Era.SETTLEMENT,
+    name: 'Era 1: Settlement',
+    description: 'Establish your colony basics',
+    unlockConditions: { tutorialComplete: true },
+    color: '#94a3b8' // slate
+  },
+  [Era.GROWTH]: {
+    id: Era.GROWTH,
+    name: 'Era 2: Growth',
+    description: 'Expand your workforce',
+    unlockConditions: { minColonists: 5, minAgt: 1000, minBuildings: 3 },
+    color: '#22c55e' // green
+  },
+  [Era.INDUSTRY]: {
+    id: Era.INDUSTRY,
+    name: 'Era 3: Industry',
+    description: 'Heavy production and resource scaling',
+    unlockConditions: { minColonists: 10, minEco: 50 },
+    color: '#eab308' // yellow
+  },
+  [Era.SUSTAINABILITY]: {
+    id: Era.SUSTAINABILITY,
+    name: 'Era 4: Sustainability',
+    description: 'Balance restoration and advanced tech',
+    unlockConditions: { minEco: 60, minTrust: 50 },
+    color: '#3b82f6' // blue
+  },
+  [Era.PROSPERITY]: {
+    id: Era.PROSPERITY,
+    name: 'Era 5: Prosperity',
+    description: 'The height of galactic development',
+    unlockConditions: { minEco: 80, minTrust: 80, minColonists: 15 },
+    color: '#a855f7' // purple
   }
 };
 

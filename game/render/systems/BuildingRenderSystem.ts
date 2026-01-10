@@ -9,7 +9,7 @@ import { BuildingType, GridTile } from '../../../types';
 import { BuildingFactory } from '../../../engine/render/utils/VoxelGenerators';
 import { BUILDINGS, COLORS } from '../../../engine/data/VoxelConstants'; // Ensure these are exported or available
 import { sharedBoxGeo } from '../../../engine/render/utils/VoxelBuilder';
-import { mats, waterFlowMaterial } from '../../../engine/render/materials/VoxelMaterials';
+import { mats } from '../../../engine/render/materials/VoxelMaterials';
 
 interface AnimationDef {
     mesh: THREE.Object3D;
@@ -87,11 +87,18 @@ export class BuildingRenderSystem {
 
                 const cached = this.tileCache.get(tile.id);
                 const currentProgress = 1 - ((tile.constructionTimeLeft || 0) / (BUILDINGS[tile.buildingType]?.buildTime || 1));
-                const stateHash = `${tile.buildingType}_${tile.isUnderConstruction}_${tile.integrity}_${tile.waterStatus}`;
+
+                // For infrastructure tiles, include connection state in the hash so neighbors trigger updates
+                let connectionHash = '';
+                if (tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE) {
+                    const conn = this.getInfrastructureConnections(tile, grid);
+                    connectionHash = `_${conn.north}_${conn.south}_${conn.east}_${conn.west}`;
+                }
+                const stateHash = `${tile.buildingType}_${tile.isUnderConstruction}_${tile.integrity}_${tile.waterStatus}${connectionHash}`;
 
                 // Detect Changes
                 if (!cached || cached.type !== tile.buildingType || Math.abs(cached.progress - currentProgress) > 0.05 || cached.state !== stateHash) {
-                    this.updateTile(tile, currentProgress, offset);
+                    this.updateTile(tile, currentProgress, offset, grid);
                     this.tileCache.set(tile.id, {
                         type: tile.buildingType,
                         progress: currentProgress,
@@ -115,7 +122,27 @@ export class BuildingRenderSystem {
         }
     }
 
-    private updateTile(tile: GridTile, progress: number, offset: number) {
+    /**
+     * Calculate infrastructure connections by checking neighboring tiles
+     */
+    private getInfrastructureConnections(tile: GridTile, grid: GridTile[]): { north: boolean; south: boolean; east: boolean; west: boolean } {
+        const targetType = tile.buildingType;
+
+        // Find neighbors by coordinates (tile.x, tile.y)
+        const north = grid.find(t => t.x === tile.x && t.y === tile.y - 1);
+        const south = grid.find(t => t.x === tile.x && t.y === tile.y + 1);
+        const east = grid.find(t => t.x === tile.x + 1 && t.y === tile.y);
+        const west = grid.find(t => t.x === tile.x - 1 && t.y === tile.y);
+
+        return {
+            north: north?.buildingType === targetType,
+            south: south?.buildingType === targetType,
+            east: east?.buildingType === targetType,
+            west: west?.buildingType === targetType
+        };
+    }
+
+    private updateTile(tile: GridTile, progress: number, offset: number, grid?: GridTile[]) {
         // Remove existing
         if (this.buildingMeshes.has(tile.id)) {
             const mesh = this.buildingMeshes.get(tile.id)!;
@@ -127,7 +154,7 @@ export class BuildingRenderSystem {
         if (tile.buildingType === BuildingType.EMPTY && tile.foliage !== 'ILLEGAL_CAMP') return; // Empty (foliage handled by FoliageSystem)
 
         // Water is handled by TerrainRenderSystem now
-        if (tile.buildingType === BuildingType.POND || tile.buildingType === BuildingType.RESERVOIR) return;
+        if (tile.buildingType === BuildingType.POND) return;
 
         // Skip multi-tile tails (infrastructure excluded)
         if (tile.structureHeadIndex !== undefined && tile.id !== tile.structureHeadIndex &&
@@ -150,12 +177,13 @@ export class BuildingRenderSystem {
             seed
         };
 
-        // Infrastructure connections would need neighbor lookups... 
-        // For MVP migration, passing simplified config or ignoring connections visually for a moment?
-        // Let's omit `connections` logic for this pass to save space. 
-        // If it looks bad, we can add it back (requires full grid access).
+        // Infrastructure connections - look up neighbors for ROAD, PIPE, FENCE
+        let connections = undefined;
+        if (grid && (tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE)) {
+            connections = this.getInfrastructureConnections(tile, grid);
+        }
 
-        const buildingGroup = BuildingFactory[type](config);
+        const buildingGroup = BuildingFactory[type]({ ...config, connections });
         const root = new THREE.Group();
 
         const def = BUILDINGS[type as BuildingType];
@@ -257,6 +285,23 @@ export class BuildingRenderSystem {
             life: 1.0,
             decay: 0.02
         });
+    }
+
+    public setPinnedGhost(index: number | null) {
+        this.pinnedGhostIndex = index;
+        // If we have a pinned index, position the ghost there
+        if (index !== null && this.ghostBuilding) {
+            const offset = (this.gridSize - 1) / 2;
+            const x = index % this.gridSize;
+            const z = Math.floor(index / this.gridSize);
+            const def = BUILDINGS[this.ghostType!];
+            const w = def?.width || 1;
+            const d = def?.depth || 1;
+            const dx = (w - 1) / 2;
+            const dz = (d - 1) / 2;
+            this.ghostBuilding.position.set(x - offset + dx, 0, z - offset + dz);
+            this.ghostBuilding.visible = true;
+        }
     }
 
     public setGhostBuilding(type: BuildingType | null) {

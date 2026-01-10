@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 import { BiomeType } from '../../../types';
-import { mats, waterFlowMaterial } from '../materials/VoxelMaterials';
+import { mats } from '../materials/VoxelMaterials';
 
 // --- GEOMETRY CACHE (For standard primitives) ---
 const boxGeoCache: Record<string, THREE.BoxGeometry> = {};

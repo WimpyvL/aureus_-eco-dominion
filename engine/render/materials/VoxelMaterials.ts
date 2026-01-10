@@ -145,7 +145,18 @@ export const mats = {
   waterSurface: waterFlowMaterial,
   waterSeaweed: new THREE.MeshStandardMaterial({ color: 0x228b22, roughness: 0.8 }),
   waterCoral: new THREE.MeshStandardMaterial({ color: 0xf44336, roughness: 0.8 }),
-  waterGold: new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.8, roughness: 0.2 })
+  waterGold: new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.8, roughness: 0.2 }),
+
+  // Dedicated basin/reservoir water - turquoise with focused sun specular
+  reservoirWater: new THREE.MeshStandardMaterial({
+    color: 0x0e7490,           // Deep cyan/teal water
+    transparent: true,
+    opacity: 0.8,
+    metalness: 0.05,           // Very low - water isn't metallic
+    roughness: 0.4,            // Higher - diffuses reflection except sun specular
+    emissive: 0x083344,        // Very subtle deep glow
+    emissiveIntensity: 0.08
+  })
 };
 
 // Map keys used in worker to material definitions.

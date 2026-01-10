@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { JobSystem, MeshChunkResult, MeshChunkJob } from '../../../engine/jobs';
 import { GridTile } from '../../../types';
-import { matMaster, waterFlowMaterial } from '../../../engine/render/materials/VoxelMaterials';
+import { matMaster, mats } from '../../../engine/render/materials/VoxelMaterials';
 import { CHUNK_SIZE, getChunkId, getChunkKey } from '../../../engine/utils/ChunkUtils';
 
 interface ChunkRenderData {
@@ -250,7 +250,7 @@ export class TerrainRenderSystem {
             this.scene.add(chunk.mesh);
         }
 
-        chunk.waterMesh = createMesh(res.water, waterFlowMaterial, false);
+        chunk.waterMesh = createMesh(res.water, mats.reservoirWater, false);
         if (chunk.waterMesh) {
             chunk.waterMesh.receiveShadow = false;
             this.scene.add(chunk.waterMesh);

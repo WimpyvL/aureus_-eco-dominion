@@ -7,7 +7,6 @@
  * (|/) Klaasvaakie
  */
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { AudioEngine, SfxType } from './services/AudioEngine';
 import { useAureusEngine } from './game';
 
@@ -37,6 +36,7 @@ import { HomePage } from './components/HomePage';
 import { TradeTerminal } from './components/TradeTerminal';
 import { WeatherOverlay } from './components/WeatherOverlay';
 import { MobileBuildingConfirmation } from './components/MobileBuildingConfirmation';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 // Colonist Inspector Component
 const ColonistInspector: React.FC<{ agent: Agent; onClose: () => void; playSfx: (t: any) => void }> = ({ agent, onClose, playSfx }) => {
@@ -356,19 +356,7 @@ const App: React.FC = () => {
             case 'BUY_BUILDING':
                 // Add building to inventory and deduct cost
                 if (world) {
-                    const buildingType = action.payload.type;
-                    const cost = action.payload.cost;
-
-                    const state = world.stateManager.getMutableState();
-
-                    // Deduct cost
-                    state.resources.agt -= cost;
-
-                    // Add to inventory
-                    if (!state.inventory[buildingType]) {
-                        state.inventory[buildingType] = 0;
-                    }
-                    state.inventory[buildingType]++;
+                    world.buyBuilding(action.payload.type, action.payload.cost);
                 }
                 break;
             case 'BULLDOZE_TILE':
@@ -436,7 +424,13 @@ const App: React.FC = () => {
             {state && !showHomePage && !isIntroAnim && (
                 <>
                     <WeatherOverlay weather={state.weather} />
-                    <HUD resources={state.resources} financials={{ net: financials.net }} population={state.agents.filter(a => a.type !== 'ILLEGAL_MINER').length} />
+                    <HUD
+                        resources={state.resources}
+                        financials={{ net: financials.net }}
+                        population={state.agents.filter(a => a.type !== 'ILLEGAL_MINER').length}
+                        currentEra={state.currentEra}
+                        state={state}
+                    />
                     <Minimap
                         grid={state.grid}
                         agents={state.agents}
