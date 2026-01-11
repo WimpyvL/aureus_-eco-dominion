@@ -21,7 +21,16 @@ export interface BaseJob {
     priority: number;
     /** Timestamp when job was queued */
     queuedAt: number;
+    /** Cancellation flag for deduplication */
+    cancelled?: boolean;
 }
+
+export const JOB_PRIORITY = {
+    HIGH: 100,
+    PATHFINDING: 50,
+    MESHING: 10,
+    LOW: 1
+};
 
 /** Mesh generation job */
 export interface MeshChunkJob extends BaseJob {

@@ -23,7 +23,7 @@ import {
     PowerGridSystem, WaterNetworkSystem
 } from '../engine/sim/systems';
 
-import { GameState, GameStep, Agent, GridTile, BuildingType, SfxType } from '../types';
+import { GameState, GameStep, Agent, GridTile, BuildingType, SfxType, TechId } from '../types';
 import { GRID_SIZE, getEcoMultiplier } from '../engine/utils/GameUtils';
 import { BUILDINGS, TECHNOLOGIES } from '../engine/data/VoxelConstants';
 import { TerrainRenderSystem } from './render/systems/TerrainRenderSystem';
@@ -311,14 +311,16 @@ export class AureusWorld extends BaseWorld {
         const state = this.stateManager.getMutableState();
 
         // 1. Validate Tech
-        const tech = TECHNOLOGIES[techId];
+        const tech = TECHNOLOGIES[techId as TechId];
         if (!tech) {
             console.warn(`[AureusWorld] Unknown tech: ${techId}`);
             return;
         }
 
+        const id = techId as TechId;
+
         // 2. Check if already unlocked
-        if (state.research.unlocked.includes(techId)) return;
+        if (state.research.unlocked.includes(id)) return;
 
         // 3. Check Prereqs
         if (tech.prereq && !state.research.unlocked.includes(tech.prereq)) {
@@ -336,18 +338,18 @@ export class AureusWorld extends BaseWorld {
         state.resources.agt -= tech.cost;
 
         // 6. Unlock (Instant)
-        state.research.unlocked.push(techId);
+        state.research.unlocked.push(id);
 
         // 7. Notification & Sound
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.COMPLETE });
         state.newsFeed.push({
-            id: `tech_${techId}_${Date.now()}`,
+            id: `tech_${id}_${Date.now()}`,
             headline: `RESEARCH COMPLETE: ${tech.name}`,
             type: 'POSITIVE',
             timestamp: Date.now()
         });
 
-        console.log(`[AureusWorld] Unlocked tech: ${techId}`);
+        console.log(`[AureusWorld] Unlocked tech: ${id}`);
     }
 
     toggleDebug(): void {
