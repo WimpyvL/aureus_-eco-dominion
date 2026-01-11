@@ -35,6 +35,10 @@ export class EnvironmentRenderSystem {
     private isRaining = false;
     private cameraFocus = new THREE.Vector3(0, 0, 0);
 
+    // Sun/Moon Visual
+    private sunMesh: THREE.Mesh;
+    private sunDistance = 150; // Distance from camera focus
+
     constructor(adapter: ThreeRenderAdapter) {
         this.adapter = adapter;
         this.scene = adapter.getScene();
@@ -46,6 +50,10 @@ export class EnvironmentRenderSystem {
         // Initialize Rain
         this.rainSystem = this.createRainSystem();
         this.scene.add(this.rainSystem);
+
+        // Initialize Sun Sphere
+        this.sunMesh = this.createSunSphere();
+        this.scene.add(this.sunMesh);
     }
 
     private createRainSystem(): THREE.InstancedMesh {
@@ -67,6 +75,53 @@ export class EnvironmentRenderSystem {
             mesh.setMatrixAt(i, dummy.matrix);
         }
         return mesh;
+    }
+
+    private createSunSphere(): THREE.Mesh {
+        const geo = new THREE.SphereGeometry(8, 16, 16);
+        const mat = new THREE.MeshBasicMaterial({
+            color: 0xffdd44,
+            transparent: true,
+            opacity: 0.95,
+            fog: false // Sun not affected by fog
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.renderOrder = 999; // Render on top
+        return mesh;
+    }
+
+    private calculateSunPosition(timeOfDay: number): THREE.Vector3 {
+        // Time 0 = midnight, 6000 = sunrise, 12000 = noon, 18000 = sunset, 24000 = midnight
+        // Sun arc: from East at sunrise, overhead at noon, to West at sunset
+
+        // Normalize to 0-1 range where 0.25 = sunrise, 0.5 = noon, 0.75 = sunset
+        const normalizedTime = timeOfDay / 24000;
+
+        // Calculate angle: 0 at sunrise (East), PI/2 at noon (overhead), PI at sunset (West)
+        // Sun travels from East (positive X) to West (negative X)
+        const sunAngle = (normalizedTime - 0.25) * Math.PI * 2;
+
+        // Height follows a sine curve, peaking at noon
+        const dayProgress = (normalizedTime - 0.25) * 2; // 0 at sunrise, 1 at sunset
+        const height = Math.sin(Math.max(0, Math.min(1, dayProgress)) * Math.PI);
+
+        const isNight = timeOfDay < 6000 || timeOfDay > 18000;
+
+        if (isNight) {
+            // Moon position (opposite side of sky)
+            const moonAngle = sunAngle + Math.PI;
+            return new THREE.Vector3(
+                Math.cos(moonAngle) * this.sunDistance * 0.8,
+                40 + Math.abs(Math.sin(moonAngle)) * 60,
+                Math.sin(moonAngle) * this.sunDistance * 0.5
+            );
+        }
+
+        return new THREE.Vector3(
+            Math.cos(sunAngle) * this.sunDistance,
+            30 + height * 100, // 30 at horizon, 130 at noon
+            Math.sin(sunAngle) * this.sunDistance * 0.5
+        );
     }
 
     public update(dt: number, timeOfDay: number, weather: string, cameraFocus: THREE.Vector3) {
@@ -170,6 +225,46 @@ export class EnvironmentRenderSystem {
             this.adapter.ambientLight.color = this.currentLightColor;
             // Ambient is softer
             this.adapter.ambientLight.intensity = Math.max(0.6, this.currentLightIntensity * 0.8);
+        }
+
+        // Update Sun/Moon Position
+        const sunPos = this.calculateSunPosition(this.timeOfDay);
+        const isNight = this.timeOfDay < 6000 || this.timeOfDay > 18000;
+
+        // Position sun relative to camera focus
+        this.sunMesh.position.set(
+            this.cameraFocus.x + sunPos.x,
+            sunPos.y,
+            this.cameraFocus.z + sunPos.z
+        );
+
+        // Update sun appearance
+        const sunMat = this.sunMesh.material as THREE.MeshBasicMaterial;
+        if (isNight) {
+            sunMat.color.setHex(0xccccff); // Moon: blueish white
+            sunMat.opacity = 0.7;
+            this.sunMesh.scale.setScalar(0.6); // Moon is smaller
+        } else {
+            sunMat.color.setHex(0xffdd44); // Sun: warm yellow
+            sunMat.opacity = 0.95;
+            this.sunMesh.scale.setScalar(1.0);
+        }
+
+        // Move directional light to match sun position
+        if (this.adapter.directionalLight) {
+            this.adapter.directionalLight.position.copy(sunPos);
+            // Light target follows camera
+            this.adapter.directionalLight.target.position.set(
+                this.cameraFocus.x,
+                0,
+                this.cameraFocus.z
+            );
+            this.adapter.directionalLight.target.updateMatrixWorld();
+
+            // Disable shadows at night for softer moonlit look, AND at low zoom for performance
+            const zoom = this.adapter.getCamera().zoom;
+            const isZoomedOut = zoom < 0.6;
+            this.adapter.directionalLight.castShadow = !isNight && !isZoomedOut;
         }
     }
 

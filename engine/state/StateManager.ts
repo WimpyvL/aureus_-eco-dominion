@@ -6,7 +6,7 @@
 
 import {
     GameState, BuildingType, Agent, GridTile, GameStep,
-    SfxType, GameCommand
+    SfxType, GameCommand, Era
 } from '../../types';
 import { generateInitialGrid, GRID_SIZE } from '../utils/GameUtils';
 import { INITIAL_RESOURCES } from '../data/VoxelConstants';
@@ -49,7 +49,7 @@ export class StateManager {
             step: GameStep.INTRO,
             gameOver: false,
             debugMode: false,
-            cheatsEnabled: false,
+            cheatsEnabled: false, // DEV: Creative mode disabled
             tickCount: 0,
 
             market: {
@@ -102,6 +102,21 @@ export class StateManager {
             },
 
             agentRequests: [],
+
+            currentEra: Era.SETTLEMENT,
+            unlockedEras: [Era.SETTLEMENT],
+
+            powerGrid: {
+                totalProduced: 0,
+                totalConsumed: 0,
+                deficit: 0,
+            },
+
+            waterNetwork: {
+                totalProduced: 0,
+                totalConsumed: 0,
+                deficit: 0,
+            },
 
             ...overrides,
         } as GameState;

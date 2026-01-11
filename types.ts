@@ -26,7 +26,48 @@ export enum BuildingType {
   RESERVOIR = 'RESERVOIR',
   PIPE = 'PIPE',
   ROAD = 'ROAD',
-  FENCE = 'FENCE'
+  FENCE = 'FENCE',
+  STORAGE_DEPOT = 'STORAGE_DEPOT',
+  WORKSHOP = 'WORKSHOP',
+  GENERATOR = 'GENERATOR',
+  // Era 2: Growth
+  MEDICAL_BAY = 'MEDICAL_BAY',
+  TRAINING_CENTER = 'TRAINING_CENTER',
+  // Era 3: Industry
+  GEM_REFINERY = 'GEM_REFINERY',
+  RAIL_LINE = 'RAIL_LINE',
+  DISTRIBUTION_HUB = 'DISTRIBUTION_HUB',
+  // Era 4: Sustainability
+  WASTE_TREATMENT = 'WASTE_TREATMENT',
+  NATURE_RESERVE = 'NATURE_RESERVE',
+  HYDROPONICS = 'HYDROPONICS',
+  GEOTHERMAL_PLANT = 'GEOTHERMAL_PLANT',
+  // Era 5: Prosperity
+  MONUMENT = 'MONUMENT',
+  SPACEPORT = 'SPACEPORT',
+}
+
+export enum Era {
+  SETTLEMENT = 'SETTLEMENT',
+  GROWTH = 'GROWTH',
+  INDUSTRY = 'INDUSTRY',
+  SUSTAINABILITY = 'SUSTAINABILITY',
+  PROSPERITY = 'PROSPERITY'
+}
+
+export interface EraDef {
+  id: Era;
+  name: string;
+  description: string;
+  unlockConditions: {
+    minColonists?: number;
+    minAgt?: number;
+    minEco?: number;
+    minTrust?: number;
+    minBuildings?: number;
+    tutorialComplete?: boolean;
+  };
+  color: string;
 }
 
 export type AgentRole = 'WORKER' | 'MINER' | 'BOTANIST' | 'ENGINEER' | 'SECURITY' | 'ILLEGAL_MINER';
@@ -214,6 +255,16 @@ export interface GameResources {
   maintenance: number; // New: Pre-calculated maintenance/s
 }
 
+export interface PowerConfig {
+  produces?: number;  // Power units produced (solar, generator, etc.)
+  consumes?: number;  // Power units required to operate
+}
+
+export interface WaterConfig {
+  produces?: number;  // Water units produced (well, reservoir)
+  consumes?: number;  // Water units required
+}
+
 export interface BuildingDef {
   type: BuildingType;
   name: string;
@@ -228,7 +279,10 @@ export interface BuildingDef {
   maintenance: number;
   pollution: number;
   production?: number;
-  productionType?: 'MINERALS' | 'AGT' | 'ECO' | 'TRUST';
+  productionType?: 'MINERALS' | 'AGT' | 'ECO' | 'TRUST' | 'GEMS';
+  era: Era;
+  power?: PowerConfig;
+  water?: WaterConfig;
 }
 
 export interface LogisticsState {
@@ -241,7 +295,7 @@ export interface Goal {
   title: string;
   description: string;
   type: 'BUILD' | 'RESOURCE' | 'STAT';
-  targetType: BuildingType | 'AGT' | 'MINERALS' | 'ECO' | 'TRUST';
+  targetType: BuildingType | 'AGT' | 'MINERALS' | 'ECO' | 'TRUST' | 'GEMS';
   targetValue: number;
   currentValue: number;
   reward: { type: 'AGT' | 'GEMS', amount: number };
@@ -359,6 +413,24 @@ export interface GameState {
     timeOfDay: number;      // 0-24000 (0 = midnight, 12000 = noon)
     dayCount: number;       // How many days have passed
     isDaytime: boolean;     // true if between 6000-18000 (6 AM - 6 PM)
+  };
+
+  // Era System
+  currentEra: Era;
+  unlockedEras: Era[];
+
+  // Power Grid System
+  powerGrid: {
+    totalProduced: number;
+    totalConsumed: number;
+    deficit: number;
+  };
+
+  // Water Network System
+  waterNetwork: {
+    totalProduced: number;
+    totalConsumed: number;
+    deficit: number;
   };
 
   // Agent requests system

@@ -231,9 +231,6 @@ export class ThreeRenderAdapter implements RenderAdapter {
         return this.scene;
     }
 
-    public directionalLight: THREE.DirectionalLight | null = null;
-    public ambientLight: THREE.AmbientLight | null = null;
-
     // ...
 
     /** Get the camera */

@@ -75,11 +75,12 @@ export class AgentRenderSystem {
         this.scene.add(this.agentSelectionRing);
 
         // Eagle
-        this.eagle = createEagle();
-        this.eagle.visible = true;
-        const range = (this.gridSize / 2) * 0.8;
-        this.eagle.position.set((Math.random() - 0.5) * 2 * range, 30, (Math.random() - 0.5) * 2 * range);
-        this.scene.add(this.eagle);
+        // Eagle (Disabled)
+        // this.eagle = createEagle();
+        // this.eagle.visible = true;
+        // const range = (this.gridSize / 2) * 0.8;
+        // this.eagle.position.set((Math.random() - 0.5) * 2 * range, 30, (Math.random() - 0.5) * 2 * range);
+        // this.scene.add(this.eagle);
     }
 
     public update(dt: number, totalTime: number, agents: Agent[], zoomLevel: number = 20) {

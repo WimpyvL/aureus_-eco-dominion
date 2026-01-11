@@ -6,7 +6,9 @@ import {
     FlaskConical, ShieldAlert, GitCommit, Waves,
     Footprints, X, Eraser, Lock, Square, Plus, ShoppingCart,
     Coffee, PartyPopper, Container, Pickaxe, Flame,
-    Search, LayoutGrid, Zap, Sprout, Hammer
+    Search, LayoutGrid, Zap, Sprout, Hammer, Archive, Wrench,
+    HeartPulse, Dumbbell, Gem, TrainFront, Truck,
+    Trash2, TreeDeciduous, Salad, Thermometer, Trophy, Rocket
 } from 'lucide-react';
 import { GameState, BuildingType, Action } from '../types';
 import { BUILDINGS } from '../engine/data/VoxelConstants';
@@ -44,6 +46,24 @@ export const getBuildingIcon = (type: BuildingType) => {
         case BuildingType.ORE_FOUNDRY: return <Flame size={18} />;
         case BuildingType.ROAD: return <Footprints size={18} />;
         case BuildingType.FENCE: return <Square size={18} />;
+        case BuildingType.STORAGE_DEPOT: return <Archive size={18} />;
+        case BuildingType.WORKSHOP: return <Wrench size={18} />;
+        case BuildingType.GENERATOR: return <Zap size={18} />;
+        // Era 2: Growth
+        case BuildingType.MEDICAL_BAY: return <HeartPulse size={18} />;
+        case BuildingType.TRAINING_CENTER: return <Dumbbell size={18} />;
+        // Era 3: Industry
+        case BuildingType.GEM_REFINERY: return <Gem size={18} />;
+        case BuildingType.RAIL_LINE: return <TrainFront size={18} />;
+        case BuildingType.DISTRIBUTION_HUB: return <Truck size={18} />;
+        // Era 4: Sustainability
+        case BuildingType.WASTE_TREATMENT: return <Trash2 size={18} />;
+        case BuildingType.NATURE_RESERVE: return <TreeDeciduous size={18} />;
+        case BuildingType.HYDROPONICS: return <Salad size={18} />;
+        case BuildingType.GEOTHERMAL_PLANT: return <Thermometer size={18} />;
+        // Era 5: Prosperity
+        case BuildingType.MONUMENT: return <Trophy size={18} />;
+        case BuildingType.SPACEPORT: return <Rocket size={18} />;
         default: return <X size={18} />;
     }
 };
@@ -55,7 +75,7 @@ const getCategoryColor = (type: BuildingType): string => {
     if (def.stats.includes('Infrastructure') || type === BuildingType.ROAD || type === BuildingType.PIPE || type === BuildingType.FENCE) return 'from-sky-700 to-sky-900 border-sky-950 shadow-sky-950/40';
     if (type === BuildingType.SECURITY_POST) return 'from-rose-600 to-rose-800 border-rose-950 shadow-rose-950/40';
     if (type === BuildingType.CANTEEN || type === BuildingType.SOCIAL_HUB || type === BuildingType.STAFF_QUARTERS) return 'from-indigo-600 to-indigo-800 border-indigo-950 shadow-indigo-950/40';
-    if (type === BuildingType.RESERVOIR || type === BuildingType.WATER_WELL) return 'from-blue-600 to-blue-800 border-blue-950 shadow-blue-950/40';
+    if (type === BuildingType.RESERVOIR || type === BuildingType.WATER_WELL || type === BuildingType.GENERATOR) return 'from-blue-600 to-blue-800 border-blue-950 shadow-blue-950/40';
     return 'from-slate-700 to-slate-900 border-slate-950 shadow-slate-950/40';
 };
 
@@ -88,6 +108,24 @@ const ITEM_CATEGORIES: Record<BuildingType, CategoryType> = {
     [BuildingType.LOCAL_SCHOOL]: 'ADVANCED',
     [BuildingType.SAFARI_LODGE]: 'ADVANCED',
     [BuildingType.GREEN_TECH_LAB]: 'ADVANCED',
+    [BuildingType.STORAGE_DEPOT]: 'UTILITIES',
+    [BuildingType.WORKSHOP]: 'BASICS',
+    [BuildingType.GENERATOR]: 'UTILITIES',
+    // Era 2: Growth
+    [BuildingType.MEDICAL_BAY]: 'BASICS',
+    [BuildingType.TRAINING_CENTER]: 'BASICS',
+    // Era 3: Industry
+    [BuildingType.GEM_REFINERY]: 'PRODUCTION',
+    [BuildingType.RAIL_LINE]: 'BASICS',
+    [BuildingType.DISTRIBUTION_HUB]: 'PRODUCTION',
+    // Era 4: Sustainability
+    [BuildingType.WASTE_TREATMENT]: 'UTILITIES',
+    [BuildingType.NATURE_RESERVE]: 'ADVANCED',
+    [BuildingType.HYDROPONICS]: 'UTILITIES',
+    [BuildingType.GEOTHERMAL_PLANT]: 'UTILITIES',
+    // Era 5: Prosperity
+    [BuildingType.MONUMENT]: 'ADVANCED',
+    [BuildingType.SPACEPORT]: 'ADVANCED',
     [BuildingType.EMPTY]: 'ALL'
 };
 
@@ -98,13 +136,22 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
 
     const shopItems = useMemo(() => {
         const all = [
+            // Era 1: Settlement
             BuildingType.ROAD, BuildingType.PIPE, BuildingType.FENCE,
-            BuildingType.STAFF_QUARTERS, BuildingType.CANTEEN,
-            BuildingType.WASH_PLANT, BuildingType.RECYCLING_PLANT, BuildingType.MINING_HEADFRAME, BuildingType.ORE_FOUNDRY,
-            BuildingType.WATER_WELL, BuildingType.POND, BuildingType.RESERVOIR,
-            BuildingType.SOLAR_ARRAY, BuildingType.WIND_TURBINE,
-            BuildingType.SOCIAL_HUB, BuildingType.SECURITY_POST, BuildingType.COMMUNITY_GARDEN,
-            BuildingType.LOCAL_SCHOOL, BuildingType.SAFARI_LODGE, BuildingType.GREEN_TECH_LAB
+            BuildingType.STAFF_QUARTERS, BuildingType.CANTEEN, BuildingType.WORKSHOP,
+            BuildingType.WASH_PLANT, BuildingType.SOLAR_ARRAY, BuildingType.WATER_WELL, BuildingType.STORAGE_DEPOT,
+            // Era 2: Growth
+            BuildingType.MEDICAL_BAY, BuildingType.TRAINING_CENTER, BuildingType.GENERATOR,
+            BuildingType.SOCIAL_HUB, BuildingType.SECURITY_POST, BuildingType.COMMUNITY_GARDEN, BuildingType.WIND_TURBINE,
+            // Era 3: Industry
+            BuildingType.RECYCLING_PLANT, BuildingType.ORE_FOUNDRY, BuildingType.GEM_REFINERY,
+            BuildingType.RAIL_LINE, BuildingType.DISTRIBUTION_HUB, BuildingType.POND,
+            // Era 4: Sustainability
+            BuildingType.RESERVOIR, BuildingType.LOCAL_SCHOOL, BuildingType.WASTE_TREATMENT,
+            BuildingType.NATURE_RESERVE, BuildingType.HYDROPONICS, BuildingType.GEOTHERMAL_PLANT,
+            // Era 5: Prosperity
+            BuildingType.SAFARI_LODGE, BuildingType.GREEN_TECH_LAB, BuildingType.MINING_HEADFRAME,
+            BuildingType.MONUMENT, BuildingType.SPACEPORT
         ];
 
         return all.filter(type => {
@@ -200,7 +247,8 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                             if (b.dependency) {
                                 dependencyMet = state.grid.some(t => t.buildingType === b.dependency && !t.isUnderConstruction);
                             }
-                            const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet);
+                            const isEraLocked = !state.unlockedEras.includes(b.era);
+                            const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet || isEraLocked);
                             const cost = calculateBuildingCost(type, state.grid);
                             const canAfford = state.cheatsEnabled || state.resources.agt >= cost;
                             const isInspecting = inspecting?.type === type;
@@ -276,7 +324,8 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                         if (b.dependency) {
                             dependencyMet = state.grid.some(t => t.buildingType === b.dependency && !t.isUnderConstruction);
                         }
-                        const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet);
+                        const isEraLocked = !state.unlockedEras.includes(b.era);
+                        const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet || isEraLocked);
 
                         return (
                             <div className="flex flex-col">
@@ -313,7 +362,7 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                                     {isLocked ? (
                                         <div className="bg-rose-950/40 border border-rose-500/30 rounded p-2 text-[9px] text-rose-300 font-bold flex items-center justify-center gap-2 uppercase">
                                             <Lock size={10} />
-                                            {isEcoLocked ? `Eco Lv.${b.ecoReq} required` : `Requires ${BUILDINGS[b.dependency!].name}`}
+                                            {isEraLocked ? `Requires ${b.era}` : isEcoLocked ? `Eco Lv.${b.ecoReq} required` : `Requires ${BUILDINGS[b.dependency!].name}`}
                                         </div>
                                     ) : (
                                         <div className="text-[9px] text-slate-500 font-mono text-center mb-1">

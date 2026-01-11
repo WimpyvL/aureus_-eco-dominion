@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { JobSystem, MeshChunkResult, MeshChunkJob } from '../../../engine/jobs';
 import { GridTile } from '../../../types';
-import { matMaster, waterFlowMaterial } from '../../../engine/render/materials/VoxelMaterials';
+import { matMaster, mats } from '../../../engine/render/materials/VoxelMaterials';
 import { CHUNK_SIZE, getChunkId, getChunkKey } from '../../../engine/utils/ChunkUtils';
 
 interface ChunkRenderData {
@@ -25,12 +25,13 @@ export class TerrainRenderSystem {
     private chunks: Map<string, ChunkRenderData & { lod: number }> = new Map();
     private tileCache: Map<string, GridTile[]> = new Map();
 
-    // View radius in chunks
-    private viewRadius = 6;
+    // View radius in chunks (Reduced for optimization)
+    private viewRadius = 5;
 
     // Track last camera chunk to avoid redundant updates
     private lastCameraCx = -999;
     private lastCameraCz = -999;
+    private lastFrustumCheck = 0;
 
     // Callbacks for foliage system
     public onFoliageUpdate?: (key: string, items: any[]) => void;
@@ -45,7 +46,7 @@ export class TerrainRenderSystem {
     /**
      * Called every visual frame with the camera focus position (world coords)
      */
-    update(cameraFocus: THREE.Vector3): void {
+    update(cameraFocus: THREE.Vector3, camera?: THREE.Camera): void {
         // Convert world position to grid position, then to chunk coordinates
         // World (0,0) = center of grid. Grid tile (64,64) for 128x128.
         const offset = (this.gridSize - 1) / 2;
@@ -55,20 +56,49 @@ export class TerrainRenderSystem {
         const cameraCx = Math.floor(gridX / CHUNK_SIZE);
         const cameraCz = Math.floor(gridZ / CHUNK_SIZE);
 
-        // Only recalculate if camera moved to different chunk
-        if (cameraCx === this.lastCameraCx && cameraCz === this.lastCameraCz) {
-            return; // No change, skip expensive iteration
+
+        const now = Date.now();
+        // Only recalculate if camera moved or periodically (every 200ms) for frustum updates
+        if (cameraCx === this.lastCameraCx && cameraCz === this.lastCameraCz && (now - this.lastFrustumCheck < 200)) {
+            // return; // Skip for now, need strict updates
         }
+
         this.lastCameraCx = cameraCx;
         this.lastCameraCz = cameraCz;
+        this.lastFrustumCheck = now;
 
         // Calculate which chunks should be visible (infinite world - no bounds limit)
         const visibleChunks = new Set<string>();
+
+        // Setup Frustum
+        const frustum = new THREE.Frustum();
+        if (camera) {
+            const matrix = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+            frustum.setFromProjectionMatrix(matrix);
+        }
+
+        // Reuse box for checks
+        const box = new THREE.Box3();
+        const chunkOffset = (this.gridSize - 1) / 2;
 
         for (let dx = -this.viewRadius; dx <= this.viewRadius; dx++) {
             for (let dz = -this.viewRadius; dz <= this.viewRadius; dz++) {
                 const cx = cameraCx + dx;
                 const cz = cameraCz + dz;
+
+                // Frustum Check
+                if (camera) {
+                    const xPos = (cx * CHUNK_SIZE) - chunkOffset;
+                    const zPos = (cz * CHUNK_SIZE) - chunkOffset;
+
+                    // Define chunk bounds (Height -10 to 60 approximation)
+                    box.min.set(xPos, -10, zPos);
+                    box.max.set(xPos + CHUNK_SIZE, 60, zPos + CHUNK_SIZE);
+
+                    if (!frustum.intersectsBox(box)) {
+                        continue; // Skip off-screen chunks
+                    }
+                }
 
                 const key = getChunkKey(cx, cz);
                 visibleChunks.add(key);
@@ -250,7 +280,7 @@ export class TerrainRenderSystem {
             this.scene.add(chunk.mesh);
         }
 
-        chunk.waterMesh = createMesh(res.water, waterFlowMaterial, false);
+        chunk.waterMesh = createMesh(res.water, mats.reservoirWater, false);
         if (chunk.waterMesh) {
             chunk.waterMesh.receiveShadow = false;
             this.scene.add(chunk.waterMesh);

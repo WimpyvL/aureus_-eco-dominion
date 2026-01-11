@@ -11,8 +11,8 @@ export class EnvironmentSystem extends BaseSimSystem {
     readonly id = 'environment';
     readonly priority = 50;
 
-    // Cycle duration: 120 seconds for a full day (adjustable)
-    private readonly DAY_DURATION = 120;
+    // Cycle duration: 180 seconds for a full day (slower pace)
+    private readonly DAY_DURATION = 180;
     private readonly WEATHER_CHECK_INTERVAL = 60; // Check weather every 60 seconds
     private lastWeatherCheck = 0;
 
@@ -29,7 +29,7 @@ export class EnvironmentSystem extends BaseSimSystem {
             ...state.dayNightCycle,
             timeOfDay: timeOfDayValue,
             dayCount: Math.floor(totalTime / this.DAY_DURATION) + 1,
-            isDaytime: normalizedTime > 0.25 && normalizedTime < 0.75 // Roughly 6 AM to 6 PM
+            isDaytime: normalizedTime > 0.21 && normalizedTime < 0.88 // 5 AM to ~9 PM (longer day)
         };
 
         // Weather Logic (Random shifts every 60 seconds)

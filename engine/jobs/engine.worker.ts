@@ -140,17 +140,26 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
             const worldZ = startZ + z;
             const data = getData(worldX, worldZ);
 
-            if (data.in) {
-                if (data.bt === 'EMPTY' && data.h > 0 && (!data.f || data.f === 'NONE')) {
-                    const nx = worldX - offsetX;
-                    const nz = worldZ - offsetZ;
-                    const bd = getBiomeAtImpl(nx, nz);
-                    const dist = Math.sqrt(nx * nx + nz * nz);
-                    const genFoliage = getFoliageAtImpl(data.b, data.h, bd.detail, dist, pRand(worldX, worldZ));
-                    if (genFoliage !== 'NONE' && genFoliage !== 'GOLD_VEIN') foliageItems.push({ x: worldX, y: data.h * 0.5, z: worldZ, type: genFoliage });
-                } else if (data.f && data.f !== 'NONE') {
-                    foliageItems.push({ x: worldX, y: data.h * 0.5, z: worldZ, type: data.f });
+            // Foliage Logic (Infinite)
+            let fType = data.f;
+
+            // Try procedural generation if no explicit foliage
+            // This runs for both existing tiles (that are empty) and procedural chunks
+            if ((!fType || fType === 'NONE') && data.bt === 'EMPTY' && data.h > 0) {
+                const nx = worldX - offsetX;
+                const nz = worldZ - offsetZ;
+                const bd = getBiomeAtImpl(nx, nz);
+                const dist = Math.sqrt(nx * nx + nz * nz);
+                const gen = getFoliageAtImpl(data.b, data.h, bd.detail, dist, pRand(worldX, worldZ));
+
+                // Do not spawn gold outside playable area (can't mine it)
+                if (gen !== 'NONE' && gen !== 'GOLD_VEIN') {
+                    fType = gen;
                 }
+            }
+
+            if (fType && fType !== 'NONE' && fType !== 'GOLD_VEIN') {
+                foliageItems.push({ x: worldX, y: data.h * 0.5, z: worldZ, type: fType });
             }
 
             let matKey = data.b.toLowerCase();

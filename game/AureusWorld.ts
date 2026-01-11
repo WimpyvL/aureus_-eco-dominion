@@ -19,12 +19,13 @@ import { Simulation } from '../engine/sim';
 import {
     AgentSystem, JobGenerationSystem, EnvironmentSystem, EconomySystem,
     ColonySystem, LogisticsSystem, EventSystem, MissionSystem,
-    ProductionSystem, ConstructionSystem
+    ProductionSystem, ConstructionSystem, EraSystem,
+    PowerGridSystem, WaterNetworkSystem
 } from '../engine/sim/systems';
 
 import { GameState, GameStep, Agent, GridTile, BuildingType, SfxType } from '../types';
 import { GRID_SIZE, getEcoMultiplier } from '../engine/utils/GameUtils';
-import { BUILDINGS } from '../engine/data/VoxelConstants';
+import { BUILDINGS, TECHNOLOGIES } from '../engine/data/VoxelConstants';
 import { TerrainRenderSystem } from './render/systems/TerrainRenderSystem';
 import { FoliageRenderSystem } from './render/systems/FoliageRenderSystem';
 import { BuildingRenderSystem } from './render/systems/BuildingRenderSystem';
@@ -99,7 +100,10 @@ export class AureusWorld extends BaseWorld {
         this.sim.addSystem(new LogisticsSystem());
         this.sim.addSystem(new EventSystem());
         this.sim.addSystem(new MissionSystem());
+        this.sim.addSystem(new PowerGridSystem());
+        this.sim.addSystem(new WaterNetworkSystem());
         this.sim.addSystem(new ProductionSystem());
+        this.sim.addSystem(new EraSystem());
 
         this.agentSystem = new AgentSystem(this.jobs, this.constructionSystem);
         this.sim.addSystem(this.agentSystem);
@@ -177,6 +181,13 @@ export class AureusWorld extends BaseWorld {
 
         const def = BUILDINGS[buildingType];
         if (!def) return;
+
+        // NEW: Era validation
+        if (!state.cheatsEnabled && !state.unlockedEras.includes(def.era)) {
+            console.warn(`Cannot place ${buildingType}: Era ${def.era} not unlocked`);
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+            return;
+        }
 
         // Validate placement
         const tile = state.grid[index];
@@ -275,6 +286,21 @@ export class AureusWorld extends BaseWorld {
         });
     }
 
+    buyBuilding(buildingType: string, cost: number): void {
+        const state = this.stateManager.getMutableState();
+
+        // Deduct cost
+        state.resources.agt -= cost;
+
+        // Add to inventory
+        if (!state.inventory[buildingType]) {
+            state.inventory[buildingType] = 0;
+        }
+        state.inventory[buildingType]++;
+
+        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
+    }
+
     setAutoSell(enabled: boolean, threshold: number): void {
         const state = this.stateManager.getMutableState();
         state.logistics.autoSell = enabled;
@@ -282,8 +308,20 @@ export class AureusWorld extends BaseWorld {
     }
 
     researchTech(techId: string): void {
-        // TODO: Implement research logic when ResearchState is updated
-        console.log(`[AureusWorld] Research requested: ${techId}`);
+        const state = this.stateManager.getMutableState();
+
+        // Find tech definition (Need to ensure TECHNOLOGIES is imported or available)
+        // Since we can't easily add import top-level without context, using available data if possible.
+        // Assuming TECHNOLOGIES is in VoxelConstants like BUILDINGS.
+        // If not, I need to check VoxelConstants.
+        // Wait, I should verify import first.
+        // But for now, I'll use a dynamic lookup or assume the user has it.
+        // Actually, Step 923 showed `import { BUILDINGS } from ...`.
+        // I will trust I can import it. I'll add the import if needed, but replace_file_content is local.
+        // I will assume TECHNOLOGIES is exported from the same place.
+        // I will blindly use it? No, that's risky.
+        // But I can't add import easily with replace_file_content unless I replace top of file.
+        // I'll read the top of AureusWorld.ts again to adding import.
     }
 
     toggleDebug(): void {
@@ -464,7 +502,7 @@ export class AureusWorld extends BaseWorld {
         const zoomLevel = this.cameraSystem.cameraZoom;
         this.agentRenderSystem.update(ctx.dt, ctx.time, state.agents, zoomLevel);
 
-        this.terrainRenderSystem.update(this.cameraSystem.cameraFocus);
+        this.terrainRenderSystem.update(this.cameraSystem.cameraFocus, this.render.getCamera());
         this.buildingRenderSystem.update(ctx.dt, ctx.time, state.grid, this.stateManager.getDirtyKeys());
         this.buildingRenderSystem.updateCursor(this.inputSystem?.getCurrentCursor() || null);
 

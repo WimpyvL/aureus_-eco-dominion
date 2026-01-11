@@ -35,7 +35,7 @@ export class Profiler {
      * Start timing a phase
      */
     begin(label: string): void {
-        if (!this.enabled || import.meta.env.PROD) return;
+        if (!this.enabled || (import.meta as any).env?.PROD) return;
         this.marks.set(label, performance.now());
     }
 
@@ -43,7 +43,7 @@ export class Profiler {
      * End timing a phase and record the result
      */
     end(label: string): number {
-        if (!this.enabled || import.meta.env.PROD) return 0;
+        if (!this.enabled || (import.meta as any).env?.PROD) return 0;
 
         const start = this.marks.get(label);
         if (start == null) return 0;
