@@ -25,6 +25,9 @@ export class JobSystem {
     /** Results ready to be consumed */
     private results: JobResult[] = [];
 
+    /** Jobs currently in queue (ID -> Job) for deduplication */
+    private queuedJobs = new Map<string, Job>();
+
     /** Statistics */
     private stats: JobStats = {
         queued: 0,
@@ -35,8 +38,17 @@ export class JobSystem {
 
     /**
      * Add a job to the queue
+     * Deduplicates based on job.id (cancels existing if present)
      */
     enqueue(job: Job): void {
+        if (this.queuedJobs.has(job.id)) {
+            // Cancel existing job
+            const existing = this.queuedJobs.get(job.id)!;
+            existing.cancelled = true;
+            // logic: we don't remove from heap O(N), just lazy cancel
+        }
+
+        this.queuedJobs.set(job.id, job);
         this.queue.push(job);
         this.stats.queued++;
     }
@@ -59,6 +71,17 @@ export class JobSystem {
 
         while (toDispatch.length < maxJobs && this.queue.size > 0) {
             const job = this.queue.pop()!;
+
+            // Clean up from queued map
+            if (this.queuedJobs.get(job.id) === job) {
+                this.queuedJobs.delete(job.id);
+            }
+
+            if (job.cancelled) {
+                this.stats.queued--; // It was counted as queued, now removed
+                continue;
+            }
+
             toDispatch.push(job);
             this.pending.set(job.id, job);
             this.stats.pending++;
@@ -173,6 +196,7 @@ export class JobSystem {
      */
     clear(): void {
         this.queue.clear();
+        this.queuedJobs.clear();
         this.pending.clear();
         this.results.length = 0;
     }

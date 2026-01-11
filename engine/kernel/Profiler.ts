@@ -10,6 +10,8 @@ interface PhaseTiming {
     average: number;
     min: number;
     max: number;
+    p95: number;
+    p99: number;
     samples: number[];
 }
 
@@ -18,8 +20,8 @@ export class Profiler {
     private timings = new Map<string, PhaseTiming>();
     private enabled = true;
 
-    /** How many samples to keep for averaging */
-    private readonly sampleSize = 60;
+    /** How many samples to keep for averaging. Use 100 to allow for p99 calc. */
+    private readonly sampleSize = 100;
 
     /** Frame budget in milliseconds (16.67ms = 60fps) */
     public frameBudgetMs = 16.67;
@@ -65,6 +67,8 @@ export class Profiler {
                 average: 0,
                 min: Infinity,
                 max: 0,
+                p95: 0,
+                p99: 0,
                 samples: [],
             };
             this.timings.set(label, timing);
@@ -81,7 +85,12 @@ export class Profiler {
         // Update stats
         timing.min = Math.min(timing.min, duration);
         timing.max = Math.max(timing.max, duration);
+
+        // Recalculate average and percentiles (not every frame ideally, but okay for this scale)
+        const sorted = [...timing.samples].sort((a, b) => a - b);
         timing.average = timing.samples.reduce((a, b) => a + b, 0) / timing.samples.length;
+        timing.p95 = sorted[Math.floor(sorted.length * 0.95)] || 0;
+        timing.p99 = sorted[Math.floor(sorted.length * 0.99)] || 0;
     }
 
     /**
@@ -144,7 +153,8 @@ export class Profiler {
                 lines.push(
                     `${phase.padEnd(12)} | cur: ${stats.current.toFixed(2).padStart(6)}ms | ` +
                     `avg: ${stats.average.toFixed(2).padStart(6)}ms | ` +
-                    `min: ${stats.min.toFixed(2).padStart(6)}ms | max: ${stats.max.toFixed(2).padStart(6)}ms`
+                    `p95: ${stats.p95.toFixed(2).padStart(6)}ms | ` +
+                    `p99: ${stats.p99.toFixed(2).padStart(6)}ms`
                 );
             }
         }

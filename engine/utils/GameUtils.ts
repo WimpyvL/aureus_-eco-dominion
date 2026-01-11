@@ -132,6 +132,15 @@ function getBiomeAt(x, z) {
 `;
 
 export const TREE_LOGIC_SOURCE = `
+const Random = {
+    _seed: 12345,
+    setSeed: (s) => { Random._seed = s; },
+    next: () => {
+        Random._seed = (Random._seed * 1664525 + 1013904223) >>> 0;
+        return Random._seed / 4294967296;
+    }
+};
+
 const Generators = {
     simple: (voxels) => voxels,
     rock: (radius, mat, accentMat) => {
@@ -139,8 +148,11 @@ const Generators = {
         for (let x = -radius; x <= radius; x++) {
             for (let y = 0; y <= radius * 1.2; y++) {
                 for (let z = -radius; z <= radius; z++) {
-                    if (x * x + (y * 0.8) * (y * 0.8) + z * z <= radius * radius && Math.random() > 0.1) {
-                        const m = (accentMat && Math.random() > 0.7) ? accentMat : mat;
+                    // Use coordinate hashing for stability or just the random stream?
+                    // User requested "Deterministic RNG" - usually implies seeded stream per chunk/object.
+                    // For procedural generation in loop, simple stream is okay if order is deterministic.
+                    if (x * x + (y * 0.8) * (y * 0.8) + z * z <= radius * radius && Random.next() > 0.1) {
+                        const m = (accentMat && Random.next() > 0.7) ? accentMat : mat;
                         voxels.push({ x: x, y: y, z: z, c: m });
                     }
                 }
@@ -155,7 +167,7 @@ const Generators = {
             if (y === 0) { voxels.push({ x: 1, y: 0, z: 0, c: trunkMat }); voxels.push({ x: -1, y: 0, z: 0, c: trunkMat }); voxels.push({ x: 0, y: 0, z: 1, c: trunkMat }); voxels.push({ x: 0, y: 0, z: -1, c: trunkMat }); }
         }
         for (let x = -leafRad; x <= leafRad; x++) for (let y = -leafRad; y <= leafRad; y++) for (let z = -leafRad; z <= leafRad; z++) {
-            if (Math.sqrt(x * x + y * y + z * z) <= leafRad && Math.random() > 0.2) voxels.push({ x: x, y: height + y, z: z, c: leafMat });
+            if (Math.sqrt(x * x + y * y + z * z) <= leafRad && Random.next() > 0.2) voxels.push({ x: x, y: height + y, z: z, c: leafMat });
         }
         return voxels;
     },

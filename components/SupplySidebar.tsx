@@ -161,6 +161,23 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
         });
     }, [activeCategory, searchQuery]);
 
+    const sidebarRef = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
+                onClose();
+            }
+        };
+
+        if (isOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isOpen, onClose]);
+
     if (!isOpen) return null;
 
     const handlePurchase = (type: BuildingType) => {
@@ -180,15 +197,18 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
     }
 
     return (
-        <div className="absolute right-0 top-14 bottom-40 sm:bottom-28 w-80 z-40 flex pointer-events-none">
+        <div
+            ref={sidebarRef}
+            className="absolute right-0 top-14 bottom-22 sm:bottom-28 w-[85vw] max-w-[340px] sm:w-80 z-40 flex pointer-events-none transition-all"
+        >
             {/* Category Tabs (Vertical) */}
-            <div className="w-14 bg-slate-900/95 border-r border-slate-800 flex flex-col items-center py-4 gap-4 pointer-events-auto shadow-xl">
+            <div className="w-12 sm:w-14 bg-slate-900/95 border-r border-slate-800 flex flex-col items-center py-4 gap-3 pointer-events-auto shadow-xl">
                 {CATEGORIES.map(cat => (
                     <button
                         key={cat.id}
                         onClick={() => { setActiveCategory(cat.id); playSfx('UI_CLICK'); }}
                         title={cat.label}
-                        className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${activeCategory === cat.id
+                        className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center transition-all ${activeCategory === cat.id
                             ? 'bg-amber-500 text-amber-950 shadow-[0_0_15px_rgba(245,158,11,0.4)]'
                             : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
                             }`}
@@ -209,11 +229,11 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
             {/* Main Content Area */}
             <div className="flex-1 bg-slate-900/95 backdrop-blur-md border-r-0 border-slate-700 rounded-bl-[4px] shadow-[-10px_0_30px_rgba(0,0,0,0.5)] flex flex-col pointer-events-auto overflow-hidden">
                 {/* Header */}
-                <div className="px-4 pt-4 pb-3 border-b border-slate-800">
+                <div className="px-3 sm:px-4 pt-3 sm:pt-4 pb-3 border-b border-slate-800">
                     <div className="flex justify-between items-center mb-3">
-                        <h2 className="text-white font-black uppercase tracking-tighter text-lg font-['Rajdhani'] leading-none">Supply Depot</h2>
+                        <h2 className="text-white font-black uppercase tracking-tighter text-base sm:text-lg font-['Rajdhani'] leading-none">Supply Depot</h2>
                         <div className="bg-slate-950 px-2 py-1 rounded border border-slate-800">
-                            <span className="text-emerald-400 font-mono text-xs font-bold">{Math.floor(state.resources.agt).toLocaleString()} AGT</span>
+                            <span className="text-emerald-400 font-mono text-[10px] sm:text-xs font-bold">{Math.floor(state.resources.agt).toLocaleString()} AGT</span>
                         </div>
                     </div>
 
@@ -301,9 +321,10 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-slate-600 hover:text-slate-400 p-1 transition-colors"
+                        className="bg-red-600 hover:bg-red-500 text-white p-1.5 rounded shadow-lg shadow-red-900/20 transition-all active:scale-95"
+                        title="Close Menu"
                     >
-                        <X size={16} />
+                        <X size={18} strokeWidth={3} />
                     </button>
                 </div>
             </div>
@@ -311,7 +332,7 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
             {/* Inspect Tooltip (Floating Left) */}
             {inspecting && (
                 <div
-                    className="fixed right-80 w-64 bg-slate-900 border-2 border-slate-700 p-0 pointer-events-auto rounded-l-lg shadow-[10px_0_30px_rgba(0,0,0,0.8)] z-50 transform -translate-y-1/2 overflow-hidden animate-in slide-in-from-right-4 fade-in duration-200"
+                    className="fixed right-[88vw] sm:right-80 w-64 bg-slate-900 border-2 border-slate-700 p-0 pointer-events-auto rounded-l-lg shadow-[10px_0_30px_rgba(0,0,0,0.8)] z-50 transform -translate-y-1/2 overflow-hidden animate-in slide-in-from-right-4 fade-in duration-200"
                     style={{ top: Math.max(120, Math.min(window.innerHeight - 150, inspecting.y)) }}
                 >
                     {(() => {

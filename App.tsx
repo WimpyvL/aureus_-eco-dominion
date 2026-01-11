@@ -483,41 +483,6 @@ const App: React.FC = () => {
                         step={state.step}
                     />
 
-                    {/* Placement Confirmation */}
-                    {pendingPlacementIndex !== null && state.selectedBuilding && (
-                        <div className="absolute bottom-40 sm:bottom-12 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-bottom-2 duration-300 pointer-events-auto">
-                            <div className="bg-slate-900 border-2 border-emerald-500/50 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] p-4 flex flex-col items-center gap-3 min-w-[280px]">
-                                <div className="flex items-center gap-2">
-                                    <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400">
-                                        <MapPin size={20} />
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest leading-none">Validator</span>
-                                        <h3 className="text-white font-bold text-sm">Confirm {BUILDINGS[state.selectedBuilding]?.name} location?</h3>
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-2 w-full">
-                                    <button
-                                        onClick={() => { setPendingPlacementIndex(null); playSfx(SfxType.UI_CLICK); }}
-                                        className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-400 font-bold py-2.5 rounded-xl border border-slate-700 transition-all flex items-center justify-center gap-2 active:scale-95"
-                                    >
-                                        <X size={16} /> REPOSITION
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            dispatch({ type: 'PLACE_BUILDING', payload: { index: pendingPlacementIndex } });
-                                            setPendingPlacementIndex(null);
-                                        }}
-                                        className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-2 active:scale-95"
-                                    >
-                                        <Check size={16} /> BUILD HERE
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
                     <Controls
                         selectedBuilding={state.selectedBuilding}
                         dispatch={dispatch}

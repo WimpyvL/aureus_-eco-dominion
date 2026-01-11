@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { BiomeType } from '../../../types';
 import { mats } from '../materials/VoxelMaterials';
+import { greedyMesh } from './GreedyMesher';
 
 // --- GEOMETRY CACHE (For standard primitives) ---
 const boxGeoCache: Record<string, THREE.BoxGeometry> = {};
@@ -83,72 +84,218 @@ export function buildMeshedVoxelGroup(
     const opaqueGeom = { positions: [] as number[], normals: [] as number[], colors: [] as number[] };
     const transGeom = { positions: [] as number[], normals: [] as number[], colors: [] as number[] };
 
-    for (const v of voxels) {
+    // Use Greedy Mesher
+    const quads = greedyMesh(voxels);
+
+    for (const q of quads) {
         // Determine transparency
-        const isTransparent = v.c === 'glass' || v.c === 'water' || (materialMap && materialMap[v.c]?.transparent);
+        const isTransparent = q.c === 'glass' || q.c === 'water' || (materialMap && materialMap[q.c]?.transparent);
         const target = isTransparent ? transGeom : opaqueGeom;
-        const rgb = getRgb(v.c, materialMap);
+        const rgb = getRgb(q.c, materialMap);
 
-        // Check 6 neighbors
-        for (let i = 0; i < 6; i++) {
-            const dir = FACE_NORMALS[i];
-            const nx = v.x + dir[0];
-            const ny = v.y + dir[1];
-            const nz = v.z + dir[2];
+        // Generate Quad Geometry
+        // Quad is defined by x,y,z (origin) and w,h (dimensions in plane)
+        // Direction tells us the plane and normal.
 
-            // If neighbor exists, don't draw face
-            if (occupied.has(getKey(nx, ny, nz))) continue;
+        // Convert to 3D corners based on direction
+        /*
+          Quad Properties:
+          x,y,z: Origin corner of the quad (in world-ish coords)
+          w,h: Extent along the two axes of the face
+          dir: 0..5 
+        */
 
-            // Add Face
-            // A 1x1 face at the correct side
-            // Basis: Center v.x, v.y, v.z. Size 1.
+        const dirIdx = q.dir;
+        const nx = FACE_NORMALS[dirIdx][0];
+        const ny = FACE_NORMALS[dirIdx][1];
+        const nz = FACE_NORMALS[dirIdx][2];
 
-            const dx = dir[0], dy = dir[1], dz = dir[2];
-            const s = 0.5; // Half size
+        // Resolve Basis Vectors for the Face
+        let u = [0, 0, 0], v = [0, 0, 0];
 
-            // Corner Offsets
-            let c1 = [0, 0, 0], c2 = [0, 0, 0], c3 = [0, 0, 0], c4 = [0, 0, 0];
+        if (dirIdx === 0 || dirIdx === 1) { // X-Facing
+            u = [0, 1, 0]; v = [0, 0, 1]; // u=y, v=z
+        } else if (dirIdx === 2 || dirIdx === 3) { // Y-Facing
+            u = [1, 0, 0]; v = [0, 0, 1]; // u=x, v=z
+        } else { // Z-Facing
+            u = [1, 0, 0]; v = [0, 1, 0]; // u=x, v=y
+        }
 
-            if (dx !== 0) { // Right/Left
-                c1 = [dx * s, -s, s]; c2 = [dx * s, -s, -s]; c3 = [dx * s, s, -s]; c4 = [dx * s, s, s];
-            } else if (dy !== 0) { // Top/Bottom
-                c1 = [-s, dy * s, s]; c2 = [s, dy * s, s]; c3 = [s, dy * s, -s]; c4 = [-s, dy * s, -s];
-            } else { // Front/Back
-                c1 = [-s, -s, dz * s]; c2 = [s, -s, dz * s]; c3 = [s, s, dz * s]; c4 = [-s, s, dz * s];
-            }
+        // Quad Corners applied to origin (q.x, q.y, q.z)
+        // The origin q.x,y,z is the bottom-left corner of the face in the plane
+        // BUT we need to account for the face offset from the voxel center (or corner? Greedy mesher uses ints)
+        // Voxel Mesher usually centers voxels at x,y,z (if they are 1x1). 
+        // My GreedyMesher returns integer coordinates of the start voxel.
+        // A voxel at V(x,y,z) has center C(x,y,z).
+        // Face 0 (+time) is at x+0.5. Face 1 (-x) is at x-0.5.
 
-            // Verts relative to center
-            const x = v.x, y = v.y, z = v.z;
+        // Let's compute center of the quad first?
+        // Or just compute corners.
 
-            // Winding Order Logic:
-            // For faces pointing in negative directions (Left, Bottom, Back -> indices 1, 3, 5),
-            // the standard winding produces inverted normals. We must flip vertex order.
+        // Start Point (at face plane)
+        // If dir is +, offset is +0.5. If -, offset is -0.5.
+        // Wait, GreedyMesher loops were integers.
+        // If dir=0 (+x), Plane is at x+0.5 relative to voxel center?
+        // No, typically voxel coords are centers.
+        // Assuming standard 1 unit size.
 
-            if (i % 2 !== 0) {
-                // FLIPPED WINDING (c1 -> c3 -> c2)
-                target.positions.push(x + c1[0], y + c1[1], z + c1[2]);
-                target.positions.push(x + c3[0], y + c3[1], z + c3[2]);
-                target.positions.push(x + c2[0], y + c2[1], z + c2[2]);
+        // Correct Offset logic:
+        const x = q.x;
+        const y = q.y;
+        const z = q.z;
 
-                target.positions.push(x + c1[0], y + c1[1], z + c1[2]);
-                target.positions.push(x + c4[0], y + c4[1], z + c4[2]);
-                target.positions.push(x + c3[0], y + c3[1], z + c3[2]);
-            } else {
-                // STANDARD WINDING (c1 -> c2 -> c3)
-                target.positions.push(x + c1[0], y + c1[1], z + c1[2]);
-                target.positions.push(x + c2[0], y + c2[1], z + c2[2]);
-                target.positions.push(x + c3[0], y + c3[1], z + c3[2]);
+        // W and H extend along U and V
+        // p0 = origin
+        // p1 = origin + H*u (Wait, my loop usually does width first? verify)
+        // In greedyMesher: w was inner loop (v-axis), h was outer loop (u-axis).
+        // So Width corresponds to V-axis, Height corresponds to U-axis in my basises above?
+        // Let's check GreedyMesher:
+        // Dir 0/1 (X): W=v(z), H=u(y). So Width is along Z (v), Height along Y (u).
+        // My U=[0,1,0] (y), V=[0,0,1] (z). MATCHES.
 
-                target.positions.push(x + c1[0], y + c1[1], z + c1[2]);
-                target.positions.push(x + c3[0], y + c3[1], z + c3[2]);
-                target.positions.push(x + c4[0], y + c4[1], z + c4[2]);
-            }
+        // Corners:
+        // c1 = Origin
+        // c2 = Origin + W*v
+        // c3 = Origin + W*v + H*u
+        // c4 = Origin + H*u
 
-            // Normals & Colors (6 verts)
-            for (let k = 0; k < 6; k++) {
-                target.normals.push(dx, dy, dz);
-                target.colors.push(rgb[0], rgb[1], rgb[2]);
-            }
+        // Origin needs to be adjusted.
+        // GreedyMesher x,y,z is the "min" voxel index.
+        // For +Face, plane is at index + 0.5.
+        // For -Face, plane is at index - 0.5.
+
+        const offset = 0.5;
+        const sign = (dirIdx % 2 === 0) ? 1 : -1;
+
+        // Center position of the face plane logic:
+        // Since x,y,z are integers, the face plane is at val + sign*0.5?
+        // Let's assume standard ThreeJS BoxGeometry layout.
+
+        let cx = x, cy = y, cz = z;
+        if (dirIdx === 0 || dirIdx === 1) cx += sign * 0.5;
+        if (dirIdx === 2 || dirIdx === 3) cy += sign * 0.5;
+        if (dirIdx === 4 || dirIdx === 5) cz += sign * 0.5;
+
+        // Wait, if it's a quad of size W,H starting at x,y,z...
+        // The center of the quad would be x + (axis1 * H/2) + (axis2 * W/2)?
+        // Rather than dealing with centers, let's explicit corners.
+
+        const px = cx;
+        const py = cy;
+        const pz = cz;
+
+        // Shift to corner of the quad area (since x,y,z is the 'min' voxel)
+        // Face is 1x1 centered at 0,0.
+        // Min corner is -0.5, -0.5 relative to center.
+        // Here x,y,z is the "Coord".
+        // So start corner is pos - 0.5 * basis? 
+        // NO, if x=0, face is at x=0 (center).
+        // The face EXITS from x-0.5 to x+0.5? 
+        // Let's assume x,y,z is center of the starting voxel.
+        // Then the face starts at (x - 0.5*w_axis - 0.5*h_axis) NO.
+
+        // Simpler: 
+        // Corner 1 is at (x,y,z) adjusted for face offset.
+        // Actually, x,y,z are integers. The voxel occupies [x-0.5, x+0.5].
+        // So the face surface starts at x-0.5 (for U/V axes).
+
+        const startX = x - (dirIdx < 2 ? 0 : 0.5); // If X-face, X is fixed. Else X starts at -0.5
+        // This is getting confusing.
+
+        // Let's use vectors.
+        // P = [x,y,z] (Integers)
+        // Offset to corner of the face in P's space:
+        // If Dir=Right (+X), Face is at X+0.5. Y range [Y-0.5, Y-0.5+H]. Z range [Z-0.5, Z-0.5+W].
+        // Yes!
+
+        const C = [x, y, z];
+        const half = 0.5;
+
+        // Adjust C to be the "Bottom-Left" corner of the quad in 3D
+        if (dirIdx === 0 || dirIdx === 1) { // X fixed
+            C[0] += (dirIdx === 0 ? half : -half);
+            C[1] -= half;
+            C[2] -= half;
+        } else if (dirIdx === 2 || dirIdx === 3) { // Y fixed
+            C[1] += (dirIdx === 2 ? half : -half);
+            C[0] -= half;
+            C[2] -= half;
+        } else { // Z fixed
+            C[2] += (dirIdx === 4 ? half : -half);
+            C[0] -= half;
+            C[1] -= half;
+        }
+
+        // Bases (u = Height Dir, v = Width Dir) - Check GreedyMesher again
+        // X-Pass: W=v(z), H=u(y).
+        // Y-Pass: W=v(z), H=u(x).
+        // Z-Pass: W=v(y), H=u(x).
+
+        let U = [0, 0, 0], V = [0, 0, 0];
+        if (dirIdx < 2) { U = [0, 1, 0]; V = [0, 0, 1]; }
+        else if (dirIdx < 4) { U = [1, 0, 0]; V = [0, 0, 1]; }
+        else { U = [1, 0, 0]; V = [0, 1, 0]; }
+
+        // Dimensions
+        const H = q.h;
+        const W = q.w;
+
+        const c1 = [C[0], C[1], C[2]];
+        const c2 = [C[0] + V[0] * W, C[1] + V[1] * W, C[2] + V[2] * W];
+        const c3 = [C[0] + V[0] * W + U[0] * H, C[1] + V[1] * W + U[1] * H, C[2] + V[2] * W + U[2] * H];
+        const c4 = [C[0] + U[0] * H, C[1] + U[1] * H, C[2] + U[2] * H];
+
+        // Winding
+        // If dir is negative (1, 3, 5), swap order?
+        // Standard (0,2,4): c1->c2->c3?
+        // Let's verify normal.
+        // X+ (0): Right hand rule. Y(Up) x Z(Front) = X+.
+        // My U=Y, V=Z. U x V = X+.
+        // So c1 -> c4 -> c3 -> c2? (CCW?)
+        // Verts: 1, 2, 3. (0,0) -> (1,0) -> (1,1).
+        // (1,0)-(0,0) = (1,0). (1,1)-(1,0) = (0,1). X x Y = Z.
+        // So V x U = Normal?
+        // V=Z, U=Y. Z x Y = -X.
+        // So U x V = X.
+        // Quad corner sequence: c1(0,0), c2(W,0) [V], c3(W,H) [V+U], c4(0,H) [U].
+        // 1->2->3: (W,0) x (0,H) = Z x Y = -X. WRONG.
+        // 1->2 is V. 2->3 is U. V x U is -Normal.
+        // So we want U x V order? 1->4->3?
+
+        // Let's stick to explicit push.
+
+        const pushQuad = (p1: number[], p2: number[], p3: number[], p4: number[]) => {
+            // Tri 1: p1, p2, p3
+            target.positions.push(...p1, ...p2, ...p3);
+            target.normals.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
+            target.colors.push(rgb[0], rgb[1], rgb[2], rgb[0], rgb[1], rgb[2], rgb[0], rgb[1], rgb[2]);
+
+            // Tri 2: p1, p3, p4
+            target.positions.push(...p1, ...p3, ...p4);
+            target.normals.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
+            target.colors.push(rgb[0], rgb[1], rgb[2], rgb[0], rgb[1], rgb[2], rgb[0], rgb[1], rgb[2]);
+        };
+
+        if (dirIdx % 2 !== 0) {
+            // Negative faces (Left, Bottom, Back)
+            // Need to flip to face "outwards" (in negative direction)
+            // U x V gives Positive.
+            // So we want V x U logic?
+            // Actually just swap winding.
+            pushQuad(c1, c4, c3, c2); // c1->c4 is U. c4->c3 is V. U x V = Pos.
+            // Wait, if normal is neg, we want tri normal to be neg.
+            // U x V is Pos.
+            // So c1->c4->c3 generates Pos normal.
+            // We want Neg normal.
+            // So use c1->c2->c3 (V x U = Neg).
+            pushQuad(c1, c2, c3, c4);
+        } else {
+            // Positive faces (Right, Top, Front)
+            // Normal is Pos.
+            // c1->c2 is V. c2->c3 is U. V x U = Neg.
+            // We want Pos.
+            // So c1->c4->c3 (U x V = Pos).
+            pushQuad(c1, c4, c3, c2);
         }
     }
 
