@@ -261,8 +261,10 @@ export class EnvironmentRenderSystem {
             );
             this.adapter.directionalLight.target.updateMatrixWorld();
 
-            // Disable shadows at night for softer moonlit look
-            this.adapter.directionalLight.castShadow = !isNight;
+            // Disable shadows at night for softer moonlit look, AND at low zoom for performance
+            const zoom = this.adapter.getCamera().zoom;
+            const isZoomedOut = zoom < 0.6;
+            this.adapter.directionalLight.castShadow = !isNight && !isZoomedOut;
         }
     }
 

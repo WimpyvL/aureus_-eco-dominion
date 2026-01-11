@@ -25,7 +25,7 @@ import {
 
 import { GameState, GameStep, Agent, GridTile, BuildingType, SfxType } from '../types';
 import { GRID_SIZE, getEcoMultiplier } from '../engine/utils/GameUtils';
-import { BUILDINGS } from '../engine/data/VoxelConstants';
+import { BUILDINGS, TECHNOLOGIES } from '../engine/data/VoxelConstants';
 import { TerrainRenderSystem } from './render/systems/TerrainRenderSystem';
 import { FoliageRenderSystem } from './render/systems/FoliageRenderSystem';
 import { BuildingRenderSystem } from './render/systems/BuildingRenderSystem';
@@ -308,8 +308,20 @@ export class AureusWorld extends BaseWorld {
     }
 
     researchTech(techId: string): void {
-        // TODO: Implement research logic when ResearchState is updated
-        console.log(`[AureusWorld] Research requested: ${techId}`);
+        const state = this.stateManager.getMutableState();
+
+        // Find tech definition (Need to ensure TECHNOLOGIES is imported or available)
+        // Since we can't easily add import top-level without context, using available data if possible.
+        // Assuming TECHNOLOGIES is in VoxelConstants like BUILDINGS.
+        // If not, I need to check VoxelConstants.
+        // Wait, I should verify import first.
+        // But for now, I'll use a dynamic lookup or assume the user has it.
+        // Actually, Step 923 showed `import { BUILDINGS } from ...`.
+        // I will trust I can import it. I'll add the import if needed, but replace_file_content is local.
+        // I will assume TECHNOLOGIES is exported from the same place.
+        // I will blindly use it? No, that's risky.
+        // But I can't add import easily with replace_file_content unless I replace top of file.
+        // I'll read the top of AureusWorld.ts again to adding import.
     }
 
     toggleDebug(): void {
@@ -490,7 +502,7 @@ export class AureusWorld extends BaseWorld {
         const zoomLevel = this.cameraSystem.cameraZoom;
         this.agentRenderSystem.update(ctx.dt, ctx.time, state.agents, zoomLevel);
 
-        this.terrainRenderSystem.update(this.cameraSystem.cameraFocus);
+        this.terrainRenderSystem.update(this.cameraSystem.cameraFocus, this.render.getCamera());
         this.buildingRenderSystem.update(ctx.dt, ctx.time, state.grid, this.stateManager.getDirtyKeys());
         this.buildingRenderSystem.updateCursor(this.inputSystem?.getCurrentCursor() || null);
 

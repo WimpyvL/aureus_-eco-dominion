@@ -219,33 +219,33 @@ export function getFoliageAt(biome: string, height: number, detail: number, dist
 
     if (rand < goldChance) return 'GOLD_VEIN';
 
-    // --- FOLIAGE LOGIC (Heavily reduced for 60fps target) ---
+    // --- FOLIAGE LOGIC (Heavily reduced for performance) ---
 
     if (biome === 'SAND') {
-        if (rand > 0.99) foliage = 'CACTUS_SAGUARO';
-        else if (rand > 0.97) foliage = 'SHRUB_DRY';
+        if (rand > 0.995) foliage = 'CACTUS_SAGUARO'; // 0.5%
+        else if (rand > 0.99) foliage = 'SHRUB_DRY'; // 0.5%
     }
     else if (biome === 'STONE') {
-        if (rand > 0.99) foliage = 'CRYSTAL_SPIKE';
-        else if (rand > 0.96) foliage = 'ROCK_PEBBLE';
+        if (rand > 0.995) foliage = 'CRYSTAL_SPIKE';
+        else if (rand > 0.99) foliage = 'ROCK_PEBBLE';
     }
     else if (biome === 'DIRT') {
-        if (rand > 0.98) foliage = 'TREE_DEAD';
-        else if (rand > 0.96) foliage = 'BUSH_THORN';
+        if (rand > 0.99) foliage = 'TREE_DEAD';
+        else if (rand > 0.98) foliage = 'BUSH_THORN';
     }
     else if (biome === 'SNOW') {
-        if (rand > 0.97) foliage = 'TREE_FROSTED_PINE';
+        if (rand > 0.99) foliage = 'TREE_FROSTED_PINE';
     }
     else if (biome === 'GRASS') {
-        // Grass Biome - Very sparse for performance
+        // Grass Biome - Very sparse
         if (detail > 0.6) {
             // Forest - Sparse trees
-            if (rand > 0.96) foliage = 'TREE_OAK';
-            else if (rand > 0.94) foliage = 'TREE_BIRCH';
+            if (rand > 0.985) foliage = 'TREE_OAK';
+            else if (rand > 0.975) foliage = 'TREE_BIRCH';
         } else {
             // Plains - Minimal
-            if (rand > 0.99) foliage = 'TREE_OAK';
-            else if (rand > 0.97) foliage = 'FLOWER_YELLOW';
+            if (rand > 0.995) foliage = 'TREE_OAK';
+            else if (rand > 0.99) foliage = 'FLOWER_YELLOW';
         }
     }
 

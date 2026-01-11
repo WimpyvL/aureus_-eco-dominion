@@ -150,9 +150,9 @@ const App: React.FC = () => {
     const lastSfxTime = useRef<number>(0);
 
     // UI-only state (not game logic)
-    const [sidebarOpen, setSidebarOpen] = useState<'NONE' | 'OPS' | 'SHOP' | 'TRADE'>('NONE');
+    const [sidebarOpen, setSidebarOpen] = useState<'NONE' | 'OPS' | 'SHOP' | 'TRADE' | 'CREW' | 'TECH'>('NONE');
     const [selectedTileForAction, setSelectedTileForAction] = useState<number | null>(null);
-    const [isIntroAnim, setIsIntroAnim] = useState(true);
+    const [isIntroAnim, setIsIntroAnim] = useState(false);
     const [pendingPlacementIndex, setPendingPlacementIndex] = useState<number | null>(null);
     const [showWorldMap, setShowWorldMap] = useState(false);
     const [showHomePage, setShowHomePage] = useState(true);
@@ -207,11 +207,11 @@ const App: React.FC = () => {
         });
     }, [state?.pendingEffects]);
 
-    // Intro animation
+    // Intro animation (Disabled)
     useEffect(() => {
-        if (ready && world) {
-            world.playIntroAnimation(() => setIsIntroAnim(false));
-        }
+        // if (ready && world) {
+        //     world.playIntroAnimation(() => setIsIntroAnim(false));
+        // }
     }, [ready, world]);
 
     // Keyboard for starting game

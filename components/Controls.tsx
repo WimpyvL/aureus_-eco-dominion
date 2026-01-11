@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -12,7 +11,7 @@ import { BUILDINGS } from '../engine/data/VoxelConstants';
 interface ControlsProps {
     selectedBuilding: BuildingType | null;
     dispatch: React.Dispatch<Action>;
-    setSidebarOpen: (mode: 'NONE' | 'OPS' | 'SHOP' | 'TRADE') => void;
+    setSidebarOpen: (mode: 'NONE' | 'OPS' | 'SHOP' | 'TRADE' | 'CREW' | 'TECH') => void;
     viewMode: string;
     playSfx: (type: any) => void;
     step: GameStep;
@@ -20,6 +19,7 @@ interface ControlsProps {
 }
 
 export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding, dispatch, setSidebarOpen, viewMode, playSfx, step, debugMode }) => {
+    // ... (keep existing render logic for selectedBuilding)
     if (selectedBuilding) {
         return (
             <div className="absolute bottom-20 sm:bottom-12 left-4 right-4 z-50 animate-in slide-in-from-bottom-4 pointer-events-auto flex flex-col gap-2 max-w-sm mx-auto items-center">
@@ -78,7 +78,7 @@ export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding,
                             ? 'bg-emerald-600 border-emerald-900 border-b-2 translate-y-[2px]'
                             : 'bg-slate-800 border-slate-950 hover:-translate-y-0.5'
                         }
-                `}
+                    `}
                 >
                     <Activity size={18} className={debugMode ? 'text-white' : 'text-slate-400'} />
                 </button>
@@ -94,7 +94,7 @@ export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding,
                             ? 'bg-purple-600 border-purple-900 border-b-2 translate-y-[2px]'
                             : 'bg-slate-800 border-slate-950 hover:-translate-y-0.5'
                         }
-                `}
+                    `}
                 >
                     <Layers size={20} className={viewMode === 'UNDERGROUND' ? 'text-white' : 'text-slate-400'} />
                 </button>
@@ -105,8 +105,8 @@ export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding,
                     }}
                     className={`
                     w-12 h-12 rounded-[4px] flex items-center justify-center transition-all bg-slate-800 border-slate-950 hover:-translate-y-0.5
-                    border-2 border-b-[4px] 
-                `}
+                    border-2 border-b-[4px]
+                    `}
                 >
                     <TrendingUp size={20} className="text-blue-400" />
                 </button>
@@ -116,16 +116,16 @@ export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding,
             <button
                 onClick={() => setSidebarOpen('SHOP')}
                 className={`
-                pointer-events-auto 
-                bg-emerald-600 hover:bg-emerald-500 text-white 
+                pointer-events-auto
+                bg-emerald-600 hover:bg-emerald-500 text-white
                 h-14 px-5
-                rounded-[6px] 
-                border-2 border-b-[6px] border-emerald-900 
-                shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)]
-                flex items-center gap-3 transition-all 
+                rounded-[6px]
+                border-2 border-b-[6px] border-emerald-900
+                shadow-[4px_4px_0px_0px_rgba(0, 0, 0, 0.3)]
+                flex items-center gap-3 transition-all
                 active:border-b-2 active:translate-y-[4px] active:shadow-none
                 ${highlightBuild ? 'highlight-pulse z-50 ring-4 ring-emerald-400' : ''}
-            `}
+                `}
             >
                 <Hammer size={24} />
                 <span className="hidden sm:inline font-black text-sm uppercase tracking-widest font-['Rajdhani']">Build</span>

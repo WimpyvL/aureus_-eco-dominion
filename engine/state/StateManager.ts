@@ -49,7 +49,7 @@ export class StateManager {
             step: GameStep.INTRO,
             gameOver: false,
             debugMode: false,
-            cheatsEnabled: true, // DEV: Creative mode enabled by default
+            cheatsEnabled: false, // DEV: Creative mode disabled
             tickCount: 0,
 
             market: {

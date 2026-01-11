@@ -279,7 +279,7 @@ export interface BuildingDef {
   maintenance: number;
   pollution: number;
   production?: number;
-  productionType?: 'MINERALS' | 'AGT' | 'ECO' | 'TRUST';
+  productionType?: 'MINERALS' | 'AGT' | 'ECO' | 'TRUST' | 'GEMS';
   era: Era;
   power?: PowerConfig;
   water?: WaterConfig;
@@ -295,7 +295,7 @@ export interface Goal {
   title: string;
   description: string;
   type: 'BUILD' | 'RESOURCE' | 'STAT';
-  targetType: BuildingType | 'AGT' | 'MINERALS' | 'ECO' | 'TRUST';
+  targetType: BuildingType | 'AGT' | 'MINERALS' | 'ECO' | 'TRUST' | 'GEMS';
   targetValue: number;
   currentValue: number;
   reward: { type: 'AGT' | 'GEMS', amount: number };

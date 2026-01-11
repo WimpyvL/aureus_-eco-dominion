@@ -29,43 +29,43 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ step, dispatch
 
     const content = {
         [GameStep.INTRO]: {
-            title: "UPLINK ESTABLISHED",
-            subtitle: "Mission Control",
-            text: "Welcome, Director. Harmonize Zimbabwean industry with the local ecosystem.",
-            buttonText: "INITIATE",
+            title: "DIRECTIVE: ESTABLISH COLONY",
+            subtitle: "Mission Briefing",
+            text: "Director, operational status confirmed. Objective: Harmonize industry with the ecosystem. Establish a sustainable foothold.",
+            buttonText: "INITIATE PROTOCOLS",
             action: () => dispatch({ type: 'ADVANCE_TUTORIAL' })
         },
         [GameStep.TUTORIAL_MINE]: {
-            title: "PHASE 1: SUPPLY",
-            subtitle: "Acquisition",
-            text: "Open the Supply Catalog to acquire buildings. They store in your inventory.",
+            title: "PHASE 1: WORKFORCE",
+            subtitle: "Maintenance",
+            text: "Colonists require habitation and industry. Access Supply Catalog to deploy Staff Quarters and Wash Plant.",
             tasks: ["Buy a Staff Quarters", "Buy a Wash Plant"],
-            buttonText: "OPEN SUPPLY",
+            buttonText: "ACCESS SUPPLY",
             action: () => setSidebarOpen('SHOP')
         },
         [GameStep.TUTORIAL_SELL]: {
-            title: "PHASE 2: ECONOMY",
-            subtitle: "Logistics",
-            text: "Liquidiate minerals in the Operations Menu to acquire AGT credits.",
+            title: "PHASE 2: REVENUE",
+            subtitle: "Operations",
+            text: "Mineral extraction authorized. Liquidate stockpiles at Operations Terminal to fund expansion.",
             tasks: ["Open Operations", "Sell Minerals"],
-            buttonText: "OPEN OPS",
+            buttonText: "ACCESS OPERATIONS",
             action: () => setSidebarOpen('OPS')
         },
         [GameStep.TUTORIAL_BUY]: {
-            title: "PHASE 3: ECO",
+            title: "PHASE 3: BALANCE",
             subtitle: "Sustainability",
-            text: "Pollution is high. Deploy Solar Arrays to offset ecological damage.",
+            text: "Biosphere degradation detected. Deploy Solar Arrays to mitigate industrial pollution.",
             tasks: ["Buy Solar Arrays"],
-            buttonText: "OPEN SUPPLY",
+            buttonText: "ACCESS SUPPLY",
             action: () => {
                 setSidebarOpen('SHOP');
                 dispatch({ type: 'ADVANCE_TUTORIAL' });
             }
         },
         [GameStep.TUTORIAL_PLACE]: {
-            title: "PHASE 4: EXPAND",
-            subtitle: "Construction",
-            text: "Select a building from the inventory below to activate placement mode.",
+            title: "PHASE 4: CONSTRUCTION",
+            subtitle: "Expansion",
+            text: "Select units from inventory dock to begin construction. Maintain positive AGT/Eco balance.",
             tasks: ["Place from Inventory"],
             buttonText: null,
             action: null

@@ -104,6 +104,7 @@ export const mats = {
   solar: new THREE.MeshStandardMaterial({ color: 0x1e3a8a, metalness: 0.8, roughness: 0.2, emissive: 0x1e3a8a, emissiveIntensity: 0.2 }),
   wood: new THREE.MeshStandardMaterial({ map: createNoiseTexture(64, 64, 0x92400e, 30), roughness: 0.8 }),
   leaf: new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.8 }),
+  grass: new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 1.0 }),
   pine: new THREE.MeshStandardMaterial({ map: createNoiseTexture(64, 64, 0x14532d), roughness: 0.9 }),
   water: new THREE.MeshStandardMaterial({ color: 0x06b6d4, transparent: true, opacity: 0.85, roughness: 0.1 }),
   brick: new THREE.MeshStandardMaterial({ map: createNoiseTexture(64, 64, 0xb91c1c, 40), roughness: 0.9 }),

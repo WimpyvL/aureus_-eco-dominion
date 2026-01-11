@@ -78,32 +78,41 @@ interface OpsDrawerProps {
     ecoMult: number;
     trustMult: number;
     playSfx: (type: any) => void;
+
 }
+
+const TabButton = ({ id, label, icon: Icon, activeTab, setActiveTab, playSfx }: { id: string, label: string, icon: any, activeTab: string, setActiveTab: (id: any) => void, playSfx: (t: any) => void }) => {
+    const isActive = activeTab === id;
+    return (
+        <button
+            onClick={() => {
+                setActiveTab(id);
+                try { playSfx('UI_CLICK'); } catch (e) { console.error('SFX Error:', e); }
+            }}
+            className={`
+            flex-1 py-2 px-1 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-wider transition-all
+            border-b-4 rounded-t-[4px]
+            ${isActive
+                    ? 'bg-slate-800 text-amber-500 border-amber-500'
+                    : 'bg-slate-900 text-slate-500 border-slate-800 hover:bg-slate-800 hover:text-slate-300'}
+        `}
+        >
+            <Icon size={12} /> <span className="hidden sm:inline">{label}</span>
+        </button>
+    );
+};
 
 export const OpsDrawer: React.FC<OpsDrawerProps> = ({ isOpen, onClose, state, dispatch, financials, ecoMult, trustMult, playSfx }) => {
     const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'RESEARCH' | 'COLONISTS'>('OVERVIEW');
 
+    // Reset tab when drawer opens
+    React.useEffect(() => {
+        if (isOpen) setActiveTab('OVERVIEW');
+    }, [isOpen]);
+
     const quartersCount = state.grid.filter(t => t.buildingType === BuildingType.STAFF_QUARTERS && !t.isUnderConstruction).length;
     const currentCapacity = (quartersCount * CAPACITY_PER_QUARTERS) + 4;
     const colonistCount = state.agents.filter(a => a.type !== 'ILLEGAL_MINER').length;
-
-    const TabButton = ({ id, label, icon: Icon }: any) => {
-        const isActive = activeTab === id;
-        return (
-            <button
-                onClick={() => { setActiveTab(id); playSfx('UI_CLICK'); }}
-                className={`
-                flex-1 py-2 px-1 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-wider transition-all
-                border-b-4 rounded-t-[4px]
-                ${isActive
-                        ? 'bg-slate-800 text-amber-500 border-amber-500'
-                        : 'bg-slate-900 text-slate-500 border-slate-800 hover:bg-slate-800 hover:text-slate-300'}
-            `}
-            >
-                <Icon size={12} /> <span className="hidden sm:inline">{label}</span>
-            </button>
-        );
-    };
 
     return (
         <div
@@ -127,9 +136,9 @@ export const OpsDrawer: React.FC<OpsDrawerProps> = ({ isOpen, onClose, state, di
 
             {/* Tabs */}
             <div className="flex border-b-2 border-slate-700 px-3 pt-3 bg-slate-900 gap-1">
-                <TabButton id="OVERVIEW" label="Stats" icon={BarChart3} />
-                <TabButton id="COLONISTS" label="Crew" icon={Users} />
-                <TabButton id="RESEARCH" label="Tech" icon={FlaskConical} />
+                <TabButton id="OVERVIEW" label="Stats" icon={BarChart3} activeTab={activeTab} setActiveTab={setActiveTab} playSfx={playSfx} />
+                <TabButton id="COLONISTS" label="Crew" icon={Users} activeTab={activeTab} setActiveTab={setActiveTab} playSfx={playSfx} />
+                <TabButton id="RESEARCH" label="Tech" icon={FlaskConical} activeTab={activeTab} setActiveTab={setActiveTab} playSfx={playSfx} />
             </div>
 
             <div className="p-3 sm:p-4 flex-1 overflow-y-auto no-scrollbar bg-slate-950">
