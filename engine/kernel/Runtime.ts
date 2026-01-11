@@ -8,10 +8,12 @@ import { Profiler } from './Profiler';
 import { EventBus, engineEvents } from './EventBus';
 import { FrameContext, FixedContext, EngineConfig, DEFAULT_ENGINE_CONFIG } from './Types';
 import { WorldHost } from '../world/WorldHost';
+import { Benchmark } from './Benchmark';
 
 export class Runtime {
     readonly clock: Clock;
     readonly profiler: Profiler;
+    readonly benchmark: Benchmark;
     readonly events: EventBus;
 
     private running = false;
@@ -27,6 +29,7 @@ export class Runtime {
         this.clock = new Clock(this.config.fixedTickRate);
         this.profiler = new Profiler();
         this.profiler.setEnabled(this.config.profilerEnabled);
+        this.benchmark = new Benchmark(this.profiler);
         this.events = engineEvents;
     }
 
@@ -169,6 +172,16 @@ export class Runtime {
         // ─────────────────────────────────────────────
         this.profiler.begin('frameEnd');
         this.worldHost.frameEnd(frameCtx);
+        this.benchmark.update(frameCtx.time);
+
+        // Log telemetry every 5 seconds (debug mode)
+        if (Math.floor(frameCtx.time) % 5 === 0 && Math.abs(frameCtx.time % 1) < frameCtx.dt * 2) {
+            const jobStats = this.worldHost.world?.jobStats || { queued: 0, pending: 0, completed: 0 };
+            // Push to benchmark (it doesn't have a push method for this, so just construct report)
+            const report = this.benchmark.getReport(jobStats.queued, 0); // Entity count 0 for now
+            console.log(`[Telemetry] FPS: ${report.fps.toFixed(1)} | Frame: ${report.frameTime.p95.toFixed(2)}ms (p95) | Jobs Q: ${report.jobs.queueDepth}`);
+        }
+
         this.profiler.end('frameEnd');
 
         this.profiler.end('frame');
@@ -191,5 +204,9 @@ export class Runtime {
      */
     getProfiler(): Profiler {
         return this.profiler;
+    }
+
+    getBenchmark(): Benchmark {
+        return this.benchmark;
     }
 }

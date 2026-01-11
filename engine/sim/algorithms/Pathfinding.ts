@@ -4,8 +4,10 @@
 
 import { GridTile, BuildingType } from '../../../types';
 import { GRID_SIZE } from '../../utils/GameUtils';
+import { BinaryHeap } from '../../utils/BinaryHeap';
 export { GRID_SIZE };
 
+// Costs for different terrains
 // Costs for different terrains
 export const COST = {
     ROAD: 0.5,
@@ -13,6 +15,12 @@ export const COST = {
     ROUGH: 1.5,
     OBSTACLE: 2.0
 };
+
+// Node wrapper for Heap
+interface PathNode {
+    index: number;
+    f: number;
+}
 
 const getDistance = (a: number, b: number) => {
     const ax = a % GRID_SIZE, ay = Math.floor(a / GRID_SIZE);
@@ -34,65 +42,58 @@ const getTileCost = (tile: GridTile): number => {
 };
 
 /**
- * A* Pathfinding
+ * A* Pathfinding (Optimized with BinaryHeap)
  * Returns array of tile indices
  */
 export function findPath(startIdx: number, endIdx: number, grid: GridTile[]): number[] | null {
     if (startIdx === endIdx) return [endIdx];
 
-    // Early exit if target is blocked/water (unless building something there)
-    // For now, assume target is reachable
+    // Priority Queue (Min-Heap based on f-score)
+    const openSet = new BinaryHeap<PathNode>((a, b) => a.f - b.f);
+    openSet.push({ index: startIdx, f: getDistance(startIdx, endIdx) });
 
-    const openSet: number[] = [startIdx];
     const cameFrom = new Map<number, number>();
-
     const gScore = new Map<number, number>();
     gScore.set(startIdx, 0);
 
-    const fScore = new Map<number, number>();
-    fScore.set(startIdx, getDistance(startIdx, endIdx));
-
-    const openSetHash = new Set<number>();
-    openSetHash.add(startIdx);
+    const visited = new Set<number>();
 
     let iterations = 0;
-    const MAX_ITERATIONS = 5000; // Performance cap
+    const MAX_ITERATIONS = 5000; // Performance limit
 
-    while (openSet.length > 0) {
+    while (openSet.size > 0) {
         iterations++;
         if (iterations > MAX_ITERATIONS) return null;
 
-        // Simple priority queue (can be optimized)
-        let current = openSet[0];
-        let lowestF = fScore.get(current) ?? Infinity;
+        const current = openSet.pop()!;
+        const cIdx = current.index;
 
-        for (let i = 1; i < openSet.length; i++) {
-            const score = fScore.get(openSet[i]) ?? Infinity;
-            if (score < lowestF) {
-                lowestF = score;
-                current = openSet[i];
-            }
-        }
+        // Lazy deletion: if we extracted a node that we've already closed with a better path, skip
+        // Actually A* guarantees first expand is best, but with duplicates in heap we might see it again.
+        // We can just check if gScore is valid.
 
-        if (current === endIdx) {
+        if (cIdx === endIdx) {
             // Reconstruct
-            const path = [current];
-            let curr = current;
+            const path = [cIdx];
+            let curr = cIdx;
             while (cameFrom.has(curr)) {
                 curr = cameFrom.get(curr)!;
                 path.unshift(curr);
             }
-            return path.slice(1); // Remove start node
+            return path.slice(1);
         }
 
-        // Remove current
-        const idx = openSet.indexOf(current);
-        openSet.splice(idx, 1);
-        openSetHash.delete(current);
+        // Optimization: Don't expand if we closed it already
+        // (Standard A* doesn't need ClosedSet if monotone heuristic, but duplicates in heap require check if we strictly want to avoid work)
+        // With lazy heap, we might pop same node twice.
+        // We can use gScore to check validity if we wanted. 
+        // But simpler: just add to visited (ClosedSet).
+        if (visited.has(cIdx)) continue;
+        visited.add(cIdx);
 
         // Neighbors (8-way)
-        const cx = current % GRID_SIZE;
-        const cy = Math.floor(current / GRID_SIZE);
+        const cx = cIdx % GRID_SIZE;
+        const cy = Math.floor(cIdx / GRID_SIZE);
 
         for (let dy = -1; dy <= 1; dy++) {
             for (let dx = -1; dx <= 1; dx++) {
@@ -103,24 +104,29 @@ export function findPath(startIdx: number, endIdx: number, grid: GridTile[]): nu
 
                 if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
                     const neighbor = ny * GRID_SIZE + nx;
+
+                    if (visited.has(neighbor)) continue;
+
                     const tile = grid[neighbor];
 
                     // Collision check
                     if (tile.buildingType === BuildingType.POND) continue;
-                    if (tile.locked) continue; // Locked doors/areas
+                    if (tile.locked) continue;
 
                     const moveCost = getTileCost(tile);
-                    const tentativeG = (gScore.get(current) ?? Infinity) + moveCost;
+                    // Diagonal movement cost slightly higher? (Euclidean approx: 1.414). 
+                    // Current logic uses Chebyshev, so diagonals are cost 1 (+ terrain).
+                    // If we want consistent movement, diagonals should perhaps cost more.
+                    // But sticking to existing logic:
+                    const tentativeG = (gScore.get(cIdx) ?? Infinity) + moveCost;
 
                     if (tentativeG < (gScore.get(neighbor) ?? Infinity)) {
-                        cameFrom.set(neighbor, current);
+                        cameFrom.set(neighbor, cIdx);
                         gScore.set(neighbor, tentativeG);
-                        fScore.set(neighbor, tentativeG + getDistance(neighbor, endIdx));
+                        const f = tentativeG + getDistance(neighbor, endIdx);
 
-                        if (!openSetHash.has(neighbor)) {
-                            openSet.push(neighbor);
-                            openSetHash.add(neighbor);
-                        }
+                        // Push to heap (even if already there, this new one is better and will pop first)
+                        openSet.push({ index: neighbor, f });
                     }
                 }
             }

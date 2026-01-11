@@ -310,18 +310,44 @@ export class AureusWorld extends BaseWorld {
     researchTech(techId: string): void {
         const state = this.stateManager.getMutableState();
 
-        // Find tech definition (Need to ensure TECHNOLOGIES is imported or available)
-        // Since we can't easily add import top-level without context, using available data if possible.
-        // Assuming TECHNOLOGIES is in VoxelConstants like BUILDINGS.
-        // If not, I need to check VoxelConstants.
-        // Wait, I should verify import first.
-        // But for now, I'll use a dynamic lookup or assume the user has it.
-        // Actually, Step 923 showed `import { BUILDINGS } from ...`.
-        // I will trust I can import it. I'll add the import if needed, but replace_file_content is local.
-        // I will assume TECHNOLOGIES is exported from the same place.
-        // I will blindly use it? No, that's risky.
-        // But I can't add import easily with replace_file_content unless I replace top of file.
-        // I'll read the top of AureusWorld.ts again to adding import.
+        // 1. Validate Tech
+        const tech = TECHNOLOGIES[techId];
+        if (!tech) {
+            console.warn(`[AureusWorld] Unknown tech: ${techId}`);
+            return;
+        }
+
+        // 2. Check if already unlocked
+        if (state.research.unlocked.includes(techId)) return;
+
+        // 3. Check Prereqs
+        if (tech.prereq && !state.research.unlocked.includes(tech.prereq)) {
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+            return;
+        }
+
+        // 4. Check Resources
+        if (state.resources.agt < tech.cost) {
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+            return;
+        }
+
+        // 5. Deduct Cost
+        state.resources.agt -= tech.cost;
+
+        // 6. Unlock (Instant)
+        state.research.unlocked.push(techId);
+
+        // 7. Notification & Sound
+        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.COMPLETE });
+        state.newsFeed.push({
+            id: `tech_${techId}_${Date.now()}`,
+            headline: `RESEARCH COMPLETE: ${tech.name}`,
+            type: 'POSITIVE',
+            timestamp: Date.now()
+        });
+
+        console.log(`[AureusWorld] Unlocked tech: ${techId}`);
     }
 
     toggleDebug(): void {

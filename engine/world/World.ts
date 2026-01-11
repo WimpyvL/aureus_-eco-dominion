@@ -28,6 +28,9 @@ export interface World {
     /** Current lifecycle state */
     readonly state: WorldState;
 
+    /** Job System Statistics for Telemetry */
+    readonly jobStats?: { queued: number; pending: number; completed: number };
+
     // ═══════════════════════════════════════════════════════════════
     // LIFECYCLE
     // ═══════════════════════════════════════════════════════════════
@@ -102,6 +105,8 @@ export interface World {
 export abstract class BaseWorld implements World {
     abstract readonly id: string;
     state: WorldState = 'uninitialized';
+
+    get jobStats() { return { queued: 0, pending: 0, completed: 0 }; }
 
     async init(): Promise<void> {
         this.state = 'loading';
