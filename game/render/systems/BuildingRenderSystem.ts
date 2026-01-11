@@ -347,33 +347,55 @@ export class BuildingRenderSystem {
         }
     }
 
-    public updateCursor(pos: THREE.Vector3 | null) {
+    public updateCursor(pos: THREE.Vector3 | null, fallbackCenter: THREE.Vector3 | null = null) {
+        // 1. Determine effective position for the Ghost Building
+        // Priority: Pinned > Cursor > Fallback (Screen Center)
+        let ghostPos = null;
+
+        if (this.pinnedGhostIndex !== null) {
+            // Already handled by setPinnedGhost, but we might want to ensure it stays there
+            // Actually setPinnedGhost positions it once.
+            // If we want it to persist, we rely on the group position.
+            // But if we want to update visibility...
+            if (this.ghostBuilding) this.ghostBuilding.visible = true;
+        } else if (pos) {
+            ghostPos = pos;
+        } else if (fallbackCenter) {
+            ghostPos = fallbackCenter;
+        }
+
+        // 2. Update Selection Cursor (Only follows actual mouse/touch)
         if (pos) {
             // Snap to grid center
             const cx = Math.floor(pos.x + 0.5);
             const cz = Math.floor(pos.z + 0.5);
 
-            // Update Selection Cursor
             this.selectionCursor.visible = true;
             this.selectionCursor.position.set(cx, pos.y + 0.1, cz);
+        } else {
+            this.selectionCursor.visible = false;
+        }
 
-            // Update Ghost
-            if (this.ghostBuilding) {
+        // 3. Update Ghost Building Position
+        if (this.ghostBuilding && this.pinnedGhostIndex === null) {
+            if (ghostPos) {
                 this.ghostBuilding.visible = true;
+
+                // Snap to grid
+                const cx = Math.floor(ghostPos.x + 0.5);
+                const cz = Math.floor(ghostPos.z + 0.5);
 
                 // Adjust for size
                 const def = BUILDINGS[this.ghostType!];
                 const w = def?.width || 1;
                 const d = def?.depth || 1;
-                // Center alignment logic matches updateTile
                 const dx = (w - 1) / 2;
                 const dz = (d - 1) / 2;
 
-                this.ghostBuilding.position.set(cx + dx, pos.y, cz + dz);
+                this.ghostBuilding.position.set(cx + dx, ghostPos.y, cz + dz);
+            } else {
+                this.ghostBuilding.visible = false;
             }
-        } else {
-            this.selectionCursor.visible = false;
-            if (this.ghostBuilding) this.ghostBuilding.visible = false;
         }
     }
 }
