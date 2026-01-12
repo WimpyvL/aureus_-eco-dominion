@@ -532,7 +532,10 @@ export class AureusWorld extends BaseWorld {
 
         this.terrainRenderSystem.update(this.cameraSystem.cameraFocus, this.render.getCamera());
         this.buildingRenderSystem.update(ctx.dt, ctx.time, state.grid, this.stateManager.getDirtyKeys());
-        this.buildingRenderSystem.updateCursor(this.inputSystem?.getCurrentCursor() || null);
+        this.buildingRenderSystem.updateCursor(
+            this.inputSystem?.getCurrentCursor() || null,
+            this.cameraSystem.getFocus()
+        );
 
         this.environmentRenderSystem.update(
             ctx.dt,
