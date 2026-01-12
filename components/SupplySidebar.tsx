@@ -130,7 +130,8 @@ const ITEM_CATEGORIES: Record<BuildingType, CategoryType> = {
 };
 
 export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dispatch, onClose, playSfx }) => {
-    const [inspecting, setInspecting] = useState<{ type: BuildingType, y: number } | null>(null);
+    // New interaction: Select item first, then buy.
+    const [selectedItem, setSelectedItem] = useState<BuildingType | null>(null);
     const [activeCategory, setActiveCategory] = useState<CategoryType>('ALL');
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -165,8 +166,16 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
 
     React.useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
+            // If modal is open, don't close sidebar on outside click (let modal handle its own close if needed)
+            // Actually, if we click completely outside everything, close sidebar.
+            // But if we click outside the detail modal but inside sidebar, keep sidebar.
             if (sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
-                onClose();
+                // Check if we are interacting with the detail modal (which might be portaled or fixed z-index)
+                // For now, simpler check:
+                const target = event.target as HTMLElement;
+                if (!target.closest('.detail-modal')) {
+                    onClose();
+                }
             }
         };
 
@@ -180,11 +189,25 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
 
     if (!isOpen) return null;
 
-    const handlePurchase = (type: BuildingType) => {
-        const scaledCost = calculateBuildingCost(type, state.grid);
+    const handleSelect = (type: BuildingType) => {
+        setSelectedItem(type);
+        playSfx('UI_CLICK');
+    };
+
+    const handlePurchase = () => {
+        if (!selectedItem) return;
+        const scaledCost = calculateBuildingCost(selectedItem, state.grid);
         if (state.cheatsEnabled || state.resources.agt >= scaledCost) {
-            dispatch({ type: 'BUY_BUILDING', payload: { type, cost: state.cheatsEnabled ? 0 : scaledCost } });
+            dispatch({ type: 'BUY_BUILDING', payload: { type: selectedItem, cost: state.cheatsEnabled ? 0 : scaledCost } });
             playSfx('SELL');
+            setSelectedItem(null); // Close detail view on buy to allow placement
+            // Optional: Close sidebar too?
+            // onClose(); 
+            // Better to keep sidebar open if they want to buy multiple? 
+            // Usually "Buy" enters placement mode which might want full screen. 
+            // In Age of Empires etc, sidebar stays. But here placement mode might need view.
+            // Let's close sidebar to give view space for placement.
+            onClose();
         } else {
             playSfx('ERROR');
         }
@@ -197,71 +220,139 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
     }
 
     return (
-        <div
-            ref={sidebarRef}
-            className="absolute right-0 top-14 bottom-22 sm:bottom-28 w-[85vw] max-w-[340px] sm:w-80 z-40 flex pointer-events-none transition-all"
-        >
-            {/* Category Tabs (Vertical) */}
-            <div className="w-12 sm:w-14 bg-slate-900/95 border-r border-slate-800 flex flex-col items-center py-4 gap-3 pointer-events-auto shadow-xl">
-                {CATEGORIES.map(cat => (
+        <>
+            {/* Sidebar Container */}
+            <div
+                ref={sidebarRef}
+                className="absolute right-0 top-14 bottom-20 sm:bottom-24 w-[75vw] sm:w-80 z-40 flex pointer-events-none transition-all"
+            >
+                {/* Category Tabs (Vertical) - Reduced size for mobile */}
+                <div className="w-10 sm:w-14 bg-slate-900/95 border-r border-slate-800 flex flex-col items-center py-2 sm:py-4 gap-2 sm:gap-3 pointer-events-auto shadow-xl">
+                    {CATEGORIES.map(cat => (
+                        <button
+                            key={cat.id}
+                            onClick={() => { setActiveCategory(cat.id); playSfx('UI_CLICK'); }}
+                            title={cat.label}
+                            className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center transition-all ${activeCategory === cat.id
+                                ? 'bg-amber-500 text-amber-950 shadow-[0_0_15px_rgba(245,158,11,0.4)]'
+                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+                                }`}
+                        >
+                            {cat.icon}
+                        </button>
+                    ))}
+                    <div className="mt-auto mb-2 w-6 sm:w-8 h-px bg-slate-800" />
                     <button
-                        key={cat.id}
-                        onClick={() => { setActiveCategory(cat.id); playSfx('UI_CLICK'); }}
-                        title={cat.label}
-                        className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center transition-all ${activeCategory === cat.id
-                            ? 'bg-amber-500 text-amber-950 shadow-[0_0_15px_rgba(245,158,11,0.4)]'
-                            : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
-                            }`}
+                        onClick={handleBulldozer}
+                        title="Bulldozer"
+                        className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center bg-rose-900/30 text-rose-500 hover:bg-rose-900/50 transition-all border border-rose-900/50"
                     >
-                        {cat.icon}
+                        <Eraser size={16} />
                     </button>
-                ))}
-                <div className="mt-auto mb-2 w-8 h-px bg-slate-800" />
-                <button
-                    onClick={handleBulldozer}
-                    title="Bulldozer (Clear/Demolish)"
-                    className="w-10 h-10 rounded-lg flex items-center justify-center bg-rose-900/30 text-rose-500 hover:bg-rose-900/50 transition-all border border-rose-900/50"
-                >
-                    <Eraser size={18} />
-                </button>
-            </div>
-
-            {/* Main Content Area */}
-            <div className="flex-1 bg-slate-900/95 backdrop-blur-md border-r-0 border-slate-700 rounded-bl-[4px] shadow-[-10px_0_30px_rgba(0,0,0,0.5)] flex flex-col pointer-events-auto overflow-hidden">
-                {/* Header */}
-                <div className="px-3 sm:px-4 pt-3 sm:pt-4 pb-3 border-b border-slate-800">
-                    <div className="flex justify-between items-center mb-3">
-                        <h2 className="text-white font-black uppercase tracking-tighter text-base sm:text-lg font-['Rajdhani'] leading-none">Supply Depot</h2>
-                        <div className="bg-slate-950 px-2 py-1 rounded border border-slate-800">
-                            <span className="text-emerald-400 font-mono text-[10px] sm:text-xs font-bold">{Math.floor(state.resources.agt).toLocaleString()} AGT</span>
-                        </div>
-                    </div>
-
-                    {/* Search */}
-                    <div className="relative">
-                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                        <input
-                            type="text"
-                            placeholder="Find units..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 rounded-md py-1.5 pl-9 pr-4 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500/50 transition-all"
-                        />
-                    </div>
+                    <button
+                        onClick={onClose}
+                        className="mt-2 w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center bg-slate-800 text-slate-400 hover:bg-slate-700 transition-all"
+                    >
+                        <X size={16} />
+                    </button>
                 </div>
 
-                {/* Grid */}
-                <div
-                    className="flex-1 overflow-y-auto custom-scrollbar p-2 grid grid-cols-4 gap-2 content-start"
-                    onMouseLeave={() => setInspecting(null)}
-                >
-                    {shopItems.length === 0 ? (
-                        <div className="col-span-4 py-8 text-center text-slate-600 text-xs font-mono italic">
-                            No units found in this category.
+                {/* Main Grid Area */}
+                <div className="flex-1 bg-slate-900/95 backdrop-blur-md border-r-0 border-slate-700 rounded-bl-[4px] shadow-[-10px_0_30px_rgba(0,0,0,0.5)] flex flex-col pointer-events-auto overflow-hidden">
+                    {/* Header */}
+                    <div className="px-2 sm:px-4 pt-2 sm:pt-4 pb-2 border-b border-slate-800">
+                        <div className="flex justify-between items-center mb-2">
+                            <h2 className="text-white font-black uppercase tracking-tighter text-sm sm:text-lg font-['Rajdhani'] leading-none">Supply</h2>
+                            <div className="bg-slate-950 px-2 py-1 rounded border border-slate-800">
+                                <span className="text-emerald-400 font-mono text-[10px] sm:text-xs font-bold">{Math.floor(state.resources.agt).toLocaleString()} AGT</span>
+                            </div>
                         </div>
-                    ) : (
-                        shopItems.map((type) => {
-                            const b = BUILDINGS[type];
+
+                        {/* Search */}
+                        <div className="relative">
+                            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                            <input
+                                type="text"
+                                placeholder="Search..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-md py-1 pl-8 pr-2 text-[10px] sm:text-xs text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500/50 transition-all"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Grid */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-2 grid grid-cols-4 gap-1.5 sm:gap-2 content-start">
+                        {shopItems.length === 0 ? (
+                            <div className="col-span-4 py-8 text-center text-slate-600 text-[10px] font-mono italic">
+                                No units found.
+                            </div>
+                        ) : (
+                            shopItems.map((type) => {
+                                const b = BUILDINGS[type];
+                                const isEcoLocked = state.resources.eco < b.ecoReq;
+                                let dependencyMet = true;
+                                if (b.dependency) {
+                                    dependencyMet = state.grid.some(t => t.buildingType === b.dependency && !t.isUnderConstruction);
+                                }
+                                const isEraLocked = !state.unlockedEras.includes(b.era);
+                                const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet || isEraLocked);
+                                const cost = calculateBuildingCost(type, state.grid);
+                                const canAfford = state.cheatsEnabled || state.resources.agt >= cost;
+                                const isSelected = selectedItem === type;
+
+                                return (
+                                    <button
+                                        key={type}
+                                        onClick={() => handleSelect(type)}
+                                        className={`
+                                            relative aspect-square rounded-[3px] flex items-center justify-center transition-all bg-gradient-to-br border-b-[2px] shadow-sm
+                                            ${getCategoryColor(type)}
+                                            ${isSelected ? 'ring-2 ring-white z-10 scale-95 brightness-125' : 'scale-100'}
+                                            ${isLocked
+                                                ? 'opacity-30 grayscale saturate-0 contrast-50 border-slate-900'
+                                                : canAfford
+                                                    ? 'hover:brightness-110 cursor-pointer active:scale-95'
+                                                    : 'opacity-60 cursor-pointer border-slate-800 saturate-50 brightness-75'}
+                                        `}
+                                    >
+                                        <div className="text-white/80 drop-shadow-md">
+                                            {getBuildingIcon(type)}
+                                        </div>
+
+                                        {isLocked && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-[3px]">
+                                                <Lock size={10} className="text-white/60" />
+                                            </div>
+                                        )}
+
+                                        {/* Cost Badge (Tiny) */}
+                                        {!isLocked && (
+                                            <div className="absolute bottom-0.5 right-0.5 text-[6px] font-mono font-bold text-white/50 bg-black/30 px-0.5 rounded">
+                                                {cost >= 1000 ? (cost / 1000).toFixed(0) + 'k' : cost}
+                                            </div>
+                                        )}
+                                    </button>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Detail Overlay / Modal (Centered on Mobile, Side on Desktop) */}
+            {selectedItem && (
+                <div
+                    className="detail-modal fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4 pointer-events-auto animate-in fade-in duration-150"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) setSelectedItem(null);
+                    }}
+                >
+                    <div className="bg-slate-900 border-2 border-amber-500/50 rounded-lg shadow-2xl w-full max-w-[320px] overflow-hidden animate-in zoom-in-95 duration-150">
+                        {(() => {
+                            const b = BUILDINGS[selectedItem];
+                            const scaledCost = calculateBuildingCost(selectedItem, state.grid);
+                            const canAfford = state.cheatsEnabled || state.resources.agt >= scaledCost;
                             const isEcoLocked = state.resources.eco < b.ecoReq;
                             let dependencyMet = true;
                             if (b.dependency) {
@@ -269,133 +360,102 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                             }
                             const isEraLocked = !state.unlockedEras.includes(b.era);
                             const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet || isEraLocked);
-                            const cost = calculateBuildingCost(type, state.grid);
-                            const canAfford = state.cheatsEnabled || state.resources.agt >= cost;
-                            const isInspecting = inspecting?.type === type;
 
                             return (
-                                <button
-                                    key={type}
-                                    onMouseEnter={(e) => {
-                                        const rect = e.currentTarget.getBoundingClientRect();
-                                        setInspecting({ type, y: rect.top + (rect.height / 2) });
-                                    }}
-                                    onClick={() => handlePurchase(type)}
-                                    className={`
-                                        relative aspect-square rounded-[4px] flex items-center justify-center transition-all bg-gradient-to-br border-b-[3px] shadow-sm
-                                        ${getCategoryColor(type)}
-                                        ${isInspecting ? 'ring-2 ring-white z-10 scale-105' : 'scale-100'}
-                                        ${isLocked
-                                            ? 'opacity-30 grayscale saturate-0 contrast-50 border-slate-900 pointer-events-none'
-                                            : canAfford
-                                                ? 'hover:brightness-125 cursor-pointer active:translate-y-[2px] active:border-b-0'
-                                                : 'opacity-60 cursor-pointer border-slate-800 saturate-50 brightness-75'}
-                                    `}
-                                >
-                                    <div className="text-white/80 drop-shadow-md">
-                                        {getBuildingIcon(type)}
+                                <div className="flex flex-col">
+                                    {/* Modal Header */}
+                                    <div className={`p-4 bg-gradient-to-r ${getCategoryColor(selectedItem)} text-white flex justify-between items-start`}>
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-black/20 rounded-md backdrop-blur-sm">
+                                                {getBuildingIcon(selectedItem)}
+                                            </div>
+                                            <div>
+                                                <h3 className="font-black text-lg uppercase font-['Rajdhani'] tracking-wide leading-none">{b.name}</h3>
+                                                <div className="text-[10px] sm:text-xs font-mono opacity-80 mt-0.5">{b.stats}</div>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => setSelectedItem(null)}
+                                            className="text-white/60 hover:text-white bg-black/20 hover:bg-black/40 rounded p-1 transition-colors"
+                                        >
+                                            <X size={16} />
+                                        </button>
                                     </div>
 
-                                    {isLocked && (
-                                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-[4px]">
-                                            <Lock size={12} className="text-white/60" />
-                                        </div>
-                                    )}
+                                    {/* Modal Body */}
+                                    <div className="p-4 bg-slate-900 space-y-4">
+                                        <p className="text-sm text-slate-300 font-medium leading-relaxed">{b.desc}</p>
 
-                                    {!isLocked && canAfford && (
-                                        <div className="absolute top-0 right-0 p-0.5">
-                                            <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full shadow-[0_0_5px_rgba(52,211,153,0.8)]" />
+                                        {/* Stats Grid */}
+                                        <div className="grid grid-cols-2 gap-2 bg-slate-950/50 p-2 rounded-md border border-slate-800">
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] text-slate-500 uppercase font-bold">Maintenance</span>
+                                                <div className="text-slate-200 font-mono text-xs">{b.maintenance} AGT/t</div>
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] text-slate-500 uppercase font-bold">Build Time</span>
+                                                <div className="text-slate-200 font-mono text-xs">{b.buildTime}s</div>
+                                            </div>
+                                            {b.power && (
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-slate-500 uppercase font-bold">Power</span>
+                                                    <div className={`font-mono text-xs ${b.power.consumes ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                                        {b.power.consumes ? `-${b.power.consumes}` : `+${b.power.produces}`}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {b.pollution !== 0 && (
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-slate-500 uppercase font-bold">Eco Impact</span>
+                                                    <div className={`font-mono text-xs ${b.pollution > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                                        {b.pollution > 0 ? `-${b.pollution}` : `+${Math.abs(b.pollution)}`}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
-                                </button>
+
+                                        {/* Requirements if locked */}
+                                        {isLocked && (
+                                            <div className="bg-rose-950/40 border-l-2 border-rose-500 rounded-r p-3 flex items-start gap-2">
+                                                <Lock size={14} className="text-rose-400 shrink-0 mt-0.5" />
+                                                <span className="text-xs text-rose-200 font-bold">
+                                                    {isEraLocked ? `Unavailable until ${b.era}` : isEcoLocked ? `Requires Ecological Score ${b.ecoReq}` : `Requires ${BUILDINGS[b.dependency!].name}`}
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        {/* Buy Action */}
+                                        <button
+                                            onClick={handlePurchase}
+                                            disabled={isLocked || (!canAfford && !state.cheatsEnabled)}
+                                            className={`
+                                                w-full py-3.5 px-4 rounded font-black uppercase tracking-widest text-sm flex items-center justify-center gap-2 transition-all
+                                                ${isLocked
+                                                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                                                    : canAfford
+                                                        ? 'bg-amber-500 hover:bg-amber-400 text-amber-950 shadow-[0_4px_0_rgb(180,83,9)] hover:shadow-[0_4px_0_rgb(217,119,6)] active:shadow-none active:translate-y-[4px]'
+                                                        : 'bg-slate-700 text-slate-400 cursor-not-allowed border border-slate-600'}
+                                            `}
+                                        >
+                                            {isLocked ? 'LOCKED' : canAfford ? (
+                                                <>
+                                                    <span>Purchase</span>
+                                                    <span className="bg-black/20 px-1.5 py-0.5 rounded text-xs ml-1 font-mono">{scaledCost.toLocaleString()}</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span>Insufficient Funds</span>
+                                                    <span className="text-xs ml-1 font-mono">({scaledCost.toLocaleString()})</span>
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
                             );
-                        })
-                    )}
-                </div>
-
-                {/* Footer / Helper */}
-                <div className="p-3 bg-slate-950/50 border-t border-slate-800 flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                        <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
-                        <span>Ready</span>
+                        })()}
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="bg-red-600 hover:bg-red-500 text-white p-1.5 rounded shadow-lg shadow-red-900/20 transition-all active:scale-95"
-                        title="Close Menu"
-                    >
-                        <X size={18} strokeWidth={3} />
-                    </button>
-                </div>
-            </div>
-
-            {/* Inspect Tooltip (Floating Left) */}
-            {inspecting && (
-                <div
-                    className="fixed right-[88vw] sm:right-80 w-64 bg-slate-900 border-2 border-slate-700 p-0 pointer-events-auto rounded-l-lg shadow-[10px_0_30px_rgba(0,0,0,0.8)] z-50 transform -translate-y-1/2 overflow-hidden animate-in slide-in-from-right-4 fade-in duration-200"
-                    style={{ top: Math.max(120, Math.min(window.innerHeight - 150, inspecting.y)) }}
-                >
-                    {(() => {
-                        const type = inspecting.type;
-                        const b = BUILDINGS[type];
-                        const scaledCost = calculateBuildingCost(type, state.grid);
-                        const canAfford = state.cheatsEnabled || state.resources.agt >= scaledCost;
-                        const isEcoLocked = state.resources.eco < b.ecoReq;
-                        let dependencyMet = true;
-                        if (b.dependency) {
-                            dependencyMet = state.grid.some(t => t.buildingType === b.dependency && !t.isUnderConstruction);
-                        }
-                        const isEraLocked = !state.unlockedEras.includes(b.era);
-                        const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet || isEraLocked);
-
-                        return (
-                            <div className="flex flex-col">
-                                {/* Header */}
-                                <div className={`p-3 bg-gradient-to-r ${getCategoryColor(type)} border-b border-black/20 text-white flex justify-between items-center`}>
-                                    <div className="flex items-center gap-2">
-                                        {getBuildingIcon(type)}
-                                        <h3 className="font-black text-sm uppercase font-['Rajdhani'] tracking-wider">{b.name}</h3>
-                                    </div>
-                                    <div className="text-[10px] font-mono opacity-60">U-{type.substring(0, 4)}</div>
-                                </div>
-
-                                {/* Body */}
-                                <div className="p-3 bg-slate-900">
-                                    <p className="text-[10px] text-slate-400 leading-normal font-medium mb-3 min-h-[30px]">{b.desc}</p>
-
-                                    <div className="space-y-2 mb-3">
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-[9px] text-slate-500 uppercase font-bold">Base Effect</span>
-                                            <span className="text-emerald-400 font-mono text-[10px] font-bold uppercase">{b.stats}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-[9px] text-slate-500 uppercase font-bold">Energy Cost</span>
-                                            <span className="text-slate-300 font-mono text-[10px] font-bold">{b.maintenance} AGT/t</span>
-                                        </div>
-                                        <div className="flex justify-between items-center bg-slate-950 p-1.5 rounded border border-slate-800">
-                                            <span className="text-[9px] text-slate-500 uppercase font-bold">Acquisition</span>
-                                            <span className={`${canAfford ? "text-amber-400" : "text-rose-500"} font-mono text-xs font-black tracking-tighter`}>
-                                                {state.cheatsEnabled ? "FREE" : `${scaledCost.toLocaleString()} AGT`}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {isLocked ? (
-                                        <div className="bg-rose-950/40 border border-rose-500/30 rounded p-2 text-[9px] text-rose-300 font-bold flex items-center justify-center gap-2 uppercase">
-                                            <Lock size={10} />
-                                            {isEraLocked ? `Requires ${b.era}` : isEcoLocked ? `Eco Lv.${b.ecoReq} required` : `Requires ${BUILDINGS[b.dependency!].name}`}
-                                        </div>
-                                    ) : (
-                                        <div className="text-[9px] text-slate-500 font-mono text-center mb-1">
-                                            {canAfford ? "Click unit to purchase" : "Insufficient AGT Capital"}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    })()}
                 </div>
             )}
-        </div>
+        </>
     );
 };

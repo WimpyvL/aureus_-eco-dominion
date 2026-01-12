@@ -49,7 +49,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     buildTime: 5,
     maintenance: 0.5,
     pollution: 0,
-    era: Era.INDUSTRY
+    era: Era.SETTLEMENT
   },
   [BuildingType.FENCE]: {
     type: BuildingType.FENCE,
