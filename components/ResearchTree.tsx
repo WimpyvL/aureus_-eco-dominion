@@ -43,7 +43,7 @@ const TechCard: React.FC<{
 
     const handleClick = () => {
         if (!unlocked && !locked && canAfford) {
-            dispatch({ type: 'RESEARCH_TECH', payload: tech.id });
+            dispatch({ type: 'UNLOCK_TECH', payload: tech.id });
             playSfx('COMPLETE');
         } else if (!unlocked && !locked && !canAfford) {
             playSfx('ERROR');
