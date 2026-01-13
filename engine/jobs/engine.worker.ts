@@ -166,12 +166,12 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
             if (data.b === 'GRASS' && data.h > 2) matKey = 'grassLight';
             const color = PALETTE[matKey] || [1, 1, 1];
 
-            const surfaceY = Math.floor(data.h * 0.5);
+            const surfaceY = (data.h * 0.5) - 0.5;
             let topY = surfaceY;
             const isWater = data.bt === 'POND' || data.bt === 'RESERVOIR' || (!data.in && data.h === 0);
 
-            if (data.bt === 'POND') topY -= 1;
-            else if (data.bt === 'RESERVOIR') topY -= 1;
+            if (data.bt === 'POND') topY = (data.h * 0.5) - 1.5;
+            else if (data.bt === 'RESERVOIR') topY = (data.h * 0.5) - 1.5;
             else if (!data.in && data.h === 0) topY = -2;
 
             // Surface
@@ -180,7 +180,7 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
             // Sides (cliff edges)
             [[1, 0, 0], [-1, 0, 1], [0, 1, 4], [0, -1, 5]].forEach(([dx, dz, type]) => {
                 const neighbor = getData(worldX + dx, worldZ + dz);
-                let nTop = Math.floor(neighbor.h * 0.5);
+                let nTop = (neighbor.h * 0.5) - 0.5;
                 if (neighbor.bt === 'POND' || neighbor.bt === 'RESERVOIR') nTop -= 1;
                 else if (!neighbor.in && neighbor.h === 0) nTop = -2;
 

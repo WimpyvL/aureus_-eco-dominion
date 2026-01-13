@@ -11,6 +11,8 @@ import { ERAS } from '../engine/data/VoxelConstants';
 
 const ResourceBlock = React.memo(({ icon: Icon, val, label, borderClass, iconBgClass, sub, textColor = "text-white" }: any) => {
   const [popup, setPopup] = useState<{ id: number; text: string; isPositive: boolean } | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [hasNew, setHasNew] = useState(false);
   const prevValRef = useRef(Math.floor(val));
   const counterRef = useRef(0);
 
@@ -24,6 +26,11 @@ const ResourceBlock = React.memo(({ icon: Icon, val, label, borderClass, iconBgC
       const text = `${diff > 0 ? '+' : ''}${diff}`;
       setPopup({ id, text, isPositive: diff > 0 });
 
+      // If collapsed, mark as having new items (only for positive changes)
+      if (!isExpanded && diff > 0) {
+        setHasNew(true);
+      }
+
       const timer = setTimeout(() => {
         setPopup(current => current?.id === id ? null : current);
       }, 600);
@@ -33,11 +40,18 @@ const ResourceBlock = React.memo(({ icon: Icon, val, label, borderClass, iconBgC
       // Just update ref without trigger
       prevValRef.current = currentInt;
     }
-  }, [val]);
+  }, [val, isExpanded]);
+
+  const toggleExpand = () => {
+    setIsExpanded(!isExpanded);
+    if (!isExpanded) {
+      setHasNew(false);
+    }
+  };
 
   return (
-    <div className="relative flex flex-col items-center group pointer-events-auto">
-      {popup && (
+    <div className="relative flex flex-col items-center pointer-events-auto">
+      {popup && isExpanded && (
         <div
           key={popup.id}
           className={`absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-black z-50 pointer-events-none resource-popup ${popup.isPositive ? 'text-emerald-400 drop-shadow-[0_2px_0_rgba(0,0,0,0.8)]' : 'text-rose-400 drop-shadow-[0_2px_0_rgba(0,0,0,0.8)]'}`}
@@ -46,15 +60,25 @@ const ResourceBlock = React.memo(({ icon: Icon, val, label, borderClass, iconBgC
         </div>
       )}
 
-      <div className={`
-        flex items-center gap-1.5 sm:gap-2.5 
-        bg-slate-900 
-        border-2 ${borderClass} 
-        rounded-[4px] px-2 py-1 sm:px-3 sm:py-2 min-w-[65px] sm:min-w-[80px]
-        shadow-[4px_4px_0px_0px_rgba(0,0,0,0.4)]
-        transition-transform duration-100
-        hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_0px_rgba(0,0,0,0.3)]
-      `}>
+      <button
+        onClick={toggleExpand}
+        className={`
+          flex items-center gap-1.5 sm:gap-2.5 
+          bg-slate-900 
+          border-2 ${borderClass} 
+          rounded-[4px] px-2 py-1 sm:px-3 sm:py-2
+          ${isExpanded ? 'min-w-[65px] sm:min-w-[80px]' : 'w-10 h-10 sm:w-12 sm:h-12 justify-center'}
+          shadow-[4px_4px_0px_0px_rgba(0,0,0,0.4)]
+          transition-all duration-200
+          hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_0px_rgba(0,0,0,0.3)]
+          relative
+        `}
+      >
+        {/* New item indicator */}
+        {!isExpanded && hasNew && (
+          <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900 animate-pulse z-10" />
+        )}
+
         {/* Icon Block */}
         <div className={`
           w-5 h-5 sm:w-7 sm:h-7 flex items-center justify-center rounded-[3px] 
@@ -64,19 +88,21 @@ const ResourceBlock = React.memo(({ icon: Icon, val, label, borderClass, iconBgC
           <Icon size={16} className="hidden sm:block" strokeWidth={2.5} />
         </div>
 
-        {/* Text Stack */}
-        <div className="flex flex-col items-start leading-none gap-0.5">
-          <span className="text-[7px] sm:text-[9px] text-slate-400 font-bold uppercase tracking-wider">{label}</span>
-          <div className="flex items-baseline gap-1">
-            <span className={`text-xs sm:text-sm font-['Rajdhani'] font-bold ${textColor} tracking-wide leading-none`}>{Math.floor(val).toLocaleString()}</span>
-            {sub !== undefined && (
-              <span className={`text-[7px] sm:text-[9px] font-mono font-bold ${sub < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                {sub > 0 ? '▲' : sub < 0 ? '▼' : ''}
-              </span>
-            )}
+        {/* Text Stack (Only visible when expanded) */}
+        {isExpanded && (
+          <div className="flex flex-col items-start leading-none gap-0.5 animate-in fade-in slide-in-from-left-1 duration-200">
+            <span className="text-[7px] sm:text-[9px] text-slate-400 font-bold uppercase tracking-wider">{label}</span>
+            <div className="flex items-baseline gap-1">
+              <span className={`text-xs sm:text-sm font-['Rajdhani'] font-bold ${textColor} tracking-wide leading-none`}>{Math.floor(val).toLocaleString()}</span>
+              {sub !== undefined && (
+                <span className={`text-[7px] sm:text-[9px] font-mono font-bold ${sub < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                  {sub > 0 ? '▲' : sub < 0 ? '▼' : ''}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
+        )}
+      </button>
     </div>
   );
 });
@@ -90,6 +116,9 @@ interface HUDProps {
 }
 
 const EraBlock = ({ currentEra, state }: { currentEra: Era; state: GameState }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [hasNew, setHasNew] = useState(false);
+  const prevProgressRef = useRef(0);
   const eraDef = ERAS[currentEra];
   const eras = Object.values(Era);
   const nextEraIndex = eras.indexOf(currentEra) + 1;
@@ -132,30 +161,58 @@ const EraBlock = ({ currentEra, state }: { currentEra: Era; state: GameState }) 
     }
 
     if (totalReqs > 0) progress = (progress / totalReqs) * 100;
+
+    // Trigger "new" indicator if progress increased while collapsed
+    if (!isExpanded && progress > prevProgressRef.current + 0.1) {
+      setHasNew(true);
+    }
+    prevProgressRef.current = progress;
   }
+
+  const handleToggle = () => {
+    const nextState = !isExpanded;
+    setIsExpanded(nextState);
+    if (nextState) {
+      setHasNew(false);
+    }
+  };
 
   return (
     <div className="relative group pointer-events-auto">
-      <div className={`
-        flex items-center gap-1.5 sm:gap-2.5 
-        bg-slate-900 
-        border-2 border-slate-700
-        rounded-[4px] px-2 py-1 sm:px-3 sm:py-2 min-w-[100px]
-        shadow-[4px_4px_0px_0px_rgba(0,0,0,0.4)]
-        transition-all duration-100
-        hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_0px_rgba(0,0,0,0.3)]
-        cursor-help
-      `}>
-        <div className="w-5 h-5 sm:w-7 sm:h-7 flex items-center justify-center rounded-[3px] bg-slate-700 text-white shrink-0 shadow-inner">
+      <button
+        onClick={handleToggle}
+        className={`
+          flex items-center gap-1.5 sm:gap-2.5 
+          bg-slate-900 
+          border-2 border-slate-700
+          rounded-[4px] px-2 py-1 sm:px-3 sm:py-2
+          ${isExpanded ? 'min-w-[100px]' : 'w-10 h-10 sm:w-12 sm:h-12 justify-center'}
+          shadow-[4px_4px_0px_0px_rgba(0,0,0,0.4)]
+          transition-all duration-200
+          hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_0px_rgba(0,0,0,0.3)]
+          cursor-help
+          relative
+        `}
+      >
+        <div className={`
+          w-5 h-5 sm:w-7 sm:h-7 flex items-center justify-center rounded-[3px] bg-slate-700 text-white shrink-0 shadow-inner
+          ${!isExpanded && hasNew ? 'animate-pulse ring-2 ring-emerald-500' : ''}
+        `} style={!isExpanded ? { backgroundColor: eraDef.color } : {}}>
           <Target size={14} strokeWidth={2.5} />
-        </div>
-        <div className="flex flex-col items-start leading-none gap-0.5 pr-2">
-          <span className="text-[7px] sm:text-[9px] text-slate-500 font-bold uppercase tracking-wider">Evolution</span>
-          <span className="text-xs sm:text-sm font-['Rajdhani'] font-bold text-white tracking-wide truncate max-w-[80px]">{eraDef.name.replace('Era ', 'E')}</span>
+          {!isExpanded && hasNew && (
+            <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900 animate-pulse z-10" />
+          )}
         </div>
 
-        {/* Simple Progress Mini-Bar */}
-        {nextDef && (
+        {isExpanded && (
+          <div className="flex flex-col items-start leading-none gap-0.5 pr-2 animate-in fade-in slide-in-from-left-1 duration-200">
+            <span className="text-[7px] sm:text-[9px] text-slate-500 font-bold uppercase tracking-wider">Evolution</span>
+            <span className="text-xs sm:text-sm font-['Rajdhani'] font-bold text-white tracking-wide truncate max-w-[80px]">{eraDef.name.replace('Era ', 'E')}</span>
+          </div>
+        )}
+
+        {/* Simple Progress Mini-Bar - Always visible at bottom if expanded */}
+        {nextDef && isExpanded && (
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-950/50 rounded-b-[2px] overflow-hidden">
             <div
               className="h-full bg-amber-500 transition-all duration-500"
@@ -163,10 +220,20 @@ const EraBlock = ({ currentEra, state }: { currentEra: Era; state: GameState }) 
             />
           </div>
         )}
-      </div>
+
+        {/* Progress ring or indicator for collapsed state */}
+        {!isExpanded && nextDef && (
+          <div className="absolute bottom-1 left-1.5 right-1.5 h-0.5 bg-slate-800 rounded-full overflow-hidden">
+            <div
+              className="h-full transition-all duration-500"
+              style={{ width: `${progress}%`, backgroundColor: eraDef.color }}
+            />
+          </div>
+        )}
+      </button>
 
       {/* Requirements Tooltip */}
-      {nextDef && (
+      {nextDef && isExpanded && (
         <div className="absolute top-full left-0 mt-2 w-48 bg-slate-900 border-2 border-slate-700 p-2 shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 rounded">
           <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-1">Next: {nextDef.name}</h4>
           <p className="text-[8px] text-slate-400 mb-2 italic">{nextDef.description}</p>

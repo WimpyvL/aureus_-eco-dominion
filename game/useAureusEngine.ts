@@ -205,10 +205,12 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                 setLoading({ stage: 'Initializing debug tools...', percent: 50 });
                 console.log('[useAureusEngine] Creating DebugHud...');
 
-                // Stage 5: Create debug HUD
+                // Stage 5: Create debug HUD (Disabled to remove black square in top right)
+                /*
                 const debugHudInstance = new DebugHud({ position: 'top-right' });
                 debugHudInstance.init(container, runtimeInstance, () => render.getStats());
                 setDebugHud(debugHudInstance);
+                */
 
                 if (cancelled) {
                     unsubscribe();
@@ -263,7 +265,7 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                 (window as any).__aureusCleanup = () => {
                     unsubscribe();
                     runtimeInstance.stop();
-                    debugHudInstance.dispose();
+                    // debugHudInstance.dispose();
                     worldInstance.teardown();
                     render.dispose();
                 };
@@ -293,7 +295,7 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
 
             setWorld(null);
             setRuntime(null);
-            setDebugHud(null);
+            // setDebugHud(null);
             setState(null);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps

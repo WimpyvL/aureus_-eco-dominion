@@ -94,7 +94,7 @@ export const matMaster = new THREE.MeshStandardMaterial({
 });
 
 // Base Materials (Still used for specific Buildings/UI/Particles)
-export const mats = {
+export const mats: Record<string, THREE.Material> = {
   concrete: new THREE.MeshStandardMaterial({ map: createNoiseTexture(64, 64, 0x94a3b8), roughness: 0.9 }),
   metal: new THREE.MeshStandardMaterial({ map: createNoiseTexture(64, 64, 0x64748b, 40), metalness: 0.6, roughness: 0.3 }),
   metalLight: new THREE.MeshStandardMaterial({ map: createNoiseTexture(64, 64, 0x94a3b8, 30), metalness: 0.5, roughness: 0.4 }),

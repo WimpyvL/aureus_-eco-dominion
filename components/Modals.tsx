@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Gem, AlertTriangle, RefreshCw, Lock, ArrowRight, Radio, XCircle, CheckCircle2, ArrowUp, ChevronDown, ChevronUp, Leaf, Hammer, X } from 'lucide-react';
 import { GameStep, Action, GameState, BuildingType } from '../types';
 import { BUILDINGS } from '../engine/data/VoxelConstants';
@@ -18,12 +18,16 @@ interface TutorialOverlayProps {
 
 export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ step, dispatch, setSidebarOpen, playSfx }) => {
     // Start collapsed for cleaner HUD (except INTRO which should be visible)
-    const [isCollapsed, setIsCollapsed] = useState(step !== GameStep.INTRO);
+    const [isCollapsed, setIsCollapsed] = useState(true);
+    const [hasNew, setHasNew] = useState(false);
+    const prevStepRef = useRef(step);
 
-    // Only auto-expand on INTRO step
     useEffect(() => {
-        if (step === GameStep.INTRO) setIsCollapsed(false);
-    }, [step]);
+        if (isCollapsed && step !== prevStepRef.current) {
+            setHasNew(true);
+        }
+        prevStepRef.current = step;
+    }, [step, isCollapsed]);
 
     if (step === GameStep.PLAYING || step === GameStep.GAME_OVER) return null;
 
@@ -78,11 +82,14 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ step, dispatch
         return (
             <div className="pointer-events-auto animate-in slide-in-from-left-8 duration-500">
                 <button
-                    onClick={() => { setIsCollapsed(false); playSfx('UI_CLICK'); }}
+                    onClick={() => { setIsCollapsed(false); setHasNew(false); playSfx('UI_CLICK'); }}
                     className="w-10 h-10 bg-slate-900 border-2 border-emerald-600 flex items-center justify-center hover:bg-slate-800 transition-colors shadow-lg group"
                 >
-                    <div className="w-6 h-6 bg-emerald-950 border border-emerald-500 flex items-center justify-center">
+                    <div className="w-6 h-6 bg-emerald-950 border border-emerald-500 flex items-center justify-center relative">
                         <Radio size={12} className="text-emerald-400 animate-pulse" />
+                        {hasNew && (
+                            <div className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-red-500 rounded-full border-2 border-slate-900 animate-pulse z-10" />
+                        )}
                     </div>
                 </button>
             </div>
@@ -97,6 +104,7 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ step, dispatch
                     className="p-2 flex items-center justify-between cursor-pointer bg-slate-800 border-b-2 border-slate-700 hover:bg-slate-750 transition-colors"
                     onClick={() => {
                         setIsCollapsed(true);
+                        setHasNew(false);
                         playSfx('UI_CLICK');
                     }}
                 >

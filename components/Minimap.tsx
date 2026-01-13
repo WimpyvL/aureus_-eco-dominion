@@ -21,7 +21,7 @@ const MAP_SIZE = GRID_SIZE * TILE_SIZE;
 
 export const Minimap: React.FC<MinimapProps> = React.memo(({ grid, agents, viewMode, onOpenMap }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(true);
     const lastDrawTime = useRef<number>(0);
     const frameId = useRef<number>(0);
 

@@ -111,8 +111,8 @@ export class AureusWorld extends BaseWorld {
         // Render Systems
         const getHeight = (worldX: number, worldZ: number) => {
             const offset = (GRID_SIZE - 1) / 2;
-            const gridX = Math.floor(worldX + offset);
-            const gridZ = Math.floor(worldZ + offset);
+            const gridX = Math.floor(worldX + offset + 0.5);
+            const gridZ = Math.floor(worldZ + offset + 0.5);
 
             if (gridX < 0 || gridX >= GRID_SIZE || gridZ < 0 || gridZ >= GRID_SIZE) {
                 return 0;
@@ -134,6 +134,9 @@ export class AureusWorld extends BaseWorld {
             GRID_SIZE,
             getHeight
         );
+
+        // Store reference for cursor height calculation
+        const getTerrainHeight = getHeight;
 
         this.terrainRenderSystem = new TerrainRenderSystem(
             this.render.getScene(),
@@ -423,7 +426,24 @@ export class AureusWorld extends BaseWorld {
         this.inputSystem = new InputSystem(this.render);
         this.inputSystem.onTileClick = (index) => {
             const state = this.stateManager.getState();
+            const config = this.config!;
 
+            // 1. Check for Agent Click first (unless in BUILD/BULLDOZE mode with specific item selected)
+            const x = index % GRID_SIZE;
+            const z = Math.floor(index / GRID_SIZE);
+            const agent = state.agents.find(a => {
+                const ax = Math.round(a.visualX ?? a.x);
+                const az = Math.round(a.visualZ ?? a.z);
+                return ax === x && az === z;
+            });
+
+            if (agent && (state.interactionMode === 'INSPECT' || (state.interactionMode === 'BUILD' && !state.selectedBuilding))) {
+                this.selectAgent(agent.id);
+                config.onAgentClick?.(agent.id);
+                return;
+            }
+
+            // 2. Existing Tile Interaction Logic
             // Detect if user is on mobile
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
                 ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
@@ -441,6 +461,9 @@ export class AureusWorld extends BaseWorld {
                 this.bulldozeTile(index);
                 config.onTileClick?.(index);
             } else {
+                // If we clicked empty terrain/building in INSPECT mode, clear agent selection
+                this.selectAgent(null);
+                config.onAgentClick?.(null);
                 config.onTileClick?.(index);
             }
         };
@@ -532,8 +555,20 @@ export class AureusWorld extends BaseWorld {
 
         this.terrainRenderSystem.update(this.cameraSystem.cameraFocus, this.render.getCamera());
         this.buildingRenderSystem.update(ctx.dt, ctx.time, state.grid, this.stateManager.getDirtyKeys());
+
+        const cursor = this.inputSystem?.getCurrentCursor() || null;
+        if (cursor) {
+            const offset = (GRID_SIZE - 1) / 2;
+            const gx = Math.floor(cursor.x + offset + 0.5);
+            const gz = Math.floor(cursor.z + offset + 0.5);
+
+            // Get height from tile if possible for precision
+            const tile = state.grid[gz * GRID_SIZE + gx];
+            cursor.y = tile ? tile.terrainHeight * 0.5 : 0;
+        }
+
         this.buildingRenderSystem.updateCursor(
-            this.inputSystem?.getCurrentCursor() || null,
+            cursor,
             this.cameraSystem.getFocus()
         );
 

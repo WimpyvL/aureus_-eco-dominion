@@ -40,7 +40,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 // Colonist Inspector Component
 const ColonistInspector: React.FC<{ agent: Agent; onClose: () => void; playSfx: (t: any) => void }> = ({ agent, onClose, playSfx }) => {
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(true);
 
     const NeedsBar = ({ icon: Icon, value, baseColor, label }: any) => {
         const isLow = value < 30;
@@ -89,7 +89,9 @@ const ColonistInspector: React.FC<{ agent: Agent; onClose: () => void; playSfx: 
                     <div className={`w-6 h-6 ${agent.type === 'ILLEGAL_MINER' ? 'bg-slate-700' : 'bg-amber-600'} flex items-center justify-center text-slate-900 font-black text-[10px] shadow-sm`}>
                         {agent.name[0]}
                     </div>
-                    <div className="absolute top-0 right-0 w-2 h-2 bg-emerald-500 rounded-full border border-slate-900" />
+                    {agent.energy < 30 && (
+                        <div className="absolute top-0 right-0 w-2 h-2 bg-rose-500 rounded-full border border-slate-900 animate-pulse" />
+                    )}
                 </button>
             </div>
         );
