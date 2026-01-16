@@ -496,7 +496,8 @@ export function generateInitialGrid(): GridTile[] {
             biome: biome as BiomeType,
             foliage,
             locked: !isPlayable,
-            explored: isPlayable
+            explored: isPlayable,
+            underground: {}
         };
     });
 }

@@ -36,6 +36,7 @@ import { HomePage } from './components/HomePage';
 import { TradeTerminal } from './components/TradeTerminal';
 import { WeatherOverlay } from './components/WeatherOverlay';
 import { MobileBuildingConfirmation } from './components/MobileBuildingConfirmation';
+import { DigConfirmPopup } from './components/DigConfirmPopup';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 // Colonist Inspector Component
@@ -160,6 +161,7 @@ const App: React.FC = () => {
     const [showHomePage, setShowHomePage] = useState(true);
     const [hasSave, setHasSave] = useState(false);
     const [hoverTile, setHoverTile] = useState<number | null>(null);
+    const [digPromptIndex, setDigPromptIndex] = useState<number | null>(null);
 
     // Container state - set after mount so engine hook can initialize
     const [container, setContainer] = useState<HTMLElement | null>(null);
@@ -177,8 +179,15 @@ const App: React.FC = () => {
             if (state?.interactionMode === 'BUILD' && state?.selectedBuilding) {
                 setPendingPlacementIndex(index);
             }
+            // Dungeon Keeper: Click to dig
+            else if (state?.interactionMode === 'DIG') {
+                // Trigger dig prompt for the selected tile
+                setDigPromptIndex(index);
+                playSfx(SfxType.UI_CLICK);
+            }
         },
         onTileHover: (index) => setHoverTile(index),
+        onSfx: (type) => playSfx(type),
         paused: showHomePage,
     });
 
@@ -193,21 +202,6 @@ const App: React.FC = () => {
         if (saved) setHasSave(true);
     }, []);
 
-    // Audio effects from engine state
-    useEffect(() => {
-        if (!state?.pendingEffects?.length) return;
-
-        state.pendingEffects.forEach(effect => {
-            if (effect.type === 'AUDIO') {
-                if (effect.sfx === 'MINING_HIT') {
-                    const now = Date.now();
-                    if (now - lastSfxTime.current < 50) return;
-                    lastSfxTime.current = now;
-                }
-                audioRef.current.play(effect.sfx);
-            }
-        });
-    }, [state?.pendingEffects]);
 
     // Intro animation (Disabled)
     useEffect(() => {
@@ -398,6 +392,21 @@ const App: React.FC = () => {
             case 'ADVANCE_TUTORIAL':
                 world.advanceTutorial();
                 break;
+            case 'TOGGLE_VIEW':
+                world.toggleViewMode();
+                break;
+            case 'QUEUE_DIG':
+                // We need to implement this method in AureusWorld
+                // world.queueDig(action.payload.index, action.payload.layer);
+                // For now, push command directly if we can, or add the method.
+                // Assuming we will add queueDig to AureusWorld now.
+                if (world['queueDig']) {
+                    world['queueDig'](action.payload.index, action.payload.layer);
+                } else {
+                    console.warn("queueDig not implemented on world");
+                }
+                playSfx(SfxType.UI_CLICK);
+                break;
             default:
                 console.warn(`Unhandled action: ${action.type}`);
         }
@@ -493,6 +502,7 @@ const App: React.FC = () => {
                         playSfx={playSfx}
                         step={state.step}
                         debugMode={state.debugMode}
+                        interactionMode={state.interactionMode}
                     />
 
                     <OpsDrawer
@@ -525,6 +535,7 @@ const App: React.FC = () => {
                     <UndergroundOverlay
                         viewMode={state.viewMode}
                         trust={state.resources.trust}
+                        cheatsEnabled={state.cheatsEnabled}
                         dispatch={dispatch}
                         playSfx={playSfx}
                     />
@@ -556,6 +567,29 @@ const App: React.FC = () => {
                         }}
                         playSfx={playSfx}
                     />
+
+                    {/* Dungeon Keeper Excavation Popup */}
+                    {state.viewMode === 'UNDERGROUND' && hoverTile !== null && (
+                        // We track click via a new state or repurpose pendingPlacementIndex?
+                        // Let's reuse pendingPlacementIndex logic but for digging
+                        // Actually, better to use a dedicated state or extend pendingPlacementIndex usage.
+                        // But pendingPlacementIndex logic in onTileClick is specific to BUILD mode.
+                        // Let's add a dedicated state for clarity.
+                        null
+                    )}
+
+                    {digPromptIndex !== null && (
+                        <DigConfirmPopup
+                            tileIndex={digPromptIndex}
+                            grid={state.grid}
+                            viewMode={state.viewMode}
+                            onConfirm={(layer) => {
+                                dispatch({ type: 'QUEUE_DIG', payload: { index: digPromptIndex, layer } });
+                                setDigPromptIndex(null);
+                            }}
+                            onCancel={() => setDigPromptIndex(null)}
+                        />
+                    )}
 
                     {state.debugMode && (
                         <>

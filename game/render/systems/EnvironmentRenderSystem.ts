@@ -15,6 +15,7 @@ export class EnvironmentRenderSystem {
     // State
     private timeOfDay = 12000;
     private weather: 'CLEAR' | 'RAINY' | 'STORM' | 'TOXIC' | 'HEAT' = 'CLEAR';
+    private viewMode: 'SURFACE' | 'UNDERGROUND' = 'SURFACE';
 
     // Target Values for Interpolation
     private targetBgColor = new THREE.Color(COLORS.BG);
@@ -22,8 +23,12 @@ export class EnvironmentRenderSystem {
 
     private targetFogColor = new THREE.Color(COLORS.BG);
     private currentFogColor = new THREE.Color(COLORS.BG);
-    private targetFogDensity = 0.0;
-    private currentFogDensity = 0.0;
+
+    // Linear Fog Params
+    private targetFogNear = 40;
+    private currentFogNear = 40;
+    private targetFogFar = 120;
+    private currentFogFar = 120;
 
     private targetLightColor = new THREE.Color(0xffcd75);
     private currentLightColor = new THREE.Color(0xffcd75);
@@ -43,8 +48,8 @@ export class EnvironmentRenderSystem {
         this.adapter = adapter;
         this.scene = adapter.getScene();
 
-        // Initialize Fog
-        this.scene.fog = new THREE.FogExp2(this.currentFogColor, 0);
+        // Initialize Fog (Linear)
+        this.scene.fog = new THREE.Fog(this.currentFogColor, this.currentFogNear, this.currentFogFar);
         this.scene.background = this.currentBgColor;
 
         // Initialize Rain
@@ -138,6 +143,10 @@ export class EnvironmentRenderSystem {
         this.updateRain(dt);
     }
 
+    public setViewMode(mode: 'SURFACE' | 'UNDERGROUND') {
+        this.viewMode = mode;
+    }
+
     private calculateTargets(timeOfDay: number, weather: string) {
         // Normalize time (0-24000)
         const isNight = timeOfDay < 6000 || timeOfDay > 18000;
@@ -155,34 +164,37 @@ export class EnvironmentRenderSystem {
 
         // Weather Modifiers
         this.isRaining = false;
-        this.targetFogDensity = 0.0;
 
         if (weather === 'TOXIC') {
             this.targetBgColor.setHex(0x1a2e1a);
             this.targetFogColor.setHex(0x2d4a2d);
-            this.targetFogDensity = 0.03;
+            this.targetFogNear = 40; // Increased from 10
+            this.targetFogFar = 200; // Increased from 60
             this.targetLightColor.setHex(0x88ff88);
             this.targetLightIntensity = 0.6;
             this.isRaining = true;
         } else if (weather === 'HEAT') {
             this.targetBgColor.setHex(0x552200);
             this.targetFogColor.setHex(0xffaa00);
-            this.targetFogDensity = 0.005;
+            this.targetFogNear = 100; // Increased from 20
+            this.targetFogFar = 400; // Increased from 80
             this.targetLightColor.setHex(0xffaa55);
             this.targetLightIntensity = 1.8;
         } else if (weather === 'GOLDEN') {
             this.targetBgColor.setHex(0x332200);
             this.targetFogColor.setHex(0xffd700);
-            this.targetFogDensity = 0.01;
+            this.targetFogNear = 150; // Increased from 30
+            this.targetFogFar = 500; // Increased from 100
             this.targetLightColor.setHex(0xffe066);
             this.targetLightIntensity = 1.4;
         } else if (weather === 'RAINY' || weather === 'STORM') {
             this.targetBgColor.setHex(0x222233);
             this.targetFogColor.setHex(0x222233);
-            this.targetFogDensity = 0.015;
+            this.targetFogNear = 100; // Increased from 20
+            this.targetFogFar = 300; // Increased from 70
             intensity *= 0.6;
             this.isRaining = true;
-            this.targetLightColor.setHex(0xccccff); // Cool light
+            this.targetLightColor.setHex(0xccccff);
             this.targetLightIntensity = intensity;
         } else {
             // NORMAL CLEAR
@@ -190,30 +202,50 @@ export class EnvironmentRenderSystem {
                 this.targetBgColor.setHex(0x050510);
                 this.targetLightColor.setHex(0x6688ff);
                 this.targetFogColor.setHex(0x050510);
+                this.targetFogNear = 200; // Increased from 30
+                this.targetFogFar = 600; // Increased from 100
             } else {
                 this.targetBgColor.setHex(COLORS.BG);
                 this.targetLightColor.setHex(0xffcd75);
                 this.targetFogColor.setHex(COLORS.BG);
+                this.targetFogNear = 300; // Increased from 40
+                this.targetFogFar = 1000; // Increased from 120
             }
             this.targetLightIntensity = intensity;
+        }
+
+        // Underground Override - tighter fog for cave atmosphere
+        if (this.viewMode === 'UNDERGROUND') {
+            this.targetBgColor.setHex(0x0f0f12); // Deep dark
+            this.targetFogColor.setHex(0x0f0f12);
+            this.targetFogNear = 60;
+            this.targetFogFar = 200;
+            this.targetLightColor.setHex(0x88aaff);
+            this.targetLightIntensity = 0.8;
+            this.isRaining = false;
         }
     }
 
     private interpolate(dt: number) {
-        const lerpSpeed = dt * 1.0;
+        const lerpSpeed = dt * 1.5;
+        const fogLerpSpeed = dt * 2.5; // Snapshot fog even faster
 
-        this.currentBgColor.lerp(this.targetBgColor, lerpSpeed);
-        this.currentFogColor.lerp(this.targetFogColor, lerpSpeed);
+        this.currentFogColor.lerp(this.targetFogColor, fogLerpSpeed);
         this.currentLightColor.lerp(this.targetLightColor, lerpSpeed);
+        this.currentBgColor.lerp(this.targetBgColor, lerpSpeed);
 
-        this.currentFogDensity = THREE.MathUtils.lerp(this.currentFogDensity, this.targetFogDensity, lerpSpeed);
+        this.currentFogNear = THREE.MathUtils.lerp(this.currentFogNear, this.targetFogNear, fogLerpSpeed);
+        this.currentFogFar = THREE.MathUtils.lerp(this.currentFogFar, this.targetFogFar, fogLerpSpeed);
         this.currentLightIntensity = THREE.MathUtils.lerp(this.currentLightIntensity, this.targetLightIntensity, lerpSpeed);
 
         // Apply
         this.scene.background = this.currentBgColor;
-        if (this.scene.fog instanceof THREE.FogExp2) {
+        if (this.scene.fog instanceof THREE.Fog) {
             this.scene.fog.color = this.currentFogColor;
-            this.scene.fog.density = this.currentFogDensity;
+            this.scene.fog.near = this.currentFogNear;
+            this.scene.fog.far = this.currentFogFar;
+        } else {
+            this.scene.fog = new THREE.Fog(this.currentFogColor, this.currentFogNear, this.currentFogFar);
         }
 
         if (this.adapter.directionalLight) {
@@ -269,7 +301,7 @@ export class EnvironmentRenderSystem {
     }
 
     private updateRain(dt: number) {
-        this.rainSystem.visible = this.isRaining || (this.rainSystem.visible && this.currentFogDensity > 0.005);
+        this.rainSystem.visible = this.isRaining || (this.rainSystem.visible && this.currentFogNear < 30);
 
         if (this.rainSystem.visible) {
             const dummy = new THREE.Object3D();

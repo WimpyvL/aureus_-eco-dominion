@@ -38,8 +38,14 @@ export class ConstructionSystem extends BaseSimSystem {
                 case 'PLACE_BUILDING':
                     this.placeBuilding(cmd.payload.index, cmd.payload.buildingType, state, cmd.payload.isInstant);
                     break;
+                case 'PLACE_SUB_BUILDING':
+                    this.placeSubBuilding(cmd.payload.index, cmd.payload.buildingType, cmd.payload.layer, state, cmd.payload.isInstant);
+                    break;
                 case 'BULLDOZE':
                     this.bulldozeBuilding(cmd.payload.index, state);
+                    break;
+                case 'BULLDOZE_SUB':
+                    this.bulldozeSubBuilding(cmd.payload.index, cmd.payload.layer, state);
                     break;
                 case 'SPEED_UP':
                     this.speedUpConstruction(cmd.payload.index, state);
@@ -102,11 +108,18 @@ export class ConstructionSystem extends BaseSimSystem {
                 if (grid[idx] && grid[idx].structureHeadIndex === headIdx) {
                     grid[idx].isUnderConstruction = false;
                     grid[idx].constructionTimeLeft = 0;
+                    // If it's a sub-building (pipe/wire), finalize the excavation state
+                    if (grid[idx].digState) {
+                        for (const layer in grid[idx].digState) {
+                            if (grid[idx].digState[layer] === 1) grid[idx].digState[layer] = 2;
+                        }
+                    }
                 }
             }
         }
 
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.COMPLETE });
+        state.pendingEffects.push({ type: 'GRID_UPDATE', updates: [headTile] });
         // Trigger water update in case this building connects pipes
         state.grid = updateWaterConnectivity(grid);
     }
@@ -232,6 +245,59 @@ export class ConstructionSystem extends BaseSimSystem {
             state.resources.agt -= 100;
             state.pendingEffects.push({ type: 'GRID_UPDATE', updates: [state.grid[index]] });
         }
+    }
+
+    /**
+     * Places a subterranean building (e.g. pipe) at a specific layer.
+     */
+    public placeSubBuilding(index: number, buildingType: BuildingType, layer: number, state: GameState, isInstant: boolean = false): void {
+        const grid = state.grid;
+        const tile = grid[index];
+        if (!tile) return;
+
+        const def = BUILDINGS[buildingType];
+        if (!def) return;
+
+        // Initialize sub-layer structures if missing
+        if (!tile.subBuildings) tile.subBuildings = {};
+        if (!tile.digState) tile.digState = {};
+
+        // Sub-buildings share construction state with the main tile for simplicity
+        // But we track their type separately
+        tile.subBuildings[layer] = buildingType;
+        tile.isUnderConstruction = !isInstant;
+        tile.constructionTimeLeft = isInstant ? 0 : def.buildTime;
+
+        // Start with a trench if it's the infrastructure layer
+        if (layer === -1) {
+            tile.digState[layer] = 1; // Trench
+        }
+
+        state.grid = updateWaterConnectivity(grid);
+        state.pendingEffects.push({ type: 'GRID_UPDATE', updates: [tile] });
+        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BUILD_START });
+    }
+
+    /**
+     * Removes a subterranean building.
+     */
+    public bulldozeSubBuilding(index: number, layer: number, state: GameState): void {
+        const grid = state.grid;
+        const tile = grid[index];
+        if (!tile || !tile.subBuildings) return;
+
+        if (tile.subBuildings[layer]) {
+            delete tile.subBuildings[layer];
+
+            // If no more sub buildings, reset digState
+            if (Object.keys(tile.subBuildings).length === 0) {
+                if (tile.digState) tile.digState[layer] = 0; // Filled
+            }
+        }
+
+        state.grid = updateWaterConnectivity(grid);
+        state.pendingEffects.push({ type: 'GRID_UPDATE', updates: [tile] });
+        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BULLDOZE });
     }
 
     /**

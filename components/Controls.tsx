@@ -4,7 +4,7 @@
 */
 
 import React from 'react';
-import { Menu, Layers, Hammer, X, Activity, TrendingUp } from 'lucide-react';
+import { Menu, Layers, Hammer, X, Activity, TrendingUp, Pickaxe } from 'lucide-react';
 import { BuildingType, Action, GameStep } from '../types';
 import { BUILDINGS } from '../engine/data/VoxelConstants';
 
@@ -16,20 +16,30 @@ interface ControlsProps {
     playSfx: (type: any) => void;
     step: GameStep;
     debugMode: boolean;
+    interactionMode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG';
 }
 
-export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding, dispatch, setSidebarOpen, viewMode, playSfx, step, debugMode }) => {
+export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding, dispatch, setSidebarOpen, viewMode, playSfx, step, debugMode, interactionMode }) => {
     // ... (keep existing render logic for selectedBuilding)
-    if (selectedBuilding) {
+    if (selectedBuilding || interactionMode === 'DIG') {
         return (
             <div className="absolute bottom-20 sm:bottom-12 left-4 right-4 z-50 animate-in slide-in-from-bottom-4 pointer-events-auto flex flex-col gap-2 max-w-sm mx-auto items-center">
-                <div className="bg-amber-500 text-amber-950 px-4 py-2.5 rounded-[4px] border-2 border-amber-800 shadow-[4px_4px_0_0_rgba(0,0,0,0.4)] font-bold flex items-center justify-center gap-2 text-xs">
-                    <Hammer size={16} className="animate-pulse" />
-                    <span className="font-['Rajdhani'] uppercase tracking-wider">Deploy: {BUILDINGS[selectedBuilding].name}</span>
+                <div className={`
+                    px-4 py-2.5 rounded-[4px] border-2 shadow-[4px_4px_0_0_rgba(0,0,0,0.4)] font-bold flex items-center justify-center gap-2 text-xs
+                    ${interactionMode === 'DIG' ? 'bg-amber-600 text-amber-950 border-amber-900' : 'bg-amber-500 text-amber-950 border-amber-800'}
+                `}>
+                    {interactionMode === 'DIG' ? <Pickaxe size={16} className="animate-pulse" /> : <Hammer size={16} className="animate-pulse" />}
+                    <span className="font-['Rajdhani'] uppercase tracking-wider">
+                        {interactionMode === 'DIG' ? 'Excavation Mode: Click Tile to Dig' : `Deploy: ${BUILDINGS[selectedBuilding!].name}`}
+                    </span>
                 </div>
                 <button
                     onClick={() => {
-                        dispatch({ type: 'SELECT_BUILDING_TO_PLACE', payload: null });
+                        if (interactionMode === 'DIG') {
+                            dispatch({ type: 'SET_INTERACTION_MODE', payload: 'INSPECT' });
+                        } else {
+                            dispatch({ type: 'SELECT_BUILDING_TO_PLACE', payload: null });
+                        }
                         playSfx('UI_CLICK');
                     }}
                     className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-[4px] border-2 border-b-4 border-slate-950 font-bold text-xs flex items-center justify-center gap-2 active:border-b-2 active:translate-y-0.5 transition-all shadow-lg"
@@ -109,6 +119,22 @@ export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding,
                     `}
                 >
                     <TrendingUp size={20} className="text-blue-400" />
+                </button>
+                <button
+                    onClick={() => {
+                        dispatch({ type: 'SET_INTERACTION_MODE', payload: interactionMode === 'DIG' ? 'INSPECT' : 'DIG' });
+                        playSfx('UI_CLICK');
+                    }}
+                    className={`
+                    w-12 h-12 rounded-[4px] flex items-center justify-center transition-all
+                    border-2 border-b-[4px] 
+                    ${interactionMode === 'DIG'
+                            ? 'bg-amber-600 border-amber-900 border-b-2 translate-y-[2px]'
+                            : 'bg-slate-800 border-slate-950 hover:-translate-y-0.5'
+                        }
+                    `}
+                >
+                    <Pickaxe size={20} className={interactionMode === 'DIG' ? 'text-white' : 'text-slate-400'} />
                 </button>
             </div>
 

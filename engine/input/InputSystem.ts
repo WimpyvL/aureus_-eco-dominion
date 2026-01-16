@@ -155,6 +155,10 @@ export class InputSystem {
         e.preventDefault();
     }
 
+    public setRayPlaneHeight(height: number) {
+        this.rayPlane.constant = -height;
+    }
+
     private getIntersection(clientX: number, clientY: number): { index: number, point: THREE.Vector3 } | null {
         // Normalized Device Coordinates
         const rect = this.domElement.getBoundingClientRect();

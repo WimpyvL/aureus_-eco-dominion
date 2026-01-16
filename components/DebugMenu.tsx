@@ -198,6 +198,14 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ getDebugStats, state, onCl
             <p className="text-[8px] text-slate-500 mt-1 italic leading-tight">
               Bypasses all building costs, eco requirements, and tech locks.
             </p>
+
+            <button
+              onClick={() => dispatch({ type: 'TOGGLE_VIEW' })}
+              className={`w-full mt-3 py-1.5 px-2 rounded-[2px] font-bold text-[9px] flex items-center justify-center gap-2 transition-all border border-emerald-600/50 bg-emerald-950/20 text-emerald-400 hover:bg-emerald-900/30 uppercase tracking-widest font-['Rajdhani']`}
+            >
+              <Layers size={12} />
+              {state.viewMode === 'SURFACE' ? 'Switch to Underground' : 'Return to Surface'}
+            </button>
           </div>
 
           <div className="pt-2 border-t-2 border-slate-800 shrink-0">

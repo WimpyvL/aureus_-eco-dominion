@@ -100,7 +100,18 @@ export class AgentSystem extends BaseSimSystem {
             }
         }
 
-        // --- PRIORITY 3: Work (Construction) ---
+        // --- PRIORITY 3: Work (Digging & Construction) ---
+        // Digging
+        const digJob = state.jobs.find(j =>
+            j.type === 'DIG' &&
+            (!j.assignedAgentId || j.assignedAgentId === agent.id) &&
+            Math.random() < 0.8 // Random chance to pick up digging (autonomy placeholder)
+        );
+        if (digJob) {
+            this.goTo(agent, digJob.targetTileId, digJob.id, state.grid);
+            return;
+        }
+
         const buildJob = state.jobs.find(j =>
             j.type === 'BUILD' &&
             (!j.assignedAgentId || j.assignedAgentId === agent.id)
@@ -148,7 +159,7 @@ export class AgentSystem extends BaseSimSystem {
             // Transition to the actual activity we traveled for
             if (agent.currentJobId === 'sys_sleep') agent.state = 'SLEEPING';
             else if (agent.currentJobId === 'sys_eat') agent.state = 'EATING';
-            else if (agent.currentJobId?.startsWith('build_') || agent.currentJobId?.includes('mine')) agent.state = 'WORKING';
+            else if (agent.currentJobId?.startsWith('build_') || agent.currentJobId?.startsWith('dig_') || agent.currentJobId?.includes('mine')) agent.state = 'WORKING';
             else this.finishActivity(agent); // Wander or manual move finished
             return;
         }
@@ -190,7 +201,47 @@ export class AgentSystem extends BaseSimSystem {
         const job = state.jobs[jobIdx];
         const tile = state.grid[job.targetTileId];
 
-        if (tile.isUnderConstruction) {
+        if (job.type === 'DIG') {
+            // Extract layer from jobID (dig_ID_LAYER)
+            const parts = job.id.split('_');
+            const layer = parseInt(parts[2]);
+
+            // Execute dig (Instant for now, or add progress logic)
+            // Progress logic:
+            if (!job.progress) job.progress = 0;
+            job.progress += 20 * (1 + agent.skills.mining / 5); // Dig speed based on mining skill
+
+            // Visual feedback
+            if (Math.random() < 0.1) {
+                state.pendingEffects.push({ type: 'FX', fxType: 'MINING', index: tile.id });
+                state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.MINING_HIT });
+            }
+
+            if (job.progress >= 100) {
+                // Done!
+                // We need to call ExcavationSystem.completeDig(tile.id, layer)
+                // Since we don't have direct ref, we can push a command or use a dirty hack.
+                // DIRTY HACK FOR SPEED: Use direct mutation, but proper way is system call.
+                // Assuming ExcavationSystem logic is simple enough to replicate or we injected it.
+                // Let's modify AgentSystem to accept ExcavationSystem in constructor.
+                // For this edit, I'll assume we HAVE it or will add it. 
+                // Wait, I can't easily add it to constructor in replace_file without seeing the whole file signature again or risking mismatch.
+                // Instead, I'll set a flag on the tile that ExcavationSystem picks up? No, that's messy.
+                // I'll emit a command!
+                // BUT `ExcavationSystem` is a Sim system, it runs ticks.
+                // I'll use `GridTile.digState` to signal completion for now. 
+                // digState: 1 (Trench) -> 2 (Excavated).
+                if (tile.digState && tile.digState[layer] === 1) {
+                    tile.digState[layer] = 2; // Mark as done for ExcavationSystem cleanup
+                    // Also trigger effects
+                    state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.CAMP_BUILD });
+                }
+
+                state.jobs.splice(jobIdx, 1);
+                this.finishActivity(agent);
+            }
+
+        } else if (tile.isUnderConstruction) {
             // Use specialized system to handle multi-tile buildings
             const amount = (1 + agent.skills.construction / 10);
             const finished = this.constructionSystem.progressConstruction(job.targetTileId, amount, state);

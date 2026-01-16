@@ -41,6 +41,7 @@ export interface MeshChunkJob extends BaseJob {
         cz: number;
         tiles: any[]; // GridTile[] but can be loose for transfer
         gridSize: number;
+        viewMode?: 'SURFACE' | 'UNDERGROUND';
         lod?: number;
     }
 }
@@ -102,6 +103,7 @@ export interface MeshChunkResult extends BaseJobResult {
     cz: number;
     solid: { p: Float32Array; n: Float32Array; c: Float32Array; u: Float32Array } | null;
     water: { p: Float32Array; n: Float32Array; c: Float32Array; u: Float32Array } | null;
+    ghost: { p: Float32Array; n: Float32Array; c: Float32Array; u: Float32Array } | null;
     foliage: any[];
     lod?: number;
 }

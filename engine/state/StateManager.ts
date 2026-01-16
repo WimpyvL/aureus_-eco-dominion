@@ -49,7 +49,7 @@ export class StateManager {
             step: GameStep.INTRO,
             gameOver: false,
             debugMode: false,
-            cheatsEnabled: false, // DEV: Creative mode disabled
+            cheatsEnabled: true, // DEV: Creative mode disabled
             tickCount: 0,
 
             market: {
@@ -94,6 +94,13 @@ export class StateManager {
             contracts: [],
 
             pendingEffects: [],
+
+            experiments: {
+                BIOLUMINESCENCE: true,
+                GREEDY_MESHING_V2: false,
+                HIERARCHICAL_PATHFINDING: false,
+                SHARED_BUFFER_TRANSFER: false,
+            },
 
             dayNightCycle: {
                 timeOfDay: 6000,

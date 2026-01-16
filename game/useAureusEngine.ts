@@ -31,6 +31,7 @@ export interface UseAureusEngineOptions {
     onTileRightClick?: (index: number) => void;
     onAgentClick?: (id: string | null) => void;
     onTileHover?: (index: number | null) => void;
+    onSfx?: (type: SfxType) => void;
 
     /** Whether the game is paused (e.g., on home page) */
     paused?: boolean;
@@ -73,6 +74,7 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
         onTileRightClick,
         onAgentClick,
         onTileHover,
+        onSfx,
         paused = false,
     } = options;
 
@@ -98,10 +100,10 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
     }, [state]);
 
     // Callback refs - these capture the latest callbacks without triggering re-init
-    const callbacksRef = useRef({ onTileClick, onTileRightClick, onAgentClick, onTileHover });
+    const callbacksRef = useRef({ onTileClick, onTileRightClick, onAgentClick, onTileHover, onSfx });
     useEffect(() => {
-        callbacksRef.current = { onTileClick, onTileRightClick, onAgentClick, onTileHover };
-    }, [onTileClick, onTileRightClick, onAgentClick, onTileHover]);
+        callbacksRef.current = { onTileClick, onTileRightClick, onAgentClick, onTileHover, onSfx };
+    }, [onTileClick, onTileRightClick, onAgentClick, onTileHover, onSfx]);
 
     // Initialize engine
     useEffect(() => {
@@ -151,6 +153,7 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                     onTileRightClick: (idx) => callbacksRef.current.onTileRightClick?.(idx),
                     onAgentClick: (id) => callbacksRef.current.onAgentClick?.(id),
                     onTileHover: (idx) => callbacksRef.current.onTileHover?.(idx),
+                    onSfx: (type) => callbacksRef.current.onSfx?.(type),
                 };
 
                 try {

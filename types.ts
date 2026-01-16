@@ -72,7 +72,7 @@ export interface EraDef {
 
 export type AgentRole = 'WORKER' | 'MINER' | 'BOTANIST' | 'ENGINEER' | 'SECURITY' | 'ILLEGAL_MINER';
 
-export type JobType = 'BUILD' | 'MINE' | 'FARM' | 'REPAIR' | 'RESEARCH' | 'SLEEP' | 'IDLE' | 'MOVE' | 'REHABILITATE' | 'EAT' | 'SOCIALIZE' | 'PATROL';
+export type JobType = 'BUILD' | 'MINE' | 'DIG' | 'REINFORCE' | 'RESCUE' | 'FARM' | 'REPAIR' | 'RESEARCH' | 'SLEEP' | 'IDLE' | 'MOVE' | 'REHABILITATE' | 'EAT' | 'SOCIALIZE' | 'PATROL';
 
 export interface Job {
   id: string;
@@ -226,6 +226,17 @@ export type FoliageType =
   | 'FLOWER_ALPINE'
   | 'CRYSTAL_SPIKE';
 
+export interface UndergroundTile {
+  excavated: boolean;
+  oreType?: 'GOLD' | 'IRON' | 'GEM' | 'COAL';
+  oreVisible: boolean;  // Fog-of-war: true when adjacent is excavated
+  supportType?: 'PILLAR' | 'WOOD_BEAM' | 'STEEL_BEAM';
+  collapseRisk: number; // 0-100
+  collapsed?: boolean;
+  trappedAgentIds?: string[];
+  rescueDeadline?: number; // Tick when agents die
+}
+
 export interface GridTile {
   id: number;
   x: number;
@@ -243,6 +254,14 @@ export interface GridTile {
   waterStatus?: 'CONNECTED' | 'DISCONNECTED';
   rehabProgress?: number; // 0-100
   explored?: boolean;
+
+  // Dungeon Keeper System
+  underground: Record<number, UndergroundTile>; // Layer -1 to -10
+  hasEntrance?: boolean; // MINE_ENTRANCE on surface
+
+  // Legacy compatibility (to be deprecated or mapped to layer -1)
+  subBuildings?: Record<number, BuildingType>;
+  digState?: Record<number, number>;
 }
 
 export interface GameResources {
@@ -389,7 +408,7 @@ export interface GameState {
   inventory: Partial<Record<BuildingType, number>>;
   selectedBuilding: BuildingType | null;
   selectedAgentId: string | null;
-  interactionMode: 'BUILD' | 'BULLDOZE' | 'INSPECT';
+  interactionMode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG';
   step: GameStep;
   tickCount: number;
   viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON';
@@ -436,13 +455,18 @@ export interface GameState {
   // Agent requests system
   agentRequests: AgentRequest[];
 
-  // Engine Command Queue (Bridge from UI/Redux to Engine)
+  experiments: {
+    BIOLUMINESCENCE: boolean;
+    GREEDY_MESHING_V2: boolean;
+    HIERARCHICAL_PATHFINDING: boolean;
+    SHARED_BUFFER_TRANSFER: boolean;
+  };
   commandQueue: GameCommand[];
 }
 
 export interface GameCommand {
   id: string; // Unique ID to prevent double execution
-  type: 'PLACE_BUILDING' | 'BULLDOZE' | 'SPEED_UP' | 'REHABILITATE';
+  type: 'PLACE_BUILDING' | 'PLACE_SUB_BUILDING' | 'BULLDOZE' | 'BULLDOZE_SUB' | 'SPEED_UP' | 'REHABILITATE';
   payload: any;
 }
 
@@ -508,4 +532,5 @@ export type Action =
   | { type: 'CLEAR_EFFECTS' }
   | { type: 'ACCEPT_CONTRACT', payload: string }
   | { type: 'COMPLETE_CONTRACT', payload: string }
+  | { type: 'SET_INTERACTION_MODE', payload: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG' }
   | { type: 'LOAD_GAME', payload: GameState };

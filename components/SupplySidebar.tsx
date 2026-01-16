@@ -141,6 +141,7 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
             BuildingType.ROAD, BuildingType.PIPE, BuildingType.FENCE,
             BuildingType.STAFF_QUARTERS, BuildingType.CANTEEN, BuildingType.WORKSHOP,
             BuildingType.WASH_PLANT, BuildingType.SOLAR_ARRAY, BuildingType.WATER_WELL, BuildingType.STORAGE_DEPOT,
+            BuildingType.MINING_HEADFRAME,
             // Era 2: Growth
             BuildingType.MEDICAL_BAY, BuildingType.TRAINING_CENTER, BuildingType.GENERATOR,
             BuildingType.SOCIAL_HUB, BuildingType.SECURITY_POST, BuildingType.COMMUNITY_GARDEN, BuildingType.WIND_TURBINE,
@@ -151,7 +152,7 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
             BuildingType.RESERVOIR, BuildingType.LOCAL_SCHOOL, BuildingType.WASTE_TREATMENT,
             BuildingType.NATURE_RESERVE, BuildingType.HYDROPONICS, BuildingType.GEOTHERMAL_PLANT,
             // Era 5: Prosperity
-            BuildingType.SAFARI_LODGE, BuildingType.GREEN_TECH_LAB, BuildingType.MINING_HEADFRAME,
+            BuildingType.SAFARI_LODGE, BuildingType.GREEN_TECH_LAB,
             BuildingType.MONUMENT, BuildingType.SPACEPORT
         ];
 

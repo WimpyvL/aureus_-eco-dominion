@@ -6,7 +6,9 @@
   "author": "Klaasvaakie (|/)",
   "license": "PROPRIETARY",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/intro.js",
+    "start": "node scripts/intro.js",
+    "vite": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },

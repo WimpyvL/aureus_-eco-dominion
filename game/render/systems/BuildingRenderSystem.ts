@@ -50,6 +50,8 @@ export class BuildingRenderSystem {
         TRUST: new THREE.MeshBasicMaterial({ color: 0xf43f5e }),
         CASH: new THREE.MeshBasicMaterial({ color: 0xf59e0b }),
         SMOKE: new THREE.MeshBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.5 }),
+        DIRT: new THREE.MeshBasicMaterial({ color: 0x78350f }),
+        ROCK: new THREE.MeshBasicMaterial({ color: 0x475569 }),
     };
 
     // Cache to detect changes
@@ -68,9 +70,8 @@ export class BuildingRenderSystem {
         this.scene.add(this.selectionCursor);
     }
 
-    public update(dt: number, time: number, grid: GridTile[], dirtyKeys?: Set<string>) {
+    public update(dt: number, time: number, grid: GridTile[], dirtyKeys?: Set<string>, viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE') {
         // 1. Sync Grid Changes
-        // Optimization: Only scan the grid for building changes if it was actually modified
         if (dirtyKeys && dirtyKeys.has('grid')) {
             const offset = (this.gridSize - 1) / 2;
 
@@ -94,11 +95,19 @@ export class BuildingRenderSystem {
                     const conn = this.getInfrastructureConnections(tile, grid);
                     connectionHash = `_${conn.north}_${conn.south}_${conn.east}_${conn.west}`;
                 }
-                const stateHash = `${tile.buildingType}_${tile.isUnderConstruction}_${tile.integrity}_${tile.waterStatus}${connectionHash}`;
+                // Sub-building hash
+                let subHash = '';
+                if (tile.subBuildings) {
+                    Object.entries(tile.subBuildings).forEach(([layer, type]) => {
+                        subHash += `_L${layer}:${type}`;
+                    });
+                }
+
+                const stateHash = `${tile.buildingType}_${tile.isUnderConstruction}_${tile.integrity}_${tile.waterStatus}${connectionHash}${subHash}_VM:${viewMode}`;
 
                 // Detect Changes
                 if (!cached || cached.type !== tile.buildingType || Math.abs(cached.progress - currentProgress) > 0.05 || cached.state !== stateHash) {
-                    this.updateTile(tile, currentProgress, offset, grid);
+                    this.updateTile(tile, currentProgress, offset, grid, viewMode);
                     this.tileCache.set(tile.id, {
                         type: tile.buildingType,
                         progress: currentProgress,
@@ -142,7 +151,7 @@ export class BuildingRenderSystem {
         };
     }
 
-    private updateTile(tile: GridTile, progress: number, offset: number, grid?: GridTile[]) {
+    private updateTile(tile: GridTile, progress: number, offset: number, grid: GridTile[] | undefined, viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE') {
         // Remove existing
         if (this.buildingMeshes.has(tile.id)) {
             const mesh = this.buildingMeshes.get(tile.id)!;
@@ -151,10 +160,11 @@ export class BuildingRenderSystem {
             this.animatedElements.delete(tile.id);
         }
 
-        if (tile.buildingType === BuildingType.EMPTY && tile.foliage !== 'ILLEGAL_CAMP') return; // Empty (foliage handled by FoliageSystem)
+        const hasSub = tile.subBuildings && Object.keys(tile.subBuildings).length > 0;
+        if (tile.buildingType === BuildingType.EMPTY && tile.foliage !== 'ILLEGAL_CAMP' && !hasSub) return;
 
         // Water is handled by TerrainRenderSystem now
-        if (tile.buildingType === BuildingType.POND) return;
+        if (tile.buildingType === BuildingType.POND && !hasSub) return;
 
         // Skip multi-tile tails (infrastructure excluded)
         if (tile.structureHeadIndex !== undefined && tile.id !== tile.structureHeadIndex &&
@@ -167,26 +177,8 @@ export class BuildingRenderSystem {
 
         if (!(type in BuildingFactory)) return;
 
-        // Create Mesh
-        const seed = Math.abs(tile.x * 11 + tile.y * 17 + tile.id * 31);
-        const config: any = {
-            isUnderConstruction: tile.isUnderConstruction,
-            progress: progress,
-            integrity: tile.integrity,
-            waterStatus: tile.waterStatus,
-            seed
-        };
-
-        // Infrastructure connections - look up neighbors for ROAD, PIPE, FENCE
-        let connections = undefined;
-        if (grid && (tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE)) {
-            connections = this.getInfrastructureConnections(tile, grid);
-        }
-
-        const buildingGroup = BuildingFactory[type]({ ...config, connections });
         const root = new THREE.Group();
-
-        const def = BUILDINGS[type as BuildingType];
+        const def = BUILDINGS[tile.buildingType];
         const w = def?.width || 1;
         const d = def?.depth || 1;
         const dx = (w - 1) / 2;
@@ -195,31 +187,87 @@ export class BuildingRenderSystem {
         // Position
         root.position.set(tile.x - offset + dx, tile.terrainHeight * 0.5, tile.y - offset + dz);
 
-        // Construction Mode
-        if (tile.isUnderConstruction) {
-            const scale = 0.4 + (progress * 0.6);
-            buildingGroup.scale.set(scale, scale, scale);
-            buildingGroup.position.y -= (1 - progress) * 0.5;
+        // Render Main Building
+        if (tile.buildingType !== BuildingType.EMPTY && tile.buildingType !== BuildingType.POND) {
+            const seed = Math.abs(tile.x * 11 + tile.y * 17 + tile.id * 31);
+            const config: any = {
+                isUnderConstruction: tile.isUnderConstruction,
+                progress: progress,
+                integrity: tile.integrity,
+                waterStatus: tile.waterStatus,
+                seed
+            };
 
-            // Blue hologram material
-            buildingGroup.traverse((c: any) => {
-                if (c.isMesh) {
-                    c.material = new THREE.MeshStandardMaterial({
-                        color: 0x00ffff, transparent: true, opacity: 0.6,
-                        roughness: 0.2, metalness: 0.8, emissive: 0x00ffff, emissiveIntensity: 0.4
-                    });
+            let connections = undefined;
+            if (grid && (tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE)) {
+                connections = this.getInfrastructureConnections(tile, grid);
+            }
+
+            const buildingGroup = BuildingFactory[type]({ ...config, connections });
+
+            if (tile.isUnderConstruction) {
+                const scale = 0.4 + (progress * 0.6);
+                buildingGroup.scale.set(scale, scale, scale);
+                buildingGroup.position.y -= (1 - progress) * 0.5;
+
+                buildingGroup.traverse((c: any) => {
+                    if (c.isMesh) {
+                        c.material = new THREE.MeshStandardMaterial({
+                            color: 0x00ffff, transparent: true, opacity: 0.6,
+                            roughness: 0.2, metalness: 0.8, emissive: 0x00ffff, emissiveIntensity: 0.4
+                        });
+                    }
+                });
+
+                if (BuildingFactory['CONSTRUCTION']) {
+                    const scaffold = BuildingFactory['CONSTRUCTION']({ width: w, depth: d });
+                    root.add(scaffold);
                 }
-            });
+            }
 
-            // Scaffolding
-            if (BuildingFactory['CONSTRUCTION']) {
-                const scaffold = BuildingFactory['CONSTRUCTION']({ width: w, depth: d });
-                root.add(scaffold);
+            // Add Sub-Base for underground view (Building Link)
+            if (viewMode === 'UNDERGROUND' && tile.buildingType !== BuildingType.ROAD && tile.buildingType !== BuildingType.FENCE) {
+                const connector = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.3, 1.0, 0.3),
+                    new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8, roughness: 0.2 })
+                );
+                connector.position.y = -0.75;
+                root.add(connector);
             }
 
             root.add(buildingGroup);
-        } else {
-            root.add(buildingGroup);
+        }
+
+        // --- Sub-Building Rendering (Infrastructure Layer) ---
+        if (tile.subBuildings) {
+            Object.entries(tile.subBuildings).forEach(([layerStr, subType]) => {
+                const layer = parseInt(layerStr);
+                // For now, focus on Layer -1 (Infrastructure)
+                if (layer === -1 && BuildingFactory[subType]) {
+                    const subGroup = BuildingFactory[subType]({ waterStatus: tile.waterStatus });
+                    subGroup.position.y = -1.0; // Level -1
+
+                    // If construction is happening, apply effects
+                    if (tile.isUnderConstruction) {
+                        subGroup.traverse((c: any) => {
+                            if (c.isMesh) {
+                                c.material = new THREE.MeshStandardMaterial({
+                                    color: 0x00ffff, transparent: true, opacity: 0.6,
+                                    roughness: 0.2, metalness: 0.8, emissive: 0x00ffff, emissiveIntensity: 0.4
+                                });
+                            }
+                        });
+                    }
+
+                    root.add(subGroup);
+                }
+            });
+        }
+
+        // Render Trench/Excavation markers
+        if (tile.digState && tile.digState[-1] === 1) {
+            const trench = BuildingFactory['TRENCH']();
+            root.add(trench);
         }
 
         // Collect Animations
@@ -269,22 +317,42 @@ export class BuildingRenderSystem {
 
     private emitParticle(tileId: number, type: string) {
         const mesh = this.buildingMeshes.get(tileId);
-        if (!mesh) return;
 
         const mat = this.particleMats[type];
         const p = new THREE.Mesh(this.particleGeo, mat);
-        p.position.copy(mesh.position);
-        p.position.y += 1.0;
+
+        if (mesh) {
+            p.position.copy(mesh.position);
+        } else {
+            const offset = (this.gridSize - 1) / 2;
+            const tx = tileId % this.gridSize;
+            const tz = Math.floor(tileId / this.gridSize);
+            p.position.set(tx - offset, 0.5, tz - offset);
+        }
+
+        p.position.y += 0.5 + Math.random() * 0.5;
         p.position.x += (Math.random() - 0.5) * 0.5;
         p.position.z += (Math.random() - 0.5) * 0.5;
 
         this.scene.add(p);
         this.particles.push({
             mesh: p,
-            velocity: new THREE.Vector3((Math.random() - 0.5) * 0.05, 0.03 + Math.random() * 0.05, (Math.random() - 0.5) * 0.02),
+            velocity: new THREE.Vector3((Math.random() - 0.5) * 0.08, 0.05 + Math.random() * 0.08, (Math.random() - 0.5) * 0.1),
             life: 1.0,
-            decay: 0.02
+            decay: 0.03
         });
+    }
+
+    public triggerEffect(tileId: number, type: string, offset: number) {
+        if (type === 'DUST') {
+            for (let i = 0; i < 5; i++) this.emitParticle(tileId, 'DIRT');
+        } else if (type === 'MINING') {
+            for (let i = 0; i < 8; i++) this.emitParticle(tileId, Math.random() > 0.5 ? 'ROCK' : 'DIRT');
+        } else if (type === 'SMOKE') {
+            for (let i = 0; i < 3; i++) this.emitParticle(tileId, 'SMOKE');
+        } else if (type === 'ECO_REHAB') {
+            for (let i = 0; i < 10; i++) this.emitParticle(tileId, 'GRASS');
+        }
     }
 
     public setPinnedGhost(index: number | null) {
@@ -336,12 +404,14 @@ export class BuildingRenderSystem {
         }
     }
 
-    public setCursorMode(mode: 'BUILD' | 'BULLDOZE' | 'INSPECT') {
+    public setCursorMode(mode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG') {
         const mat = this.selectionCursor.material as THREE.MeshBasicMaterial;
         if (mode === 'BULLDOZE') {
             mat.color.setHex(0xf43f5e); // Red
         } else if (mode === 'INSPECT') {
             mat.color.setHex(0x3b82f6); // Blue
+        } else if (mode === 'DIG') {
+            mat.color.setHex(0xf59e0b); // Amber
         } else {
             mat.color.setHex(0x22c55e); // Green
         }
@@ -378,7 +448,10 @@ export class BuildingRenderSystem {
 
         // 3. Update Ghost Building Position
         if (this.ghostBuilding && this.pinnedGhostIndex === null) {
-            if (ghostPos) {
+            const isUnderground = pos?.y && pos.y < -0.1;
+            const isValidForLayer = isUnderground ? (this.ghostType === BuildingType.PIPE) : (this.ghostType !== BuildingType.PIPE);
+
+            if (ghostPos && isValidForLayer) {
                 this.ghostBuilding.visible = true;
 
                 // Snap to grid

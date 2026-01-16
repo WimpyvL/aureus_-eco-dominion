@@ -85,6 +85,40 @@ export const waterFlowMaterial = new THREE.ShaderMaterial({
   side: THREE.DoubleSide // Ensure visibility from all angles
 });
 
+export const bioLumeMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    time: { value: 0 },
+    color: { value: new THREE.Color(0x22d3ee) }, // Cyan
+    glowColor: { value: new THREE.Color(0x00ffff) }
+  },
+  vertexShader: `
+        varying vec3 vWorldPosition;
+        varying vec3 vNormal;
+        void main() {
+            vNormal = normalize(normalMatrix * normal);
+            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+            vWorldPosition = worldPosition.xyz;
+            gl_Position = projectionMatrix * viewMatrix * worldPosition;
+        }
+    `,
+  fragmentShader: `
+        uniform float time;
+        uniform vec3 color;
+        uniform vec3 glowColor;
+        varying vec3 vWorldPosition;
+        varying vec3 vNormal;
+        void main() {
+            float pulse = (sin(time * 2.0 + vWorldPosition.x * 0.5 + vWorldPosition.z * 0.5) * 0.5 + 0.5);
+            vec3 finalColor = mix(color, glowColor, pulse);
+            // Fresnel-like effect for soft edges
+            float fresnel = pow(1.0 - max(0.0, vNormal.z), 2.0);
+            gl_FragColor = vec4(finalColor, 0.8 + fresnel * 0.2);
+        }
+    `,
+  transparent: true,
+  side: THREE.DoubleSide
+});
+
 // Single Master Material for Terrain Consolidation
 export const matMaster = new THREE.MeshStandardMaterial({
   map: texMaster,
@@ -109,6 +143,7 @@ export const mats: Record<string, THREE.Material> = {
   water: new THREE.MeshStandardMaterial({ color: 0x06b6d4, transparent: true, opacity: 0.85, roughness: 0.1 }),
   brick: new THREE.MeshStandardMaterial({ map: createNoiseTexture(64, 64, 0xb91c1c, 40), roughness: 0.9 }),
   white: new THREE.MeshStandardMaterial({ map: createNoiseTexture(64, 64, 0xf1f5f9, 10), roughness: 0.5 }),
+  ghost: new THREE.MeshStandardMaterial({ color: 0x64748b, transparent: true, opacity: 0.3, depthWrite: false }),
   gold: new THREE.MeshStandardMaterial({ map: createNoiseTexture(64, 64, 0xffe135, 10), metalness: 0.9, roughness: 0.1, emissive: 0xffaa00, emissiveIntensity: 0.4 }),
   glass: new THREE.MeshStandardMaterial({ color: 0xa5f3fc, transparent: true, opacity: 0.4, metalness: 0.9, roughness: 0.0 }),
   hazard: new THREE.MeshStandardMaterial({ map: createNoiseTexture(64, 64, 0xfacc15), roughness: 0.5 }),
@@ -157,7 +192,8 @@ export const mats: Record<string, THREE.Material> = {
     roughness: 0.4,            // Higher - diffuses reflection except sun specular
     emissive: 0x083344,        // Very subtle deep glow
     emissiveIntensity: 0.08
-  })
+  }),
+  biolume: bioLumeMaterial
 };
 
 // Map keys used in worker to material definitions.

@@ -13,6 +13,7 @@ import { CHUNK_SIZE, getChunkId, getChunkKey } from '../../../engine/utils/Chunk
 interface ChunkRenderData {
     mesh: THREE.Mesh | null;
     waterMesh: THREE.Mesh | null;
+    ghostMesh: THREE.Mesh | null;
     dirty: boolean;
     loading: boolean;
 }
@@ -24,6 +25,7 @@ export class TerrainRenderSystem {
 
     private chunks: Map<string, ChunkRenderData & { lod: number }> = new Map();
     private tileCache: Map<string, GridTile[]> = new Map();
+    private viewMode: 'SURFACE' | 'UNDERGROUND' = 'SURFACE';
 
     // View radius in chunks (Reduced for optimization)
     private viewRadius = 5;
@@ -41,6 +43,15 @@ export class TerrainRenderSystem {
         this.scene = scene;
         this.gridSize = gridSize;
         this.jobSystem = jobSystem;
+    }
+
+    public setViewMode(mode: 'SURFACE' | 'UNDERGROUND'): void {
+        if (this.viewMode === mode) return;
+        this.viewMode = mode;
+        // Invalidate all chunks to force rebuild with new view mode
+        for (const chunk of this.chunks.values()) {
+            chunk.dirty = true;
+        }
     }
 
     /**
@@ -91,9 +102,9 @@ export class TerrainRenderSystem {
                     const xPos = (cx * CHUNK_SIZE) - chunkOffset;
                     const zPos = (cz * CHUNK_SIZE) - chunkOffset;
 
-                    // Define chunk bounds (Height -10 to 60 approximation)
-                    box.min.set(xPos, -10, zPos);
-                    box.max.set(xPos + CHUNK_SIZE, 60, zPos + CHUNK_SIZE);
+                    // Define chunk bounds (Expanded for subterranean heights)
+                    box.min.set(xPos, -50, zPos);
+                    box.max.set(xPos + CHUNK_SIZE, 80, zPos + CHUNK_SIZE);
 
                     if (!frustum.intersectsBox(box)) {
                         continue; // Skip off-screen chunks
@@ -110,7 +121,7 @@ export class TerrainRenderSystem {
 
                 // Load chunk if not already present
                 if (!this.chunks.has(key)) {
-                    this.chunks.set(key, { mesh: null, waterMesh: null, dirty: true, loading: false, lod });
+                    this.chunks.set(key, { mesh: null, waterMesh: null, ghostMesh: null, dirty: true, loading: false, lod });
                 }
 
                 const chunk = this.chunks.get(key)!;
@@ -221,6 +232,7 @@ export class TerrainRenderSystem {
                 cz,
                 tiles,
                 gridSize: this.gridSize,
+                viewMode: this.viewMode,
                 lod
             }
         };
@@ -248,6 +260,10 @@ export class TerrainRenderSystem {
         if (chunk.waterMesh) {
             this.scene.remove(chunk.waterMesh);
             chunk.waterMesh.geometry.dispose();
+        }
+        if (chunk.ghostMesh) {
+            this.scene.remove(chunk.ghostMesh);
+            chunk.ghostMesh.geometry.dispose();
         }
 
         // Calculate world position for chunk
@@ -286,6 +302,12 @@ export class TerrainRenderSystem {
             this.scene.add(chunk.waterMesh);
         }
 
+        chunk.ghostMesh = createMesh(res.ghost, mats.ghost, false);
+        if (chunk.ghostMesh) {
+            chunk.ghostMesh.receiveShadow = false;
+            this.scene.add(chunk.ghostMesh);
+        }
+
         // Foliage callback
         if (this.onFoliageUpdate && res.foliage) {
             this.onFoliageUpdate(res.chunkId, res.foliage);
@@ -300,6 +322,10 @@ export class TerrainRenderSystem {
         if (chunk.waterMesh) {
             this.scene.remove(chunk.waterMesh);
             chunk.waterMesh.geometry.dispose();
+        }
+        if (chunk.ghostMesh) {
+            this.scene.remove(chunk.ghostMesh);
+            chunk.ghostMesh.geometry.dispose();
         }
         if (this.onChunkDispose) {
             this.onChunkDispose(key);

@@ -307,15 +307,17 @@ export const ConstructionModal: React.FC<{
 export const UndergroundOverlay: React.FC<{
     viewMode: string;
     trust: number;
+    cheatsEnabled: boolean;
     dispatch: React.Dispatch<Action>;
     playSfx: (type: any) => void;
-}> = ({ viewMode, trust, dispatch, playSfx }) => {
+}> = ({ viewMode, trust, cheatsEnabled, dispatch, playSfx }) => {
     if (viewMode !== 'UNDERGROUND') return null;
 
-    const isLocked = trust < 50;
+    const isLocked = trust < 50 && !cheatsEnabled;
+    if (!isLocked) return null;
 
     return (
-        <div className={`absolute inset-0 z-20 flex flex-col items-center justify-center transition-all duration-500 ${isLocked ? 'pointer-events-auto bg-slate-950/80 backdrop-blur-sm' : 'pointer-events-none'}`}>
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-auto bg-slate-950/80 backdrop-blur-sm">
             <div className="text-center space-y-3 max-w-xs px-6">
                 <h2 className="text-4xl font-bold text-slate-700 tracking-[0.2em] uppercase opacity-30 font-['Rajdhani'] select-none">Sector B1</h2>
 
@@ -347,6 +349,7 @@ export const UndergroundOverlay: React.FC<{
                         </div>
                         <p className="text-emerald-200/50 text-[10px] font-mono">
                             Subterranean expansion zone active.
+                            {trust < 50 && <span className="text-amber-500 block mt-1 opacity-80">[DEVELOPER BYPASS ACTIVE]</span>}
                         </p>
                     </div>
                 )}

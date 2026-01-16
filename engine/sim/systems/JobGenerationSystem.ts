@@ -52,5 +52,44 @@ export class JobGenerationSystem extends BaseSimSystem {
                 }
             }
         }
+        // 2. GENERATE DIGGING JOBS
+        for (let i = 0; i < grid.length; i++) {
+            const tile = grid[i];
+
+            // Check legacy digState or new underground designation
+            // Assuming digState[layer] == 1 means "Marked for Digging"
+            if (tile.digState) {
+                for (const layerStr in tile.digState) {
+                    const layer = parseInt(layerStr);
+                    const status = tile.digState[layer];
+
+                    if (status === 1) { // 1 = Designated/Trench
+                        const jobId = `dig_${tile.id}_${layer}`;
+
+                        // Check if job exists
+                        let exists = false;
+                        for (let j = 0; j < jobs.length; j++) {
+                            if (jobs[j].id === jobId) {
+                                exists = true;
+                                break;
+                            }
+                        }
+
+                        if (!exists) {
+                            const job: Job = {
+                                id: jobId,
+                                type: 'DIG', // New JobType
+                                targetTileId: tile.id,
+                                priority: 80, // High priority but below emergency repairs
+                                assignedAgentId: null,
+                                // Store layer in ID or we need a payload field (Job interface doesn't have one, usually parsed from ID or lookup)
+                            };
+                            // Add layer metadata if we can, or parse from ID later
+                            jobs.push(job);
+                        }
+                    }
+                }
+            }
+        }
     }
 }

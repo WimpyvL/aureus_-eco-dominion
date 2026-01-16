@@ -21,6 +21,8 @@ export class IsoCameraSystem {
     public cameraFocus = new THREE.Vector3(0, 0, 0);
     public cameraAngle = Math.PI / 4;  // 45 degrees - isometric view
     public cameraElevation = Math.PI / 3.5;  // ~51 degrees
+    public targetFocusY = 0;
+    public currentFocusY = 0;
 
     // Input State
     private isDragging = false;
@@ -356,6 +358,22 @@ export class IsoCameraSystem {
         this.lastTouchDistance = currentDistance;
         this.lastTouchAngle = currentAngle;
         this.lastTouchMidpoint = currentMidpoint;
+    }
+
+    public setTargetHeight(y: number): void {
+        this.targetFocusY = y;
+    }
+
+    public update(dt: number): void {
+        // Smoothly interpolate vertical focus
+        const lerpSpeed = 5.0; // Adjust for transition speed
+        const dy = this.targetFocusY - this.currentFocusY;
+
+        if (Math.abs(dy) > 0.01) {
+            this.currentFocusY += dy * Math.min(1, dt * lerpSpeed);
+            this.cameraFocus.y = this.currentFocusY;
+            this.updateCameraTransform();
+        }
     }
 
     // --- Camera Actions (Based on legacy SceneManager) ---
