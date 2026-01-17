@@ -804,7 +804,21 @@ export class AureusWorld extends BaseWorld {
             this.bulldozeTile(index);
             config.onTileClick?.(index);
         } else if (state.interactionMode === 'DIG') {
-            this.queueDig(index, -1);
+            const tile = state.grid[index];
+            let nextLayer = -1;
+            if (tile?.underground) {
+                for (let l = -1; l >= -10; l--) {
+                    if (tile.underground[l]?.excavated) {
+                        nextLayer = l - 1;
+                    } else {
+                        nextLayer = l;
+                        break;
+                    }
+                }
+            }
+            if (nextLayer >= -10) {
+                this.queueDig(index, nextLayer);
+            }
             config.onTileClick?.(index);
         } else {
             // In underground, inspect might show ore data
