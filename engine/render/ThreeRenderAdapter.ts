@@ -64,6 +64,7 @@ export class ThreeRenderAdapter implements RenderAdapter {
         this.renderer.setPixelRatio(this.config.pixelRatio);
         this.renderer.setClearColor(this.config.clearColor, 0); // Transparent clear
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        this.renderer.localClippingEnabled = true; // Required for material clippingPlanes
 
         if (this.config.shadowMap) {
             this.renderer.shadowMap.enabled = true;

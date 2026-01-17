@@ -16,6 +16,7 @@ import { StreamingManager } from '../engine/space';
 import { JobSystem, MeshChunkResult, PathfindResult, WorkerPool } from '../engine/jobs';
 import { ThreeRenderAdapter } from '../engine/render';
 import { Simulation } from '../engine/sim';
+import { subterraneanClippingPlane } from '../engine/render/materials/VoxelMaterials';
 import {
     AgentSystem, JobGenerationSystem, EnvironmentSystem, EconomySystem,
     ColonySystem, LogisticsSystem, EventSystem, MissionSystem,
@@ -189,10 +190,19 @@ export class AureusWorld extends BaseWorld {
     placeBuilding(index: number, type?: string): void {
         const state = this.stateManager.getMutableState();
         const buildingType = (type || state.selectedBuilding) as BuildingType;
-        if (!buildingType) return;
+
+        console.log('[placeBuilding] Called with index:', index, 'buildingType:', buildingType, 'viewMode:', state.viewMode);
+
+        if (!buildingType) {
+            console.warn('[placeBuilding] No buildingType, returning');
+            return;
+        }
 
         const def = BUILDINGS[buildingType];
-        if (!def) return;
+        if (!def) {
+            console.warn('[placeBuilding] No def for buildingType, returning');
+            return;
+        }
 
         // NEW: Era validation
         if (!state.cheatsEnabled && !state.unlockedEras.includes(def.era)) {
@@ -203,8 +213,14 @@ export class AureusWorld extends BaseWorld {
 
         // Validate placement
         const tile = state.grid[index];
-        if (!tile || tile.locked) return;
-        if (tile.buildingType !== BuildingType.EMPTY && tile.buildingType !== BuildingType.POND) return;
+        if (!tile || tile.locked) {
+            console.warn('[placeBuilding] Tile is null or locked');
+            return;
+        }
+        if (tile.buildingType !== BuildingType.EMPTY && tile.buildingType !== BuildingType.POND) {
+            console.warn('[placeBuilding] Tile is not empty or pond, current type:', tile.buildingType);
+            return;
+        }
 
         // Check if building is in inventory
         if (!state.inventory[buildingType] || state.inventory[buildingType] <= 0) {
@@ -783,6 +799,28 @@ export class AureusWorld extends BaseWorld {
             }
         }
 
+        if (state.viewMode === 'UNDERGROUND') {
+            // Find terrain height at camera focus to set base slice height
+            const focus = this.cameraSystem.cameraFocus;
+            const offset = (GRID_SIZE - 1) / 2;
+            const gx = Math.floor(focus.x + offset + 0.5);
+            const gz = Math.floor(focus.z + offset + 0.5);
+            const focusIndex = gz * GRID_SIZE + gx;
+            const focusTile = state.grid[focusIndex];
+            const baseSurfaceY = focusTile ? focusTile.terrainHeight * 0.5 : 5.0;
+
+            // To hide everything ABOVE depth D, we use Normal(0, -1, 0)
+            subterraneanClippingPlane.normal.set(0, -1, 0);
+
+            // Set the cut-off at (baseSurfaceY + currentLayer + 0.5)
+            // This ensures we see the floor of the current layer but not the one above.
+            subterraneanClippingPlane.constant = baseSurfaceY + state.currentUndergroundLayer + 0.5;
+        } else {
+            // Restore to "no clipping"
+            subterraneanClippingPlane.normal.set(0, 1, 0);
+            subterraneanClippingPlane.constant = 1000;
+        }
+
         this.buildingRenderSystem.updateCursor(
             cursor,
             this.cameraSystem.getFocus()
@@ -867,7 +905,10 @@ export class AureusWorld extends BaseWorld {
         // 2. Building / Bulldoze
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ('ontouchstart' in window);
 
+        console.log('[handleSurfaceInteraction] interactionMode:', state.interactionMode, 'selectedBuilding:', state.selectedBuilding, 'isMobile:', isMobile);
+
         if (state.interactionMode === 'BUILD' && state.selectedBuilding) {
+            console.log('[handleSurfaceInteraction] BUILD mode active, placing at index:', index);
             if (isMobile) {
                 this.pinBuildingForConfirmation(index);
                 config.onTileClick?.(index);

@@ -3,8 +3,11 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-
 import * as THREE from 'three';
+
+// Global shared clipping plane for subterranean "slice view"
+// Normal facing up, constant initially very high to not clip anything
+export const subterraneanClippingPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 1000);
 
 // --- Procedural Textures ---
 
@@ -124,7 +127,9 @@ export const matMaster = new THREE.MeshStandardMaterial({
   map: texMaster,
   roughness: 1.0,
   vertexColors: true, // ENABLED for merged geometry
-  side: THREE.DoubleSide // Fixes invisible faces if winding is off
+  side: THREE.DoubleSide, // Fixes invisible faces if winding is off
+  clippingPlanes: [subterraneanClippingPlane],
+  clipShadows: true
 });
 
 // Base Materials (Still used for specific Buildings/UI/Particles)
@@ -142,8 +147,8 @@ export const mats: Record<string, THREE.Material> = {
   pine: new THREE.MeshStandardMaterial({ map: createNoiseTexture(64, 64, 0x14532d), roughness: 0.9 }),
   water: new THREE.MeshStandardMaterial({ color: 0x06b6d4, transparent: true, opacity: 0.85, roughness: 0.1 }),
   brick: new THREE.MeshStandardMaterial({ map: createNoiseTexture(64, 64, 0xb91c1c, 40), roughness: 0.9 }),
-  white: new THREE.MeshStandardMaterial({ map: createNoiseTexture(64, 64, 0xf1f5f9, 10), roughness: 0.5 }),
-  ghost: new THREE.MeshStandardMaterial({ color: 0x64748b, transparent: true, opacity: 0.3, depthWrite: false }),
+  white: new THREE.MeshStandardMaterial({ map: createNoiseTexture(64, 64, 0xf1f5f9, 10), roughness: 0.5, clippingPlanes: [subterraneanClippingPlane] }),
+  ghost: new THREE.MeshStandardMaterial({ color: 0x64748b, transparent: true, opacity: 0.3, depthWrite: false, clippingPlanes: [subterraneanClippingPlane] }),
   gold: new THREE.MeshStandardMaterial({ map: createNoiseTexture(64, 64, 0xffe135, 10), metalness: 0.9, roughness: 0.1, emissive: 0xffaa00, emissiveIntensity: 0.4 }),
   glass: new THREE.MeshStandardMaterial({ color: 0xa5f3fc, transparent: true, opacity: 0.4, metalness: 0.9, roughness: 0.0 }),
   hazard: new THREE.MeshStandardMaterial({ map: createNoiseTexture(64, 64, 0xfacc15), roughness: 0.5 }),
@@ -195,6 +200,20 @@ export const mats: Record<string, THREE.Material> = {
   }),
   biolume: bioLumeMaterial
 };
+
+// Apply clipping plane to all standard materials in the record
+Object.values(mats).forEach(mat => {
+  if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshBasicMaterial || mat instanceof THREE.ShaderMaterial) {
+    (mat as any).clippingPlanes = [subterraneanClippingPlane];
+    if (mat instanceof THREE.MeshStandardMaterial) {
+      mat.clipShadows = true;
+    }
+  }
+});
+
+// Specific Shader Materials
+waterFlowMaterial.clippingPlanes = [subterraneanClippingPlane];
+bioLumeMaterial.clippingPlanes = [subterraneanClippingPlane];
 
 // Map keys used in worker to material definitions.
 export const terrainMats = {

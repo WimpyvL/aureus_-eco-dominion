@@ -35,6 +35,19 @@ const PALETTE: Record<string, number[]> = {
     'gold': [1.0, 0.84, 0.0]
 };
 
+const LAYER_PALETTE: number[][] = [
+    [0.2, 0.3, 0.5], // Layer 1 (Blue-ish)
+    [0.2, 0.5, 0.5], // Layer 2 (Teal-ish)
+    [0.2, 0.5, 0.3], // Layer 3 (Green-ish)
+    [0.4, 0.5, 0.2], // Layer 4 (Lime-ish)
+    [0.5, 0.5, 0.2], // Layer 5 (Yellow-ish)
+    [0.5, 0.4, 0.2], // Layer 6 (Orange-ish)
+    [0.5, 0.3, 0.2], // Layer 7 (Rust-ish)
+    [0.5, 0.2, 0.3], // Layer 8 (Pink-ish)
+    [0.4, 0.2, 0.5], // Layer 9 (Purple-ish)
+    [0.2, 0.2, 0.5], // Layer 10 (Deep Blue)
+];
+
 self.onmessage = (e: MessageEvent) => {
     const msg = e.data;
 
@@ -171,12 +184,16 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
                     if (amISolid) {
                         const myStrata = myU ? myU[layer] : null;
                         const ore = myStrata?.oreVisible ? myStrata.oreType : null;
-                        let color = PALETTE['dirt'];
-                        if (layer <= -4) color = PALETTE['stone'];
-                        if (ore === 'GOLD') color = PALETTE['gold'];
-                        else if (ore === 'GEM') color = PALETTE['crystal'];
-                        else if (ore === 'IRON') color = [0.6, 0.4, 0.3];
-                        else if (ore === 'COAL') color = [0.1, 0.1, 0.1];
+
+                        // Use layer palette for visual distinctiveness
+                        const layerIndex = Math.abs(layer) - 1;
+                        let color = LAYER_PALETTE[layerIndex % 10];
+
+                        // Blend with ore color if present
+                        if (ore === 'GOLD') color = [color[0] * 0.5 + 0.5, color[1] * 0.5 + 0.42, color[2] * 0.5];
+                        else if (ore === 'GEM') color = [color[0] * 0.5 + 0.2, color[1] * 0.5 + 0.5, color[2] * 0.5 + 0.5];
+                        else if (ore === 'IRON') color = [color[0] * 0.5 + 0.3, color[1] * 0.5 + 0.2, color[2] * 0.5 + 0.15];
+                        else if (ore === 'COAL') color = [color[0] * 0.2, color[1] * 0.2, color[2] * 0.2];
 
                         // Check 6 neighbors
                         const isNeighborSolid = (nx: number, nz: number, nLayer: number) => {

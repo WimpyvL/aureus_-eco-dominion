@@ -41,6 +41,7 @@ export class BuildingRenderSystem {
     private ghostBuilding: THREE.Group | null = null;
     private ghostType: BuildingType | null = null;
     private pinnedGhostIndex: number | null = null;
+    private currentViewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE';
 
     // Materials / Geometry Reuse
     private particleGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
@@ -71,6 +72,8 @@ export class BuildingRenderSystem {
     }
 
     public update(dt: number, time: number, grid: GridTile[], dirtyKeys?: Set<string>, viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE') {
+        this.currentViewMode = viewMode;
+
         // 1. Sync Grid Changes
         if (dirtyKeys && dirtyKeys.has('grid')) {
             const offset = (this.gridSize - 1) / 2;
@@ -445,19 +448,31 @@ export class BuildingRenderSystem {
 
         // 3. Update Ghost Building Position
         if (this.ghostBuilding && this.pinnedGhostIndex === null) {
-            const isUnderground = ghostPos?.y !== undefined && ghostPos.y < -0.1;
+            // Use viewMode to determine layer validity, not y-coordinate
+            const isUndergroundView = this.currentViewMode === 'UNDERGROUND';
 
-            const subterraneanTypes = [
-                BuildingType.PIPE,
+            const subterraneanOnlyTypes = [
+                // PIPE is allowed on surface too, so it's not "subterranean-only"
                 BuildingType.SUPPORT_PILLAR,
                 BuildingType.MINING_DRILL,
                 BuildingType.UNDERGROUND_FANS,
                 BuildingType.ORE_EXTRACTOR
             ];
 
-            const isValidForLayer = isUnderground
-                ? subterraneanTypes.includes(this.ghostType!)
-                : !subterraneanTypes.includes(this.ghostType!);
+            const isSubterraneanOnlyType = subterraneanOnlyTypes.includes(this.ghostType!);
+            const isPipe = this.ghostType === BuildingType.PIPE;
+
+            // Subterranean-only buildings can only be placed underground
+            // PIPE can be placed anywhere
+            // All other buildings can only be placed on surface
+            const isValidForLayer = isUndergroundView
+                ? (isSubterraneanOnlyType || isPipe)
+                : (!isSubterraneanOnlyType);
+
+            // DEBUG: Log ghost visibility calculation
+            if (Math.random() < 0.01) {
+                console.log('[Ghost] viewMode:', this.currentViewMode, 'ghostType:', this.ghostType, 'isValidForLayer:', isValidForLayer, 'ghostPos:', ghostPos);
+            }
 
             if (ghostPos && isValidForLayer) {
                 this.ghostBuilding.visible = true;
