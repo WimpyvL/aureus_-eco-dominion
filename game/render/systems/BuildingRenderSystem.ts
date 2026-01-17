@@ -352,7 +352,7 @@ export class BuildingRenderSystem {
         }
     }
 
-    public setPinnedGhost(index: number | null) {
+    public setPinnedGhost(index: number | null, y: number = 0) {
         this.pinnedGhostIndex = index;
         // If we have a pinned index, position the ghost there
         if (index !== null && this.ghostBuilding) {
@@ -364,7 +364,7 @@ export class BuildingRenderSystem {
             const d = def?.depth || 1;
             const dx = (w - 1) / 2;
             const dz = (d - 1) / 2;
-            this.ghostBuilding.position.set(x - offset + dx, 0, z - offset + dz);
+            this.ghostBuilding.position.set(x - offset + dx, y, z - offset + dz);
             this.ghostBuilding.visible = true;
         }
     }
@@ -445,8 +445,19 @@ export class BuildingRenderSystem {
 
         // 3. Update Ghost Building Position
         if (this.ghostBuilding && this.pinnedGhostIndex === null) {
-            const isUnderground = pos?.y && pos.y < -0.1;
-            const isValidForLayer = isUnderground ? (this.ghostType === BuildingType.PIPE) : (this.ghostType !== BuildingType.PIPE);
+            const isUnderground = ghostPos?.y !== undefined && ghostPos.y < -0.1;
+
+            const subterraneanTypes = [
+                BuildingType.PIPE,
+                BuildingType.SUPPORT_PILLAR,
+                BuildingType.MINING_DRILL,
+                BuildingType.UNDERGROUND_FANS,
+                BuildingType.ORE_EXTRACTOR
+            ];
+
+            const isValidForLayer = isUnderground
+                ? subterraneanTypes.includes(this.ghostType!)
+                : !subterraneanTypes.includes(this.ghostType!);
 
             if (ghostPos && isValidForLayer) {
                 this.ghostBuilding.visible = true;

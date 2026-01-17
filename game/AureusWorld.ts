@@ -224,13 +224,30 @@ export class AureusWorld extends BaseWorld {
 
         // Context-aware placement
         if (state.viewMode === 'UNDERGROUND') {
-            // For now, only allow PIPES underground
-            if (buildingType === BuildingType.PIPE) {
-                this.stateManager.pushCommand('PLACE_SUB_BUILDING', { index, buildingType, layer: -1 });
+            const layer = state.currentUndergroundLayer;
+            const strata = tile.underground ? tile.underground[layer] : null;
+
+            // Only allow subterranean construction on excavated tiles
+            if (!strata || !strata.excavated) {
+                console.warn("Cannot build on unexcavated bedrock.");
+                state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+                return;
+            }
+
+            const subterraneanTypes = [
+                BuildingType.PIPE,
+                BuildingType.SUPPORT_PILLAR,
+                BuildingType.MINING_DRILL,
+                BuildingType.UNDERGROUND_FANS,
+                BuildingType.ORE_EXTRACTOR
+            ];
+
+            if (subterraneanTypes.includes(buildingType)) {
+                this.stateManager.pushCommand('PLACE_SUB_BUILDING', { index, buildingType, layer });
                 state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BUILD });
                 return;
             } else {
-                console.warn("Only Pipes can be placed underground currently.");
+                console.warn(`${buildingType} cannot be placed underground.`);
                 state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
                 return;
             }
@@ -249,9 +266,10 @@ export class AureusWorld extends BaseWorld {
         if (!tile || tile.locked) return;
 
         if (state.viewMode === 'UNDERGROUND') {
-            const hasSub = tile.subBuildings && tile.subBuildings[-1];
+            const layer = state.currentUndergroundLayer;
+            const hasSub = tile.subBuildings && tile.subBuildings[layer];
             if (hasSub) {
-                this.stateManager.pushCommand('BULLDOZE_SUB', { index, layer: -1 });
+                this.stateManager.pushCommand('BULLDOZE_SUB', { index, layer });
                 state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BULLDOZE });
             }
             return;
@@ -269,8 +287,17 @@ export class AureusWorld extends BaseWorld {
     }
 
     pinBuildingForConfirmation(index: number): void {
+        const state = this.stateManager.getState();
+        const tile = state.grid[index];
+        const surfaceY = tile ? tile.terrainHeight * 0.5 : 0;
+
+        let y = surfaceY;
+        if (state.viewMode === 'UNDERGROUND') {
+            y = surfaceY + state.currentUndergroundLayer;
+        }
+
         // Pin the ghost building at this location for mobile confirmation
-        this.buildingRenderSystem.setPinnedGhost(index);
+        this.buildingRenderSystem.setPinnedGhost(index, y);
     }
 
     clearPinnedBuilding(): void {
@@ -901,8 +928,14 @@ export class AureusWorld extends BaseWorld {
 
         // Logic for Underground Clicks
         if (state.interactionMode === 'BUILD' && state.selectedBuilding) {
-            // Only allow subterranean construction
-            this.placeBuilding(index);
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+            if (isMobile) {
+                this.pinBuildingForConfirmation(index);
+                config.onTileClick?.(index);
+            } else {
+                this.placeBuilding(index);
+            }
         } else if (state.interactionMode === 'BULLDOZE') {
             this.bulldozeTile(index);
             config.onTileClick?.(index);

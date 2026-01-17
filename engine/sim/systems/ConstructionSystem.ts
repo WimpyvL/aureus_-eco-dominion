@@ -105,9 +105,15 @@ export class ConstructionSystem extends BaseSimSystem {
                 const tz = Math.floor(headIdx / GRID_SIZE) + dz;
                 const idx = tz * GRID_SIZE + tx;
 
-                if (grid[idx] && grid[idx].structureHeadIndex === headIdx) {
+                if (grid[idx] && (grid[idx].structureHeadIndex === headIdx || idx === headIdx)) {
                     grid[idx].isUnderConstruction = false;
                     grid[idx].constructionTimeLeft = 0;
+
+                    // Finalize this specific tile's structure head if it was targeting us
+                    if (grid[idx].structureHeadIndex === undefined) {
+                        grid[idx].structureHeadIndex = headIdx;
+                    }
+
                     // If it's a sub-building (pipe/wire), finalize the excavation state
                     if (grid[idx].digState) {
                         for (const layer in grid[idx].digState) {
@@ -267,6 +273,7 @@ export class ConstructionSystem extends BaseSimSystem {
         tile.subBuildings[layer] = buildingType;
         tile.isUnderConstruction = !isInstant;
         tile.constructionTimeLeft = isInstant ? 0 : def.buildTime;
+        tile.structureHeadIndex = index; // Ensure we can find the head for completion
 
         // Start with a trench if it's the infrastructure layer
         if (layer === -1) {
