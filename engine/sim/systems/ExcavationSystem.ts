@@ -30,8 +30,8 @@ export class ExcavationSystem extends BaseSimSystem {
                     const layer = parseInt(layerStr);
                     const status = tile.digState[layer];
 
-                    if (status === 2) { // 2 = Excavated by Agent
-                        this.completeDig(tile.id, layer, state);
+                    if (status === 2 || status === 5) { // 2 = Finished Tunnel, 5 = Finished Entrance
+                        this.completeDig(tile.id, layer, state, status === 5);
 
                         // Clear the temporary dig state, as the permanent underground state is now set
                         delete tile.digState[layer];
@@ -47,7 +47,7 @@ export class ExcavationSystem extends BaseSimSystem {
     /**
      * Called when an agent finishes a DIG job at a specific location.
      */
-    public completeDig(tileId: number, layer: number, state: GameState): void {
+    public completeDig(tileId: number, layer: number, state: GameState, isEntrance: boolean = false): void {
         const tile = state.grid[tileId];
         if (!tile || !tile.underground) return;
 
@@ -57,8 +57,8 @@ export class ExcavationSystem extends BaseSimSystem {
         // 1. Excavate the tile
         strata.excavated = true;
 
-        // 2. If it's the top layer, it creates an entrance/hole on the surface
-        if (layer === -1) {
+        // 2. If flagged as an entrance, it creates a hole on the surface
+        if (isEntrance) {
             tile.hasEntrance = true;
         }
 

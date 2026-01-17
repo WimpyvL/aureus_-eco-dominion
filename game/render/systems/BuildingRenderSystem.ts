@@ -205,6 +205,11 @@ export class BuildingRenderSystem {
 
             const buildingGroup = BuildingFactory[type]({ ...config, connections });
 
+            // NEW: Hide top side in underground view
+            if (viewMode === 'UNDERGROUND') {
+                buildingGroup.visible = false;
+            }
+
             if (tile.isUnderConstruction) {
                 const scale = 0.4 + (progress * 0.6);
                 buildingGroup.scale.set(scale, scale, scale);
@@ -225,15 +230,7 @@ export class BuildingRenderSystem {
                 }
             }
 
-            // Add Sub-Base for underground view (Building Link)
-            if (viewMode === 'UNDERGROUND' && tile.buildingType !== BuildingType.ROAD && tile.buildingType !== BuildingType.FENCE) {
-                const connector = new THREE.Mesh(
-                    new THREE.BoxGeometry(0.3, 1.0, 0.3),
-                    new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8, roughness: 0.2 })
-                );
-                connector.position.y = -0.75;
-                root.add(connector);
-            }
+            // --- Underground Connector Removed ---
 
             root.add(buildingGroup);
         }

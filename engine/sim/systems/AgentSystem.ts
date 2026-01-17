@@ -6,8 +6,8 @@
 
 import { BaseSimSystem } from '../Simulation';
 import { FixedContext } from '../../kernel';
-import { Agent, GameState, GridTile, BuildingType, SfxType } from '../../../types';
-import { GRID_SIZE, findPath } from '../algorithms/Pathfinding';
+import { Agent, GameState, GridTile, BuildingType, SfxType, PathStep } from '../../../types';
+import { GRID_SIZE, findPath3D } from '../algorithms/Pathfinding';
 import { JobSystem, PathfindResult } from '../../jobs';
 import { ConstructionSystem } from './ConstructionSystem';
 import { PathPool } from '../../utils/PathPool';
@@ -88,14 +88,14 @@ export class AgentSystem extends BaseSimSystem {
         if (agent.energy < CONFIG.NEED_CRITICAL) {
             const bed = this.findNearest(agent, BuildingType.STAFF_QUARTERS, state.grid);
             if (bed !== null) {
-                this.goTo(agent, bed, 'sys_sleep', state.grid);
+                this.goTo(agent, bed, 0, 'sys_sleep', state.grid);
                 return;
             }
         }
         if (agent.hunger < CONFIG.NEED_CRITICAL) {
             const food = this.findNearest(agent, BuildingType.CANTEEN, state.grid);
             if (food !== null) {
-                this.goTo(agent, food, 'sys_eat', state.grid);
+                this.goTo(agent, food, 0, 'sys_eat', state.grid);
                 return;
             }
         }
@@ -108,7 +108,7 @@ export class AgentSystem extends BaseSimSystem {
             Math.random() < 0.8 // Random chance to pick up digging (autonomy placeholder)
         );
         if (digJob) {
-            this.goTo(agent, digJob.targetTileId, digJob.id, state.grid);
+            this.goTo(agent, digJob.targetTileId, digJob.layer || 0, digJob.id, state.grid);
             return;
         }
 
@@ -117,14 +117,14 @@ export class AgentSystem extends BaseSimSystem {
             (!j.assignedAgentId || j.assignedAgentId === agent.id)
         );
         if (buildJob) {
-            this.goTo(agent, buildJob.targetTileId, buildJob.id, state.grid);
+            this.goTo(agent, buildJob.targetTileId, buildJob.layer || 0, buildJob.id, state.grid);
             return;
         }
 
         // --- PRIORITY 4: Idleness / Wander ---
         if (agent.state === 'IDLE' && Math.random() < 0.3) {
             const wanderTarget = this.getRandomNearby(agent);
-            this.goTo(agent, wanderTarget, 'sys_wander', state.grid);
+            this.goTo(agent, wanderTarget, 0, 'sys_wander', state.grid);
         }
     }
 
@@ -165,18 +165,21 @@ export class AgentSystem extends BaseSimSystem {
         }
 
         const next = agent.path[0];
-        const tx = next % GRID_SIZE;
-        const ty = Math.floor(next / GRID_SIZE);
+        const tx = next.index % GRID_SIZE;
+        const tz = Math.floor(next.index / GRID_SIZE);
+        const tL = next.layer;
 
         const dx = tx - agent.x;
-        const dy = ty - agent.z;
-        const distSq = dx * dx + dy * dy;
+        const dz = tz - agent.z;
+        const distSq = dx * dx + dz * dz;
         const frameStep = CONFIG.SPEED * dt;
 
+        // If we reached the horizontal node, we can also instantly snap the layer
         if (distSq < (frameStep * frameStep)) {
             // Snap to node and pop it
             agent.x = tx;
-            agent.z = ty;
+            agent.z = tz;
+            agent.layer = tL; // Update vertical layer
             agent.path.shift();
 
             if (agent.path.length === 0) {
@@ -187,7 +190,7 @@ export class AgentSystem extends BaseSimSystem {
             // Linear lerp towards next node
             const dist = Math.sqrt(distSq);
             agent.x += (dx / dist) * frameStep;
-            agent.z += (dy / dist) * frameStep;
+            agent.z += (dz / dist) * frameStep;
         }
     }
 
@@ -231,8 +234,8 @@ export class AgentSystem extends BaseSimSystem {
                 // BUT `ExcavationSystem` is a Sim system, it runs ticks.
                 // I'll use `GridTile.digState` to signal completion for now. 
                 // digState: 1 (Trench) -> 2 (Excavated).
-                if (tile.digState && tile.digState[layer] === 1) {
-                    tile.digState[layer] = 2; // Mark as done for ExcavationSystem cleanup
+                if (tile.digState && (tile.digState[layer] === 1 || tile.digState[layer] === 4)) {
+                    tile.digState[layer] = tile.digState[layer] === 4 ? 5 : 2; // 2 = Finished Tunnel, 5 = Finished Entrance
                     // Also trigger effects
                     state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.CAMP_BUILD });
                 }
@@ -283,25 +286,26 @@ export class AgentSystem extends BaseSimSystem {
         agent.path = null;
     }
 
-    private goTo(agent: Agent, targetIdx: number, jobId: string, grid: GridTile[]): void {
+    private goTo(agent: Agent, targetIdx: number, targetLayer: number, jobId: string, grid: GridTile[]): void {
         const ax = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor(agent.x)));
         const az = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor(agent.z)));
         const startIdx = az * GRID_SIZE + ax;
+        const startLayer = agent.layer || 0;
 
-        // If we're already there, start the action immediately
-        if (startIdx === targetIdx) {
+        // If we're already there (horizontally and vertically), start the action immediately
+        if (startIdx === targetIdx && startLayer === targetLayer) {
             agent.currentJobId = jobId;
             if (jobId === 'sys_sleep') agent.state = 'SLEEPING';
             else if (jobId === 'sys_eat') agent.state = 'EATING';
-            else if (jobId.startsWith('build_')) agent.state = 'WORKING';
+            else if (jobId.startsWith('build_') || jobId.startsWith('dig_') || jobId.includes('mine')) agent.state = 'WORKING';
             else agent.state = 'IDLE';
             return;
         }
 
         try {
-            const path = findPath(startIdx, targetIdx, grid);
+            const path = findPath3D(startIdx, startLayer, targetIdx, targetLayer, grid);
             if (path && path.length > 0) {
-                PathPool.release(agent.path); // Free old path
+                PathPool.release(agent.path);
                 agent.path = path;
                 agent.state = 'MOVING';
                 agent.currentJobId = jobId;

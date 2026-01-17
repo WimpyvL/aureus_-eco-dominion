@@ -284,7 +284,7 @@ export function updateWaterConnectivity(grid: GridTile[]): GridTile[] {
     const connectedIndices = new Set<number>();
     const queue: number[] = [];
 
-    // 1. Seed queue with all Water Sources
+    // 1. Seed queue with all Water Sources (Surface buildings providing water)
     grid.forEach((tile, i) => {
         if (tile.buildingType === BuildingType.POND || tile.buildingType === BuildingType.WATER_WELL) {
             connectedIndices.add(i);
@@ -292,7 +292,7 @@ export function updateWaterConnectivity(grid: GridTile[]): GridTile[] {
         }
     });
 
-    // 2. BFS Flood Fill
+    // 2. BFS Flood Fill through layer -1 (Underground Network)
     while (queue.length > 0) {
         const currIdx = queue.shift()!;
 
@@ -308,15 +308,12 @@ export function updateWaterConnectivity(grid: GridTile[]): GridTile[] {
             if (connectedIndices.has(n)) continue;
 
             const tile = grid[n];
-            // We can flow through pipes and any building that connects to pipes
-            // (Basically any non-empty lot that isn't under construction or just empty terrain)
-            const canConduct = tile.buildingType === BuildingType.PIPE ||
-                tile.buildingType === BuildingType.WASH_PLANT ||
-                tile.buildingType === BuildingType.RECYCLING_PLANT ||
-                tile.buildingType === BuildingType.WATER_WELL ||
-                tile.buildingType === BuildingType.POND;
+            // Propagation happens via pipes at layer -1
+            const hasPipe = tile.subBuildings?.[-1] === BuildingType.PIPE;
+            // Also sources themselves act as nodes in the network
+            const isSource = tile.buildingType === BuildingType.WATER_WELL || tile.buildingType === BuildingType.POND;
 
-            if (canConduct) {
+            if (hasPipe || isSource) {
                 connectedIndices.add(n);
                 queue.push(n);
             }
@@ -325,17 +322,28 @@ export function updateWaterConnectivity(grid: GridTile[]): GridTile[] {
 
     // 3. Map status back to grid
     return grid.map((tile, i) => {
-        // Only buildings that actually CARE about water get a status (visual pipes)
-        if (tile.buildingType === BuildingType.PIPE) {
-            return { ...tile, waterStatus: connectedIndices.has(i) ? 'CONNECTED' : 'DISCONNECTED' };
+        // A tile is part of the network if it's in connectedIndices
+        const isNetworked = connectedIndices.has(i);
+
+        // If it's a building that needs water, it's connected if its tile index is networked
+        // (Assuming a pipe exists on the same tile at layer -1 or it's a source)
+        if (tile.buildingType !== BuildingType.EMPTY) {
+            return { ...tile, waterStatus: isNetworked ? 'CONNECTED' : 'DISCONNECTED' };
         }
+
+        // Also update the visual state of pipes if they are in sub-buildings
+        if (tile.subBuildings?.[-1] === BuildingType.PIPE) {
+            // This allows pipes to show as connected visual-wise
+            return { ...tile, waterStatus: isNetworked ? 'CONNECTED' : 'DISCONNECTED' };
+        }
+
         return tile;
     });
 }
 
 // Utility: Check if a tile is connected to a water source via pipes
 export function isConnectedToWater(grid: GridTile[], startIndex: number): boolean {
-    // BFS
+    // BFS through the same layer -1 logic
     const queue = [startIndex];
     const visited = new Set<number>();
     visited.add(startIndex);
@@ -360,10 +368,8 @@ export function isConnectedToWater(grid: GridTile[], startIndex: number): boolea
                 return true;
             }
 
-            // If Pipe, continue searching
-            if (tile.buildingType === BuildingType.PIPE ||
-                tile.buildingType === BuildingType.WASH_PLANT ||
-                tile.buildingType === BuildingType.RECYCLING_PLANT) {
+            // Continue searching if there's a pipe at layer -1
+            if (tile.subBuildings?.[-1] === BuildingType.PIPE) {
                 visited.add(n);
                 queue.push(n);
             }

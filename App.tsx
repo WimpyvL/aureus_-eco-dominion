@@ -37,6 +37,7 @@ import { TradeTerminal } from './components/TradeTerminal';
 import { WeatherOverlay } from './components/WeatherOverlay';
 import { MobileBuildingConfirmation } from './components/MobileBuildingConfirmation';
 import { DigConfirmPopup } from './components/DigConfirmPopup';
+import { LayerNavigator } from './components/LayerNavigator';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 // Colonist Inspector Component
@@ -253,92 +254,12 @@ const App: React.FC = () => {
         return { income, cost, net: income - cost, ecoMult, trustMult };
     };
 
-    // If engine not ready, show ONLY loading screen
-    // Container must still exist (hidden) for engine to mount
-    if (!state) {
-        return (
-            <div className="relative w-full h-screen overflow-hidden bg-slate-900 select-none">
-                {/* Hidden container for engine mounting */}
-                <div
-                    ref={containerRef}
-                    className="absolute inset-0 z-0 opacity-0 pointer-events-none"
-                />
-
-                {/* Loading Screen */}
-                <div className="fixed inset-0 z-10 flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
-                    {/* Logo/Title */}
-                    <div className="text-center mb-12">
-                        <h1 className="text-4xl font-bold bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 bg-clip-text text-transparent mb-2">AUREUS</h1>
-                        <p className="text-slate-500 text-sm tracking-widest uppercase">Eco Dominion</p>
-                    </div>
-
-                    {/* Loading Container */}
-                    <div className="w-80 bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 shadow-lg shadow-black/20">
-                        {/* Current Stage */}
-                        <div className="text-center mb-4">
-                            <p className="text-white text-lg font-medium">{loading.stage}</p>
-                            {loading.error && (
-                                <p className="text-red-400 text-sm mt-2 break-words">{loading.error}</p>
-                            )}
-                        </div>
-
-                        {/* Progress Bar */}
-                        <div className="relative h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-700">
-                            <div
-                                className="absolute inset-y-0 left-0 bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-500 ease-out rounded-full"
-                                style={{ width: `${loading.percent}%` }}
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse" />
-                        </div>
-
-                        {/* Percentage */}
-                        <div className="text-center mt-3">
-                            <span className="text-2xl font-bold text-amber-400">{loading.percent}%</span>
-                        </div>
-
-                        {/* Loading Steps */}
-                        <div className="mt-6 space-y-2 text-xs text-slate-500">
-                            <div className={`flex items-center gap-2 ${loading.percent >= 10 ? 'text-emerald-400' : ''}`}>
-                                <span>●</span> Renderer
-                            </div>
-                            <div className={`flex items-center gap-2 ${loading.percent >= 30 ? 'text-emerald-400' : ''}`}>
-                                <span>●</span> World & Input
-                            </div>
-                            <div className={`flex items-center gap-2 ${loading.percent >= 50 ? 'text-emerald-400' : ''}`}>
-                                <span>●</span> Runtime & Tools
-                            </div>
-                            <div className={`flex items-center gap-2 ${loading.percent >= 80 ? 'text-emerald-400' : ''}`}>
-                                <span>●</span> Simulation
-                            </div>
-                            <div className={`flex items-center gap-2 ${loading.percent >= 100 ? 'text-emerald-400' : ''}`}>
-                                <span>●</span> Game Engine Running
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Bouncing dots or checkmark */}
-                    <div className="mt-12 flex gap-1">
-                        {loading.percent < 100 ? (
-                            <>
-                                <div className="w-2 h-2 bg-amber-500/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                <div className="w-2 h-2 bg-amber-500/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                <div className="w-2 h-2 bg-amber-500/50 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                            </>
-                        ) : (
-                            <div className="text-emerald-400 text-2xl animate-pulse">✓</div>
-                        )}
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
     // ──────────────────────────────────────────────────────────────────
-    // ENGINE READY - Render full game UI
+    // ENGINE READY - Internal logic
     // ──────────────────────────────────────────────────────────────────
 
-    const selectedAgent = state.agents.find(a => a.id === state.selectedAgentId);
-    const financials = calculateFinancials(state);
+    const selectedAgent = state?.agents.find(a => a.id === state.selectedAgentId);
+    const financials = state ? calculateFinancials(state) : { income: 0, cost: 0, net: 0, ecoMult: 1, trustMult: 1 };
 
     // Engine action wrappers
     const dispatch = (action: { type: string; payload?: any }) => {
@@ -350,10 +271,7 @@ const App: React.FC = () => {
                 playSfx(SfxType.BUILD_START);
                 break;
             case 'BUY_BUILDING':
-                // Add building to inventory and deduct cost
-                if (world) {
-                    world.buyBuilding(action.payload.type, action.payload.cost);
-                }
+                if (world) world.buyBuilding(action.payload.type, action.payload.cost);
                 break;
             case 'BULLDOZE_TILE':
                 world.bulldozeTile(action.payload.index);
@@ -389,6 +307,9 @@ const App: React.FC = () => {
             case 'DELIVER_CONTRACT':
                 world.deliverContract(action.payload);
                 break;
+            case 'CHANGE_LAYER':
+                world.changeUndergroundLayer(action.payload.delta);
+                break;
             case 'ADVANCE_TUTORIAL':
                 world.advanceTutorial();
                 break;
@@ -396,14 +317,8 @@ const App: React.FC = () => {
                 world.toggleViewMode();
                 break;
             case 'QUEUE_DIG':
-                // We need to implement this method in AureusWorld
-                // world.queueDig(action.payload.index, action.payload.layer);
-                // For now, push command directly if we can, or add the method.
-                // Assuming we will add queueDig to AureusWorld now.
                 if (world['queueDig']) {
                     world['queueDig'](action.payload.index, action.payload.layer);
-                } else {
-                    console.warn("queueDig not implemented on world");
                 }
                 playSfx(SfxType.UI_CLICK);
                 break;
@@ -414,14 +329,77 @@ const App: React.FC = () => {
 
     return (
         <div className="relative w-full h-screen overflow-hidden bg-slate-900 select-none">
-            {/* Engine Canvas Container */}
+            {/* Engine Canvas Container - PERSISTENT */}
             <div
                 ref={containerRef}
-                className={`absolute inset-0 z-0 transition-opacity duration-1000 ${showHomePage ? 'brightness-[0.9]' : 'brightness-100'}`}
+                className={`absolute inset-0 z-0 transition-opacity duration-1000 ${(showHomePage || !state) ? 'brightness-[0.9]' : 'brightness-100'} ${(!state) ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
             />
 
+            {/* Loading Screen Overlay */}
+            {!state && (
+                <div className="fixed inset-0 z-10 flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
+                    {/* Logo/Title */}
+                    <div className="text-center mb-12">
+                        <h1 className="text-4xl font-bold bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 bg-clip-text text-transparent mb-2">AUREUS</h1>
+                        <p className="text-slate-500 text-sm tracking-widest uppercase">Eco Dominion</p>
+                    </div>
+
+                    {/* Loading Container */}
+                    <div className="w-80 bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 shadow-lg shadow-black/20">
+                        <div className="text-center mb-4">
+                            <p className="text-white text-lg font-medium">{loading.stage}</p>
+                            {loading.error && (
+                                <p className="text-red-400 text-sm mt-2 break-words">{loading.error}</p>
+                            )}
+                        </div>
+
+                        <div className="relative h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-700">
+                            <div
+                                className="absolute inset-y-0 left-0 bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-500 ease-out rounded-full"
+                                style={{ width: `${loading.percent}%` }}
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse" />
+                        </div>
+
+                        <div className="text-center mt-3">
+                            <span className="text-2xl font-bold text-amber-400">{loading.percent}%</span>
+                        </div>
+
+                        <div className="mt-6 space-y-2 text-xs text-slate-500">
+                            <div className={`flex items-center gap-2 ${loading.percent >= 10 ? 'text-emerald-400' : ''}`}>
+                                <span>●</span> Renderer
+                            </div>
+                            <div className={`flex items-center gap-2 ${loading.percent >= 30 ? 'text-emerald-400' : ''}`}>
+                                <span>●</span> World & Input
+                            </div>
+                            <div className={`flex items-center gap-2 ${loading.percent >= 50 ? 'text-emerald-400' : ''}`}>
+                                <span>●</span> Runtime & Tools
+                            </div>
+                            <div className={`flex items-center gap-2 ${loading.percent >= 80 ? 'text-emerald-400' : ''}`}>
+                                <span>●</span> Simulation
+                            </div>
+                            <div className={`flex items-center gap-2 ${loading.percent >= 100 ? 'text-emerald-400' : ''}`}>
+                                <span>●</span> Game Engine Running
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-12 flex gap-1">
+                        {loading.percent < 100 ? (
+                            <>
+                                <div className="w-2 h-2 bg-amber-500/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                <div className="w-2 h-2 bg-amber-500/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                <div className="w-2 h-2 bg-amber-500/50 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </>
+                        ) : (
+                            <div className="text-emerald-400 text-2xl animate-pulse">✓</div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Home Page Overlay */}
-            {showHomePage && (
+            {state && showHomePage && (
                 <div className="absolute inset-0 z-50 bg-gradient-to-b from-black/30 via-transparent to-black/50">
                     <HomePage
                         onStartGame={handleStartGame}
@@ -505,12 +483,20 @@ const App: React.FC = () => {
                         interactionMode={state.interactionMode}
                     />
 
+                    {state.viewMode === 'UNDERGROUND' && (
+                        <LayerNavigator
+                            currentLayer={state.currentUndergroundLayer}
+                            dispatch={dispatch}
+                            playSfx={playSfx}
+                        />
+                    )}
+
                     <OpsDrawer
                         isOpen={sidebarOpen === 'OPS'}
                         onClose={() => setSidebarOpen('NONE')}
                         state={state}
                         dispatch={dispatch}
-                        financials={financials}
+                        financials={{ income: financials.income, cost: financials.cost, net: financials.net }}
                         ecoMult={financials.ecoMult}
                         trustMult={financials.trustMult}
                         playSfx={playSfx}
@@ -568,21 +554,12 @@ const App: React.FC = () => {
                         playSfx={playSfx}
                     />
 
-                    {/* Dungeon Keeper Excavation Popup */}
-                    {state.viewMode === 'UNDERGROUND' && hoverTile !== null && (
-                        // We track click via a new state or repurpose pendingPlacementIndex?
-                        // Let's reuse pendingPlacementIndex logic but for digging
-                        // Actually, better to use a dedicated state or extend pendingPlacementIndex usage.
-                        // But pendingPlacementIndex logic in onTileClick is specific to BUILD mode.
-                        // Let's add a dedicated state for clarity.
-                        null
-                    )}
-
                     {digPromptIndex !== null && (
                         <DigConfirmPopup
                             tileIndex={digPromptIndex}
                             grid={state.grid}
                             viewMode={state.viewMode}
+                            currentUndergroundLayer={state.currentUndergroundLayer}
                             onConfirm={(layer) => {
                                 dispatch({ type: 'QUEUE_DIG', payload: { index: digPromptIndex, layer } });
                                 setDigPromptIndex(null);

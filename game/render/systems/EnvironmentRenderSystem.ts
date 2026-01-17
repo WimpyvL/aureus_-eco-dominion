@@ -15,7 +15,7 @@ export class EnvironmentRenderSystem {
     // State
     private timeOfDay = 12000;
     private weather: 'CLEAR' | 'RAINY' | 'STORM' | 'TOXIC' | 'HEAT' = 'CLEAR';
-    private viewMode: 'SURFACE' | 'UNDERGROUND' = 'SURFACE';
+    private viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE';
 
     // Target Values for Interpolation
     private targetBgColor = new THREE.Color(COLORS.BG);
@@ -143,7 +143,7 @@ export class EnvironmentRenderSystem {
         this.updateRain(dt);
     }
 
-    public setViewMode(mode: 'SURFACE' | 'UNDERGROUND') {
+    public setViewMode(mode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON') {
         this.viewMode = mode;
     }
 

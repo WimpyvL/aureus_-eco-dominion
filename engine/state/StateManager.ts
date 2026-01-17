@@ -82,6 +82,7 @@ export class StateManager {
             },
 
             activeEvents: [],
+            currentUndergroundLayer: -1,
             newsFeed: [],
             activeGoal: null,
 

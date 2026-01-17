@@ -25,7 +25,7 @@ export class TerrainRenderSystem {
 
     private chunks: Map<string, ChunkRenderData & { lod: number }> = new Map();
     private tileCache: Map<string, GridTile[]> = new Map();
-    private viewMode: 'SURFACE' | 'UNDERGROUND' = 'SURFACE';
+    private viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE';
 
     // View radius in chunks (Reduced for optimization)
     private viewRadius = 5;
@@ -45,7 +45,7 @@ export class TerrainRenderSystem {
         this.jobSystem = jobSystem;
     }
 
-    public setViewMode(mode: 'SURFACE' | 'UNDERGROUND'): void {
+    public setViewMode(mode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON'): void {
         if (this.viewMode === mode) return;
         this.viewMode = mode;
         // Invalidate all chunks to force rebuild with new view mode

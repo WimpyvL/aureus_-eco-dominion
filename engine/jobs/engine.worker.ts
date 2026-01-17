@@ -154,10 +154,12 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
                 const ceilingColor = PALETTE['dirt'];
                 const ghostColor = PALETTE[data.b] || PALETTE['grass'];
 
-                // Render Surface Ghost (Transparent) for context - Only if layer -1 has something or focus
+                // --- Surface Ghost Removed (User requested top side hidden) ---
+                /*
                 if (tile?.hasEntrance) {
                     addFace(ghost, x, surfaceY - 0.5, z, 2, ghostColor);
                 }
+                */
 
                 // Render Underground Layers (-1 to -10) with Neighbor Culling
                 for (let layer = -1; layer >= -10; layer--) {

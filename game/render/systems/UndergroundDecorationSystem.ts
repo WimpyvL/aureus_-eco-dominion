@@ -15,11 +15,9 @@ export class UndergroundDecorationSystem {
     }
 
     private createCrystalMesh(): THREE.InstancedMesh {
-        // Simple crystal geometry (cone/pyramid)
-        const geo = new THREE.ConeGeometry(0.2, 0.6, 4);
-        const mesh = new THREE.InstancedMesh(geo, bioLumeMaterial, this.maxCrystals);
-        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        mesh.frustumCulled = false;
+        // --- Crystals Removed (User requested removal of blue cones) ---
+        const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+        const mesh = new THREE.InstancedMesh(geo, bioLumeMaterial, 1);
         mesh.visible = false;
         return mesh;
     }
@@ -29,7 +27,7 @@ export class UndergroundDecorationSystem {
 
         if (this.visible !== isUnderground) {
             this.visible = isUnderground;
-            this.crystals.visible = isUnderground;
+            this.crystals.visible = false; // Always hidden
             if (isUnderground) this.rebuild(cameraFocus);
         }
 

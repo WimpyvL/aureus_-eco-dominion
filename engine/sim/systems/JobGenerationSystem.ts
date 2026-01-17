@@ -63,7 +63,7 @@ export class JobGenerationSystem extends BaseSimSystem {
                     const layer = parseInt(layerStr);
                     const status = tile.digState[layer];
 
-                    if (status === 1) { // 1 = Designated/Trench
+                    if (status === 1 || status === 4) { // 1 = Tunnel, 4 = Entrance
                         const jobId = `dig_${tile.id}_${layer}`;
 
                         // Check if job exists

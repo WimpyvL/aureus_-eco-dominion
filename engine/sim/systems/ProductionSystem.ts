@@ -66,9 +66,13 @@ export class ProductionSystem extends BaseSimSystem {
                 powerEfficiency = 0.25;
             }
 
-            // Buildings with water consumption operate at 50% if network has deficit
-            if (def.water?.consumes && state.waterNetwork?.deficit > 0) {
-                waterEfficiency = 0.5;
+            // Buildings with water consumption depend on being connected to pipes
+            if (def.water?.consumes) {
+                if (tile.waterStatus !== 'CONNECTED') {
+                    waterEfficiency = 0.1; // Virtually idle without water connection
+                } else if (state.waterNetwork?.deficit > 0) {
+                    waterEfficiency = 0.5; // Grid-wide pressure issues
+                }
             }
 
             const utilityEfficiency = powerEfficiency * waterEfficiency;

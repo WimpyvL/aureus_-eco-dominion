@@ -64,6 +64,10 @@ export const getBuildingIcon = (type: BuildingType) => {
         // Era 5: Prosperity
         case BuildingType.MONUMENT: return <Trophy size={18} />;
         case BuildingType.SPACEPORT: return <Rocket size={18} />;
+        case BuildingType.SUPPORT_PILLAR: return <GitCommit size={18} />;
+        case BuildingType.MINING_DRILL: return <Pickaxe size={18} />;
+        case BuildingType.UNDERGROUND_FANS: return <Wind size={18} />;
+        case BuildingType.ORE_EXTRACTOR: return <Container size={18} />;
         default: return <X size={18} />;
     }
 };
@@ -124,8 +128,12 @@ const ITEM_CATEGORIES: Record<BuildingType, CategoryType> = {
     [BuildingType.HYDROPONICS]: 'UTILITIES',
     [BuildingType.GEOTHERMAL_PLANT]: 'UTILITIES',
     // Era 5: Prosperity
-    [BuildingType.MONUMENT]: 'ADVANCED',
     [BuildingType.SPACEPORT]: 'ADVANCED',
+    [BuildingType.MONUMENT]: 'ADVANCED',
+    [BuildingType.SUPPORT_PILLAR]: 'BASICS',
+    [BuildingType.MINING_DRILL]: 'PRODUCTION',
+    [BuildingType.UNDERGROUND_FANS]: 'UTILITIES',
+    [BuildingType.ORE_EXTRACTOR]: 'PRODUCTION',
     [BuildingType.EMPTY]: 'ALL'
 };
 
@@ -153,15 +161,36 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
             BuildingType.NATURE_RESERVE, BuildingType.HYDROPONICS, BuildingType.GEOTHERMAL_PLANT,
             // Era 5: Prosperity
             BuildingType.SAFARI_LODGE, BuildingType.GREEN_TECH_LAB,
-            BuildingType.MONUMENT, BuildingType.SPACEPORT
+            BuildingType.MONUMENT, BuildingType.SPACEPORT,
+            // Underground
+            BuildingType.SUPPORT_PILLAR, BuildingType.MINING_DRILL, BuildingType.UNDERGROUND_FANS, BuildingType.ORE_EXTRACTOR
         ];
 
         return all.filter(type => {
             const matchesCategory = activeCategory === 'ALL' || ITEM_CATEGORIES[type] === activeCategory;
             const matchesSearch = BUILDINGS[type].name.toLowerCase().includes(searchQuery.toLowerCase());
-            return matchesCategory && matchesSearch;
+
+            // View Mode Filter
+            const isUndergroundItem = [
+                BuildingType.PIPE,
+                BuildingType.SUPPORT_PILLAR,
+                BuildingType.MINING_DRILL,
+                BuildingType.ORE_EXTRACTOR,
+                BuildingType.UNDERGROUND_FANS
+            ].includes(type);
+
+            if (state.viewMode === 'UNDERGROUND') {
+                return matchesCategory && matchesSearch && isUndergroundItem;
+            } else {
+                return matchesCategory && matchesSearch && !([
+                    BuildingType.SUPPORT_PILLAR,
+                    BuildingType.MINING_DRILL,
+                    BuildingType.ORE_EXTRACTOR,
+                    BuildingType.UNDERGROUND_FANS
+                ].includes(type));
+            }
         });
-    }, [activeCategory, searchQuery]);
+    }, [activeCategory, searchQuery, state.viewMode]);
 
     const sidebarRef = React.useRef<HTMLDivElement>(null);
 
@@ -225,72 +254,168 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
             {/* Sidebar Container */}
             <div
                 ref={sidebarRef}
-                className="absolute right-0 top-14 bottom-20 sm:bottom-24 w-[75vw] sm:w-80 z-40 flex pointer-events-none transition-all"
+                className={`fixed right-0 top-14 bottom-22 w-[85vw] sm:w-[500px] z-40 flex pointer-events-none transition-all duration-500 ease-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
             >
-                {/* Category Tabs (Vertical) - Reduced size for mobile */}
-                <div className="w-10 sm:w-14 bg-slate-900/95 border-r border-slate-800 flex flex-col items-center py-2 sm:py-4 gap-2 sm:gap-3 pointer-events-auto shadow-xl">
-                    {CATEGORIES.map(cat => (
-                        <button
-                            key={cat.id}
-                            onClick={() => { setActiveCategory(cat.id); playSfx('UI_CLICK'); }}
-                            title={cat.label}
-                            className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center transition-all ${activeCategory === cat.id
-                                ? 'bg-amber-500 text-amber-950 shadow-[0_0_15px_rgba(245,158,11,0.4)]'
-                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
-                                }`}
-                        >
-                            {cat.icon}
-                        </button>
-                    ))}
-                    <div className="mt-auto mb-2 w-6 sm:w-8 h-px bg-slate-800" />
-                    <button
-                        onClick={handleBulldozer}
-                        title="Bulldozer"
-                        className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center bg-rose-900/30 text-rose-500 hover:bg-rose-900/50 transition-all border border-rose-900/50"
-                    >
-                        <Eraser size={16} />
-                    </button>
-                    <button
-                        onClick={onClose}
-                        className="mt-2 w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center bg-slate-800 text-slate-400 hover:bg-slate-700 transition-all"
-                    >
-                        <X size={16} />
-                    </button>
-                </div>
+                {/* Main Panel */}
+                <div className="flex-1 flex flex-col pointer-events-auto bg-slate-950/90 backdrop-blur-xl border-l border-slate-800 shadow-[-20px_0_50px_rgba(0,0,0,0.8)] overflow-hidden">
 
-                {/* Main Grid Area */}
-                <div className="flex-1 bg-slate-900/95 backdrop-blur-md border-r-0 border-slate-700 rounded-bl-[4px] shadow-[-10px_0_30px_rgba(0,0,0,0.5)] flex flex-col pointer-events-auto overflow-hidden">
-                    {/* Header */}
-                    <div className="px-2 sm:px-4 pt-2 sm:pt-4 pb-2 border-b border-slate-800">
-                        <div className="flex justify-between items-center mb-2">
-                            <h2 className="text-white font-black uppercase tracking-tighter text-sm sm:text-lg font-['Rajdhani'] leading-none">Supply</h2>
-                            <div className="bg-slate-950 px-2 py-1 rounded border border-slate-800">
-                                <span className="text-emerald-400 font-mono text-[10px] sm:text-xs font-bold">{Math.floor(state.resources.agt).toLocaleString()} AGT</span>
+
+                    {/* Top Bar: Era & Category Selection */}
+                    <div className="p-4 border-b border-white/5 bg-slate-900/50">
+                        <div className="flex justify-between items-end mb-4">
+                            <div>
+                                <h2 className="text-white font-black uppercase tracking-widest text-xl font-['Rajdhani'] leading-none">Supply Command</h2>
+                                <p className="text-slate-500 text-[10px] uppercase font-mono mt-1 tracking-tighter">Authorized Assets & Infrastructure</p>
+                            </div>
+                            <div className="flex flex-col items-end">
+                                <span className="text-amber-500 font-mono text-lg font-black leading-none">{Math.floor(state.resources.agt).toLocaleString()}</span>
+                                <span className="text-[9px] text-slate-600 font-mono uppercase">Credits Available</span>
                             </div>
                         </div>
 
-                        {/* Search */}
-                        <div className="relative">
-                            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                            <input
-                                type="text"
-                                placeholder="Search..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-md py-1 pl-8 pr-2 text-[10px] sm:text-xs text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500/50 transition-all"
-                            />
+                        {/* Search & Category Tabs */}
+                        <div className="flex gap-2 mb-3">
+                            <div className="relative flex-1">
+                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                <input
+                                    type="text"
+                                    placeholder="SEARCH ASSETS..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full bg-black/40 border border-slate-800 rounded py-2 pl-9 pr-3 text-xs text-white placeholder:text-slate-700 focus:outline-none focus:border-amber-500/50 font-mono transition-all"
+                                />
+                            </div>
+                            <button
+                                onClick={handleBulldozer}
+                                title="Bulldozer Mode"
+                                className={`px-3 rounded flex items-center justify-center transition-all border ${state.interactionMode === 'BULLDOZE' ? 'bg-rose-500 text-rose-950 border-rose-400' : 'bg-slate-900 text-rose-500 border-rose-900/30'}`}
+                            >
+                                <Eraser size={16} />
+                            </button>
+                            <button
+                                onClick={onClose}
+                                className="w-10 bg-slate-800 text-slate-400 hover:bg-slate-700 rounded flex items-center justify-center transition-all"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar">
+                            {CATEGORIES.map(cat => (
+                                <button
+                                    key={cat.id}
+                                    onClick={() => { setActiveCategory(cat.id); playSfx('UI_CLICK'); }}
+                                    className={`px-3 py-1.5 rounded-full whitespace-nowrap text-[10px] font-black uppercase tracking-wider transition-all border ${activeCategory === cat.id
+                                        ? 'bg-amber-500 text-amber-950 border-amber-400 shadow-lg shadow-amber-500/20'
+                                        : 'bg-slate-800/50 text-slate-500 border-transparent hover:bg-slate-800 hover:text-slate-300'
+                                        }`}
+                                >
+                                    <span className="flex items-center gap-1.5">
+                                        {cat.icon}
+                                        {cat.label}
+                                    </span>
+                                </button>
+                            ))}
                         </div>
                     </div>
 
-                    {/* Grid */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-2 grid grid-cols-4 gap-1.5 sm:gap-2 content-start">
-                        {shopItems.length === 0 ? (
-                            <div className="col-span-4 py-8 text-center text-slate-600 text-[10px] font-mono italic">
-                                No units found.
-                            </div>
-                        ) : (
-                            shopItems.map((type) => {
-                                const b = BUILDINGS[type];
+
+                    {/* Scrollable Content */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
+                        {/* Grouping Items by Era or Status */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 content-start">
+                            {
+                                shopItems.length === 0 ? (
+                                    <div className="col-span-full py-12 text-center">
+                                        <Search size={32} className="mx-auto text-slate-800 mb-2 opacity-20" />
+                                        <p className="text-slate-600 text-xs font-mono uppercase tracking-widest italic">No assets matching criteria found</p>
+                                    </div>
+                                ) : (
+                                    shopItems.map((type) => {
+                                        const b = BUILDINGS[type];
+                                        const cost = calculateBuildingCost(type, state.grid);
+                                        const isEcoLocked = state.resources.eco < b.ecoReq;
+                                        let dependencyMet = true;
+                                        if (b.dependency) {
+                                            dependencyMet = state.grid.some(t => t.buildingType === b.dependency && !t.isUnderConstruction);
+                                        }
+                                        const isEraLocked = !state.unlockedEras.includes(b.era);
+                                        const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet || isEraLocked);
+                                        const canAfford = state.cheatsEnabled || state.resources.agt >= cost;
+                                        const isSelected = selectedItem === type;
+
+                                        return (
+                                            <div
+                                                key={type}
+                                                onClick={() => handleSelect(type)}
+                                                className={`
+                                                group relative p-3 border border-slate-800/50 rounded-lg transition-all cursor-pointer flex gap-4
+                                                ${isSelected ? 'bg-amber-500/10 border-amber-500/50 ring-1 ring-amber-500/20' : 'bg-slate-900/30 hover:bg-slate-800/40 hover:border-slate-700'}
+                                                ${isLocked ? 'opacity-40 grayscale pointer-events-none' : ''}
+                                            `}
+                                            >
+                                                {/* Icon Section */}
+                                                <div className={`
+                                                w-12 h-12 shrink-0 rounded flex items-center justify-center text-white transition-all
+                                                ${isSelected ? 'scale-110 shadow-lg' : ''}
+                                                ${isLocked ? 'bg-slate-800' : getCategoryColor(type).replace('border-', 'border-opacity-0 border-')}
+                                            `} style={{ background: isLocked ? undefined : 'linear-gradient(135deg, rgba(255,255,255,0.1), transparent)' }}>
+                                                    {getBuildingIcon(type)}
+                                                </div>
+
+                                                {/* Info Section */}
+                                                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                                    <div className="flex justify-between items-start gap-2">
+                                                        <h3 className={`font-black uppercase tracking-tight truncate text-xs font-['Rajdhani'] ${isSelected ? 'text-amber-400' : 'text-slate-200'}`}>
+                                                            {b.name}
+                                                        </h3>
+                                                        {isLocked && <Lock size={10} className="text-slate-600 mt-0.5" />}
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className={`font-mono text-[10px] font-bold ${canAfford ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                            {cost.toLocaleString()} <span className="text-[8px] opacity-70">AGT</span>
+                                                        </span>
+                                                        <div className="w-1 h-1 rounded-full bg-slate-700" />
+                                                        <span className="text-slate-500 text-[8px] uppercase font-mono tracking-tighter truncate">
+                                                            {b.era}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Mini Availability Bar */}
+                                                    <div className="w-full h-[2px] bg-slate-800 mt-2 overflow-hidden rounded-full">
+                                                        <div className={`h-full transition-all duration-700 ${canAfford ? 'bg-emerald-500 w-full' : 'bg-rose-500 w-1/3 shadow-[0_0_5px_rgba(239,68,68,0.5)]'}`} />
+                                                    </div>
+                                                </div>
+
+                                                {/* Selection Gloss */}
+                                                {isSelected && (
+                                                    <div className="absolute inset-0 border border-amber-500 opacity-20 rounded-lg pointer-events-none animate-pulse" />
+                                                )}
+                                            </div>
+                                        );
+                                    })
+                                )
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Detail Overlay */}
+            {
+                selectedItem && (
+                    <div
+                        className="detail-modal fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 pointer-events-auto animate-in fade-in duration-300"
+                        onClick={(e) => {
+                            if (e.target === e.currentTarget) setSelectedItem(null);
+                        }}
+                    >
+                        <div className="bg-slate-900 border-t-4 border-amber-500 rounded-lg shadow-2xl w-full max-w-[400px] overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-5 duration-300">
+                            {(() => {
+                                const b = BUILDINGS[selectedItem];
+                                const scaledCost = calculateBuildingCost(selectedItem, state.grid);
+                                const canAfford = state.cheatsEnabled || state.resources.agt >= scaledCost;
                                 const isEcoLocked = state.resources.eco < b.ecoReq;
                                 let dependencyMet = true;
                                 if (b.dependency) {
@@ -298,165 +423,111 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                                 }
                                 const isEraLocked = !state.unlockedEras.includes(b.era);
                                 const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet || isEraLocked);
-                                const cost = calculateBuildingCost(type, state.grid);
-                                const canAfford = state.cheatsEnabled || state.resources.agt >= cost;
-                                const isSelected = selectedItem === type;
 
                                 return (
-                                    <button
-                                        key={type}
-                                        onClick={() => handleSelect(type)}
-                                        className={`
-                                            relative aspect-square rounded-[3px] flex items-center justify-center transition-all bg-gradient-to-br border-b-[2px] shadow-sm
-                                            ${getCategoryColor(type)}
-                                            ${isSelected ? 'ring-2 ring-white z-10 scale-95 brightness-125' : 'scale-100'}
-                                            ${isLocked
-                                                ? 'opacity-30 grayscale saturate-0 contrast-50 border-slate-900'
-                                                : canAfford
-                                                    ? 'hover:brightness-110 cursor-pointer active:scale-95'
-                                                    : 'opacity-60 cursor-pointer border-slate-800 saturate-50 brightness-75'}
-                                        `}
-                                    >
-                                        <div className="text-white/80 drop-shadow-md">
-                                            {getBuildingIcon(type)}
-                                        </div>
-
-                                        {isLocked && (
-                                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-[3px]">
-                                                <Lock size={10} className="text-white/60" />
-                                            </div>
-                                        )}
-
-                                        {/* Cost Badge (Tiny) */}
-                                        {!isLocked && (
-                                            <div className="absolute bottom-0.5 right-0.5 text-[6px] font-mono font-bold text-white/50 bg-black/30 px-0.5 rounded">
-                                                {cost >= 1000 ? (cost / 1000).toFixed(0) + 'k' : cost}
-                                            </div>
-                                        )}
-                                    </button>
-                                );
-                            })
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* Detail Overlay / Modal (Centered on Mobile, Side on Desktop) */}
-            {selectedItem && (
-                <div
-                    className="detail-modal fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4 pointer-events-auto animate-in fade-in duration-150"
-                    onClick={(e) => {
-                        if (e.target === e.currentTarget) setSelectedItem(null);
-                    }}
-                >
-                    <div className="bg-slate-900 border-2 border-amber-500/50 rounded-lg shadow-2xl w-full max-w-[320px] overflow-hidden animate-in zoom-in-95 duration-150">
-                        {(() => {
-                            const b = BUILDINGS[selectedItem];
-                            const scaledCost = calculateBuildingCost(selectedItem, state.grid);
-                            const canAfford = state.cheatsEnabled || state.resources.agt >= scaledCost;
-                            const isEcoLocked = state.resources.eco < b.ecoReq;
-                            let dependencyMet = true;
-                            if (b.dependency) {
-                                dependencyMet = state.grid.some(t => t.buildingType === b.dependency && !t.isUnderConstruction);
-                            }
-                            const isEraLocked = !state.unlockedEras.includes(b.era);
-                            const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet || isEraLocked);
-
-                            return (
-                                <div className="flex flex-col">
-                                    {/* Modal Header */}
-                                    <div className={`p-4 bg-gradient-to-r ${getCategoryColor(selectedItem)} text-white flex justify-between items-start`}>
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-black/20 rounded-md backdrop-blur-sm">
+                                    <div className="flex flex-col">
+                                        {/* Modal Header */}
+                                        <div className="p-6 bg-slate-950 flex flex-col gap-4 relative overflow-hidden">
+                                            {/* Background Decoration */}
+                                            <div className="absolute top-0 right-0 p-8 opacity-5">
                                                 {getBuildingIcon(selectedItem)}
                                             </div>
-                                            <div>
-                                                <h3 className="font-black text-lg uppercase font-['Rajdhani'] tracking-wide leading-none">{b.name}</h3>
-                                                <div className="text-[10px] sm:text-xs font-mono opacity-80 mt-0.5">{b.stats}</div>
+
+                                            <div className="flex justify-between items-start z-10">
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`p-4 rounded-xl border border-white/5 shadow-2xl ${getCategoryColor(selectedItem)}`}>
+                                                        {getBuildingIcon(selectedItem)}
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-black text-2xl uppercase font-['Rajdhani'] tracking-tighter text-white leading-none">{b.name}</h3>
+                                                        <div className="bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[9px] font-black tracking-widest px-2 py-0.5 mt-2 rounded-sm inline-block">{b.era} ASSET</div>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => setSelectedItem(null)}
+                                                    className="text-slate-500 hover:text-white transition-colors"
+                                                >
+                                                    <X size={24} />
+                                                </button>
                                             </div>
+
+                                            <p className="text-sm text-slate-400 font-medium leading-relaxed z-10">
+                                                {b.desc}
+                                            </p>
                                         </div>
-                                        <button
-                                            onClick={() => setSelectedItem(null)}
-                                            className="text-white/60 hover:text-white bg-black/20 hover:bg-black/40 rounded p-1 transition-colors"
-                                        >
-                                            <X size={16} />
-                                        </button>
-                                    </div>
 
-                                    {/* Modal Body */}
-                                    <div className="p-4 bg-slate-900 space-y-4">
-                                        <p className="text-sm text-slate-300 font-medium leading-relaxed">{b.desc}</p>
+                                        {/* Modal Stats Area */}
+                                        <div className="px-6 py-4 bg-slate-900 gap-4 flex flex-col">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="p-3 bg-black/30 border border-white/5 rounded-lg">
+                                                    <span className="text-[9px] text-slate-500 uppercase font-black block mb-1">Upkeep Cost</span>
+                                                    <div className="text-white font-mono text-sm">{b.maintenance} <span className="text-[10px] opacity-50 uppercase">AGT / Tick</span></div>
+                                                </div>
+                                                <div className="p-3 bg-black/30 border border-white/5 rounded-lg">
+                                                    <span className="text-[9px] text-slate-500 uppercase font-black block mb-1">Production</span>
+                                                    <div className="text-emerald-400 font-mono text-sm">+{b.production || 0} <span className="text-[10px] opacity-50 uppercase">{b.productionType}</span></div>
+                                                </div>
+                                            </div>
 
-                                        {/* Stats Grid */}
-                                        <div className="grid grid-cols-2 gap-2 bg-slate-950/50 p-2 rounded-md border border-slate-800">
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] text-slate-500 uppercase font-bold">Maintenance</span>
-                                                <div className="text-slate-200 font-mono text-xs">{b.maintenance} AGT/t</div>
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] text-slate-500 uppercase font-bold">Build Time</span>
-                                                <div className="text-slate-200 font-mono text-xs">{b.buildTime}s</div>
-                                            </div>
-                                            {b.power && (
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] text-slate-500 uppercase font-bold">Power</span>
-                                                    <div className={`font-mono text-xs ${b.power.consumes ? 'text-rose-400' : 'text-emerald-400'}`}>
-                                                        {b.power.consumes ? `-${b.power.consumes}` : `+${b.power.produces}`}
+                                            {/* Error/Requirement Alerts */}
+                                            {isLocked && (
+                                                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded flex items-center gap-3">
+                                                    <ShieldAlert className="text-rose-500 animate-pulse shrink-0" size={18} />
+                                                    <div className="flex-1">
+                                                        <p className="text-[10px] font-black text-rose-500 uppercase">Requirement Failed</p>
+                                                        <p className="text-xs text-rose-200">
+                                                            {isEraLocked ? `Unavailable in Era: ${b.era}` : isEcoLocked ? `Requires Ecological Index ${b.ecoReq}` : `Requires Active ${BUILDINGS[b.dependency!].name}`}
+                                                        </p>
                                                     </div>
                                                 </div>
                                             )}
-                                            {b.pollution !== 0 && (
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] text-slate-500 uppercase font-bold">Eco Impact</span>
-                                                    <div className={`font-mono text-xs ${b.pollution > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                                                        {b.pollution > 0 ? `-${b.pollution}` : `+${Math.abs(b.pollution)}`}
+
+                                            {!isLocked && !canAfford && (
+                                                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded flex items-center gap-3">
+                                                    <ShoppingCart className="text-amber-500 shrink-0" size={18} />
+                                                    <div className="flex-1">
+                                                        <p className="text-[10px] font-black text-amber-500 uppercase">Credits Required</p>
+                                                        <p className="text-xs text-amber-200">You need {Math.ceil(scaledCost - state.resources.agt).toLocaleString()} more AGT credits.</p>
                                                     </div>
                                                 </div>
                                             )}
+
+                                            <div className="flex gap-2 mt-2">
+                                                <button
+                                                    onClick={handlePurchase}
+                                                    disabled={isLocked || (!canAfford && !state.cheatsEnabled)}
+                                                    className={`
+                                                    flex-1 py-4 px-6 rounded-md font-black uppercase tracking-widest text-sm flex items-center justify-center gap-3 transition-all duration-300
+                                                    ${isLocked
+                                                            ? 'bg-slate-800 text-slate-600 cursor-not-allowed opacity-50'
+                                                            : canAfford
+                                                                ? 'bg-emerald-500 text-emerald-950 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20'
+                                                                : 'bg-slate-800 text-slate-500 cursor-not-allowed'}
+                                                `}
+                                                >
+                                                    {isLocked ? 'ASSET LOCKED' : (
+                                                        <>
+                                                            <Plus size={18} />
+                                                            <span>Authorize Build</span>
+                                                            <span className="font-mono bg-black/10 px-2 py-0.5 rounded ml-auto">{scaledCost.toLocaleString()}</span>
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
                                         </div>
 
-                                        {/* Requirements if locked */}
-                                        {isLocked && (
-                                            <div className="bg-rose-950/40 border-l-2 border-rose-500 rounded-r p-3 flex items-start gap-2">
-                                                <Lock size={14} className="text-rose-400 shrink-0 mt-0.5" />
-                                                <span className="text-xs text-rose-200 font-bold">
-                                                    {isEraLocked ? `Unavailable until ${b.era}` : isEcoLocked ? `Requires Ecological Score ${b.ecoReq}` : `Requires ${BUILDINGS[b.dependency!].name}`}
-                                                </span>
-                                            </div>
-                                        )}
-
-                                        {/* Buy Action */}
-                                        <button
-                                            onClick={handlePurchase}
-                                            disabled={isLocked || (!canAfford && !state.cheatsEnabled)}
-                                            className={`
-                                                w-full py-3.5 px-4 rounded font-black uppercase tracking-widest text-sm flex items-center justify-center gap-2 transition-all
-                                                ${isLocked
-                                                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                                                    : canAfford
-                                                        ? 'bg-amber-500 hover:bg-amber-400 text-amber-950 shadow-[0_4px_0_rgb(180,83,9)] hover:shadow-[0_4px_0_rgb(217,119,6)] active:shadow-none active:translate-y-[4px]'
-                                                        : 'bg-slate-700 text-slate-400 cursor-not-allowed border border-slate-600'}
-                                            `}
-                                        >
-                                            {isLocked ? 'LOCKED' : canAfford ? (
-                                                <>
-                                                    <span>Purchase</span>
-                                                    <span className="bg-black/20 px-1.5 py-0.5 rounded text-xs ml-1 font-mono">{scaledCost.toLocaleString()}</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <span>Insufficient Funds</span>
-                                                    <span className="text-xs ml-1 font-mono">({scaledCost.toLocaleString()})</span>
-                                                </>
-                                            )}
-                                        </button>
+                                        {/* Footer / Meta */}
+                                        <div className="px-6 py-3 bg-slate-950 border-t border-white/5 flex justify-between items-center text-[9px] font-mono text-slate-600 uppercase">
+                                            <span>Build Window: {b.buildTime}s</span>
+                                            <span>Eco Req: {b.ecoReq}</span>
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })()}
+                                );
+                            })()}
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
         </>
     );
 };

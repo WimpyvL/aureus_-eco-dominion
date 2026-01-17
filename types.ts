@@ -45,6 +45,11 @@ export enum BuildingType {
   // Era 5: Prosperity
   MONUMENT = 'MONUMENT',
   SPACEPORT = 'SPACEPORT',
+  // Underground Specific
+  SUPPORT_PILLAR = 'SUPPORT_PILLAR',
+  MINING_DRILL = 'MINING_DRILL',
+  ORE_EXTRACTOR = 'ORE_EXTRACTOR',
+  UNDERGROUND_FANS = 'UNDERGROUND_FANS',
 }
 
 export enum Era {
@@ -81,6 +86,7 @@ export interface Job {
   priority: number; // 1-5
   assignedAgentId: string | null;
   progress?: number;
+  layer?: number; // 0 for surface, -1 to -10 for underground
 }
 
 export interface ColonistStats {
@@ -141,6 +147,11 @@ export interface AgentRequest {
   resolved: boolean;
 }
 
+export interface PathStep {
+  index: number;
+  layer: number;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -148,7 +159,8 @@ export interface Agent {
   x: number;
   z: number;
   targetTileId: number | null;
-  path: number[] | null;
+  path: PathStep[] | null;
+  layer: number; // Current vertical layer
   // Visual position for smooth rendering
   visualX?: number;
   visualZ?: number;
@@ -416,6 +428,7 @@ export interface GameState {
   activeGoal: Goal | null;
   newsFeed: NewsItem[];
   activeEvents: GlobalEvent[];
+  currentUndergroundLayer: number; // Current subterranean depth being viewed (-1 to -10)
   research: ResearchState;
   debugMode: boolean;
   cheatsEnabled: boolean;
@@ -533,4 +546,5 @@ export type Action =
   | { type: 'ACCEPT_CONTRACT', payload: string }
   | { type: 'COMPLETE_CONTRACT', payload: string }
   | { type: 'SET_INTERACTION_MODE', payload: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG' }
+  | { type: 'CHANGE_LAYER', payload: { delta: number } }
   | { type: 'LOAD_GAME', payload: GameState };

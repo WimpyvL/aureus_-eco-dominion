@@ -23,6 +23,7 @@ export class IsoCameraSystem {
     public cameraElevation = Math.PI / 3.5;  // ~51 degrees
     public targetFocusY = 0;
     public currentFocusY = 0;
+    public undergroundMode = false;
 
     // Input State
     private isDragging = false;
@@ -364,6 +365,14 @@ export class IsoCameraSystem {
         this.targetFocusY = y;
     }
 
+    public setUndergroundMode(enabled: boolean): void {
+        this.undergroundMode = enabled;
+        // Re-calculate zoom immediately when mode changes
+        const stepSize = this.undergroundMode ? 5 : 10;
+        this.cameraZoom = 15 + (this.zoomLevel * stepSize);
+        this.updateCameraTransform();
+    }
+
     public update(dt: number): void {
         // Smoothly interpolate vertical focus
         const lerpSpeed = 5.0; // Adjust for transition speed
@@ -408,9 +417,11 @@ export class IsoCameraSystem {
         const direction = delta > 0 ? 1 : -1;
         this.zoomLevel = Math.max(0, Math.min(7, this.zoomLevel + direction));
 
-        // Calculate cameraZoom based on steps: 15 (min) to 85 (max)
-        // This ensures the world corners stay completely off-screen.
-        this.cameraZoom = 15 + (this.zoomLevel * 10);
+        // Calculate cameraZoom based on steps: 
+        // Surface: 15 (min) to 85 (max)
+        // Underground: 15 (min) to 50 (max) - much closer for DK2 feel
+        const stepSize = this.undergroundMode ? 5 : 10;
+        this.cameraZoom = 15 + (this.zoomLevel * stepSize);
         this.updateCameraTransform();
     }
 

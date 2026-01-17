@@ -19,119 +19,153 @@ export const COST = {
 // Node wrapper for Heap
 interface PathNode {
     index: number;
+    layer: number;
     f: number;
 }
 
-const getDistance = (a: number, b: number) => {
-    const ax = a % GRID_SIZE, ay = Math.floor(a / GRID_SIZE);
-    const bx = b % GRID_SIZE, by = Math.floor(b / GRID_SIZE);
-    // Chebyshev distance (8-way movement)
-    return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
+const getDistance3D = (a: number, al: number, b: number, bl: number) => {
+    const ax = a % GRID_SIZE, az = Math.floor(a / GRID_SIZE);
+    const bx = b % GRID_SIZE, bz = Math.floor(b / GRID_SIZE);
+    // Chebyshev distance + vertical difference
+    return Math.max(Math.abs(ax - bx), Math.abs(az - bz)) + Math.abs(al - bl);
 };
 
-const getTileCost = (tile: GridTile): number => {
-    if (tile.buildingType === BuildingType.ROAD) return COST.ROAD;
-    if (tile.buildingType !== BuildingType.EMPTY && !tile.isUnderConstruction && tile.buildingType !== BuildingType.POND) return 1.0; // Indoors
+const getTileCostAtLayer = (tile: GridTile, layer: number): number => {
+    if (layer === 0) {
+        if (tile.buildingType === BuildingType.ROAD) return COST.ROAD;
+        if (tile.buildingType !== BuildingType.EMPTY && !tile.isUnderConstruction && tile.buildingType !== BuildingType.POND) return 1.0; // Indoors
 
-    switch (tile.biome) {
-        case 'SAND': return COST.OBSTACLE;
-        case 'SNOW': return COST.OBSTACLE;
-        case 'STONE': return COST.ROUGH;
-        default: return COST.BASE;
+        switch (tile.biome) {
+            case 'SAND': return COST.OBSTACLE;
+            case 'SNOW': return COST.OBSTACLE;
+            case 'STONE': return COST.ROUGH;
+            default: return COST.BASE;
+        }
+    } else {
+        // Underground is always "Rough" stone unless we add paths
+        const strata = tile.underground?.[layer];
+        if (!strata || !strata.excavated) return Infinity; // impassable
+        return COST.ROUGH;
     }
 };
 
 /**
- * A* Pathfinding (Optimized with BinaryHeap)
- * Returns array of tile indices
+ * A* Pathfinding (3D Layer Aware)
+ * Returns array of { index, layer } steps
  */
-export function findPath(startIdx: number, endIdx: number, grid: GridTile[]): number[] | null {
-    if (startIdx === endIdx) return [endIdx];
+export function findPath3D(
+    startIdx: number, startLayer: number,
+    endIdx: number, endLayer: number,
+    grid: GridTile[]
+): { index: number, layer: number }[] | null {
+    if (startIdx === endIdx && startLayer === endLayer) return [{ index: endIdx, layer: endLayer }];
 
-    // Priority Queue (Min-Heap based on f-score)
     const openSet = new BinaryHeap<PathNode>((a, b) => a.f - b.f);
-    openSet.push({ index: startIdx, f: getDistance(startIdx, endIdx) });
+    openSet.push({ index: startIdx, layer: startLayer, f: getDistance3D(startIdx, startLayer, endIdx, endLayer) });
 
-    const cameFrom = new Map<number, number>();
-    const gScore = new Map<number, number>();
-    gScore.set(startIdx, 0);
+    const cameFrom = new Map<string, { index: number, layer: number }>();
+    const gScore = new Map<string, number>();
 
-    const visited = new Set<number>();
+    const startKey = `${startIdx},${startLayer}`;
+    gScore.set(startKey, 0);
+
+    const visited = new Set<string>();
 
     let iterations = 0;
-    const MAX_ITERATIONS = 5000; // Performance limit
+    const MAX_ITERATIONS = 5000;
 
     while (openSet.size > 0) {
         iterations++;
         if (iterations > MAX_ITERATIONS) return null;
 
         const current = openSet.pop()!;
-        const cIdx = current.index;
+        const { index: cIdx, layer: cL } = current;
+        const currentKey = `${cIdx},${cL}`;
 
-        // Lazy deletion: if we extracted a node that we've already closed with a better path, skip
-        // Actually A* guarantees first expand is best, but with duplicates in heap we might see it again.
-        // We can just check if gScore is valid.
-
-        if (cIdx === endIdx) {
+        if (cIdx === endIdx && cL === endLayer) {
             // Reconstruct
-            const path = [cIdx];
-            let curr = cIdx;
-            while (cameFrom.has(curr)) {
-                curr = cameFrom.get(curr)!;
-                path.unshift(curr);
+            const path = [{ index: cIdx, layer: cL }];
+            let currKey = currentKey;
+            while (cameFrom.has(currKey)) {
+                const prev = cameFrom.get(currKey)!;
+                path.unshift(prev);
+                currKey = `${prev.index},${prev.layer}`;
             }
             return path.slice(1);
         }
 
-        // Optimization: Don't expand if we closed it already
-        // (Standard A* doesn't need ClosedSet if monotone heuristic, but duplicates in heap require check if we strictly want to avoid work)
-        // With lazy heap, we might pop same node twice.
-        // We can use gScore to check validity if we wanted. 
-        // But simpler: just add to visited (ClosedSet).
-        if (visited.has(cIdx)) continue;
-        visited.add(cIdx);
+        if (visited.has(currentKey)) continue;
+        visited.add(currentKey);
 
-        // Neighbors (8-way)
         const cx = cIdx % GRID_SIZE;
-        const cy = Math.floor(cIdx / GRID_SIZE);
+        const cz = Math.floor(cIdx / GRID_SIZE);
+        const currentTile = grid[cIdx];
 
-        for (let dy = -1; dy <= 1; dy++) {
+        // --- 1. Lateral Neighbors (Same Layer) ---
+        for (let dz = -1; dz <= 1; dz++) {
             for (let dx = -1; dx <= 1; dx++) {
-                if (dx === 0 && dy === 0) continue;
+                if (dx === 0 && dz === 0) continue;
 
-                const nx = cx + dx;
-                const ny = cy + dy;
+                const nx = cx + dx, nz = cz + dz;
+                if (nx >= 0 && nx < GRID_SIZE && nz >= 0 && nz < GRID_SIZE) {
+                    const nIdx = nz * GRID_SIZE + nx;
+                    const nKey = `${nIdx},${cL}`;
+                    if (visited.has(nKey)) continue;
 
-                if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
-                    const neighbor = ny * GRID_SIZE + nx;
+                    const neighborTile = grid[nIdx];
+                    if (neighborTile.locked) continue;
 
-                    if (visited.has(neighbor)) continue;
+                    const cost = getTileCostAtLayer(neighborTile, cL);
+                    if (cost === Infinity) continue;
 
-                    const tile = grid[neighbor];
-
-                    // Collision check
-                    if (tile.buildingType === BuildingType.POND) continue;
-                    if (tile.locked) continue;
-
-                    const moveCost = getTileCost(tile);
-                    // Diagonal movement cost slightly higher? (Euclidean approx: 1.414). 
-                    // Current logic uses Chebyshev, so diagonals are cost 1 (+ terrain).
-                    // If we want consistent movement, diagonals should perhaps cost more.
-                    // But sticking to existing logic:
-                    const tentativeG = (gScore.get(cIdx) ?? Infinity) + moveCost;
-
-                    if (tentativeG < (gScore.get(neighbor) ?? Infinity)) {
-                        cameFrom.set(neighbor, cIdx);
-                        gScore.set(neighbor, tentativeG);
-                        const f = tentativeG + getDistance(neighbor, endIdx);
-
-                        // Push to heap (even if already there, this new one is better and will pop first)
-                        openSet.push({ index: neighbor, f });
+                    const tentativeG = (gScore.get(currentKey) ?? Infinity) + cost;
+                    if (tentativeG < (gScore.get(nKey) ?? Infinity)) {
+                        cameFrom.set(nKey, { index: cIdx, layer: cL });
+                        gScore.set(nKey, tentativeG);
+                        openSet.push({ index: nIdx, layer: cL, f: tentativeG + getDistance3D(nIdx, cL, endIdx, endLayer) });
                     }
+                }
+            }
+        }
+
+        // --- 2. Vertical Neighbors (Shafts/Entrances) ---
+        // Potential layers to check: cL-1 and cL+1
+        const layers = [cL - 1, cL + 1];
+        for (const nL of layers) {
+            if (nL < -10 || nL > 0) continue;
+
+            const nKey = `${cIdx},${nL}`;
+            if (visited.has(nKey)) continue;
+
+            // Transition Logic
+            let canTransition = false;
+            if (cL === 0 && nL === -1) {
+                if (currentTile.hasEntrance) canTransition = true;
+            } else if (cL === -1 && nL === 0) {
+                if (currentTile.hasEntrance) canTransition = true;
+            } else {
+                // Between -1 and -10
+                const strataAbove = currentTile.underground?.[Math.max(cL, nL)];
+                const strataBelow = currentTile.underground?.[Math.min(cL, nL)];
+                if (strataAbove?.excavated && strataBelow?.excavated) canTransition = true;
+            }
+
+            if (canTransition) {
+                const tentativeG = (gScore.get(currentKey) ?? Infinity) + 1.0; // Vertical move cost
+                if (tentativeG < (gScore.get(nKey) ?? Infinity)) {
+                    cameFrom.set(nKey, { index: cIdx, layer: cL });
+                    gScore.set(nKey, tentativeG);
+                    openSet.push({ index: cIdx, layer: nL, f: tentativeG + getDistance3D(cIdx, nL, endIdx, endLayer) });
                 }
             }
         }
     }
 
     return null;
+}
+
+/** Legacy wrapper for surface-only pathfinding */
+export function findPath(startIdx: number, endIdx: number, grid: GridTile[]): number[] | null {
+    const path3d = findPath3D(startIdx, 0, endIdx, 0, grid);
+    return path3d ? path3d.map(p => p.index) : null;
 }

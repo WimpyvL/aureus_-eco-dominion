@@ -392,18 +392,51 @@ export class AureusWorld extends BaseWorld {
         state.debugMode = !state.debugMode;
     }
 
+    speedUpConstruction(index: number): void {
+        const state = this.stateManager.getMutableState();
+        const tile = state.grid[index];
+        if (!tile || !tile.isUnderConstruction) return;
+
+        const cost = 50; // Flat fee for now
+        if (state.resources.agt >= cost) {
+            state.resources.agt -= cost;
+            tile.isUnderConstruction = false;
+            tile.constructionTimeLeft = 0;
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.CONSTRUCT_SPEEDUP });
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.COMPLETE });
+        } else {
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+        }
+    }
+
     toggleViewMode(): void {
         const state = this.stateManager.getMutableState();
         if (state.viewMode === 'SURFACE') {
-            state.viewMode = 'UNDERGROUND';
+            // Check if at least one entrance exists
+            const hasEntrance = state.grid.some(t => t.hasEntrance);
+            if (!hasEntrance) {
+                state.newsFeed.push({
+                    id: `no_underground_${Date.now()}`,
+                    headline: "Underground access locked. You must build a Mine Entrance first!",
+                    type: 'NEUTRAL',
+                    timestamp: Date.now()
+                });
+                state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+                return;
+            }
 
-            // Update Camera Target Height
-            this.cameraSystem.setTargetHeight(-0.5); // Focus on layer -1
-            this.inputSystem?.setRayPlaneHeight(-1.0); // Focus interaction on layer -1
+            state.viewMode = 'UNDERGROUND';
+            this.cameraSystem.setUndergroundMode(true);
+
+            // Focus on current layer
+            const layerY = (state.currentUndergroundLayer ?? -1) * 1.0;
+            this.cameraSystem.setTargetHeight(layerY);
+            this.inputSystem?.setRayPlaneHeight(layerY);
         } else {
             state.viewMode = 'SURFACE';
-            this.cameraSystem.setTargetHeight(0); // Surface focus
-            this.inputSystem?.setRayPlaneHeight(0); // Surface interaction
+            this.cameraSystem.setUndergroundMode(false);
+            this.cameraSystem.setTargetHeight(0);
+            this.inputSystem?.setRayPlaneHeight(0);
         }
 
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
@@ -413,12 +446,25 @@ export class AureusWorld extends BaseWorld {
 
         // Sync grid to force re-render with new view mode (will be passed to worker)
         this.terrainRenderSystem.syncGrid(state.grid);
-
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
     }
 
-    speedUpConstruction(index: number): void {
-        this.stateManager.pushCommand('SPEED_UP', { index });
+    public changeUndergroundLayer(delta: number): void {
+        const state = this.stateManager.getMutableState();
+        if (state.viewMode !== 'UNDERGROUND') return;
+
+        const nextLayer = Math.max(-10, Math.min(-1, state.currentUndergroundLayer + delta));
+        if (nextLayer === state.currentUndergroundLayer) return;
+
+        state.currentUndergroundLayer = nextLayer;
+
+        // Update Camera & Interaction
+        this.cameraSystem.setTargetHeight(state.currentUndergroundLayer * 1.0);
+        this.inputSystem?.setRayPlaneHeight(state.currentUndergroundLayer * 1.0);
+
+        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
+
+        // No need to sync grid fully, but might need to notify systems
+        state.pendingEffects.push({ type: 'GRID_UPDATE', updates: [] });
     }
 
     queueDig(index: number, layer: number): void {
@@ -426,15 +472,47 @@ export class AureusWorld extends BaseWorld {
         const tile = state.grid[index];
         if (!tile) return;
 
-        // Initialize digState if missing
+        // DK2-Style: If in underground view, default to the current viewed layer
+        // We only use the passed 'layer' if it's different from the current viewed layer (e.g. forced dig down)
+        const targetLayer = state.viewMode === 'UNDERGROUND' ? (state.currentUndergroundLayer || -1) : layer;
+
+        // Accessibility Check: Can we reach this layer to dig it?
+        if (!this.isLayerAccessible(index, targetLayer, state.grid)) {
+            console.warn(`Layer ${targetLayer} at ${index} is not reachable.`);
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+            return;
+        }
+
         if (!tile.digState) tile.digState = {};
-
-        // Mark as Designated (1)
-        tile.digState[layer] = 1;
-
+        // Use status 4 for 'ENTRANCE DIG' and 1 for 'TUNNEL DIG'
+        tile.digState[targetLayer] = (targetLayer === -1 && state.viewMode === 'SURFACE') ? 4 : 1;
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
+    }
 
-        // This will be picked up by JobGenerationSystem in the next tick
+    private isLayerAccessible(index: number, layer: number, grid: GridTile[]): boolean {
+        // Top layer always accessible from surface
+        if (layer === -1) return true;
+
+        const tile = grid[index];
+
+        // DK2 Priority: Horizontal access (from neighbors at same depth)
+        // This is the most common way to expand.
+        const x = index % GRID_SIZE;
+        const z = Math.floor(index / GRID_SIZE);
+        const offsets = [{ dx: 0, dz: -1 }, { dx: 0, dz: 1 }, { dx: -1, dz: 0 }, { dx: 1, dz: 0 }];
+
+        for (const off of offsets) {
+            const nx = x + off.dx, nz = z + off.dz;
+            if (nx >= 0 && nx < GRID_SIZE && nz >= 0 && nz < GRID_SIZE) {
+                const nIdx = nz * GRID_SIZE + nx;
+                if (grid[nIdx].underground[layer]?.excavated) return true;
+            }
+        }
+
+        // Vertical access (from layer above) - only if the tile directly above is excavated
+        if (grid[index].underground[layer + 1]?.excavated) return true;
+
+        return false;
     }
 
     acceptContract(contractId: string): void {
@@ -643,7 +721,7 @@ export class AureusWorld extends BaseWorld {
         this.cameraSystem.update(ctx.dt);
         this.agentRenderSystem.setSelectedAgent(state.selectedAgentId);
         const zoomLevel = this.cameraSystem.cameraZoom;
-        this.agentRenderSystem.update(ctx.dt, ctx.time, state.agents, zoomLevel);
+        this.agentRenderSystem.update(ctx.dt, ctx.time, state.agents, zoomLevel, state.viewMode);
 
         this.terrainRenderSystem.update(this.cameraSystem.cameraFocus, this.render.getCamera());
         this.buildingRenderSystem.update(ctx.dt, ctx.time, state.grid, this.stateManager.getDirtyKeys(), state.viewMode);
@@ -788,10 +866,35 @@ export class AureusWorld extends BaseWorld {
         // In Underground Mode, we specifically ignore agents on surface
         // And we focus purely on layers -1 to -10
 
-        if (type === 'hover') return;
+        if (type === 'hover') {
+            const tile = state.grid[index];
+            if (tile?.underground) {
+                for (let l = -1; l >= -10; l--) {
+                    const strata = tile.underground[l];
+                    if (strata && strata.oreType && strata.oreVisible) {
+                        if (Math.random() < 0.02) {
+                            state.newsFeed.unshift({
+                                id: `ore_${Date.now()}`,
+                                headline: `Sensors indicate ${strata.oreType} at depth ${Math.abs(l)}.`,
+                                type: 'NEUTRAL',
+                                timestamp: Date.now()
+                            });
+                        }
+                        break;
+                    }
+                }
+            }
+            return;
+        }
 
         if (type === 'right-click') {
-            // Right clicking underground currently does nothing unless we add underground-capable bots
+            // Right clicking underground can now command agents if they are underground
+            if (state.selectedAgentId) {
+                const agent = state.agents.find(a => a.id === state.selectedAgentId);
+                if (agent) {
+                    this.commandAgent(agent.id, index);
+                }
+            }
             config.onTileRightClick?.(index);
             return;
         }
@@ -805,19 +908,20 @@ export class AureusWorld extends BaseWorld {
             config.onTileClick?.(index);
         } else if (state.interactionMode === 'DIG') {
             const tile = state.grid[index];
-            let nextLayer = -1;
-            if (tile?.underground) {
-                for (let l = -1; l >= -10; l--) {
-                    if (tile.underground[l]?.excavated) {
-                        nextLayer = l - 1;
-                    } else {
-                        nextLayer = l;
+
+            // Find first unexcavated layer that is ACCESSIBLE
+            let targetLayer = -1;
+            for (let l = -1; l >= -10; l--) {
+                if (!tile.underground[l].excavated && (!tile.digState || tile.digState[l] !== 1)) {
+                    if (this.isLayerAccessible(index, l, state.grid)) {
+                        targetLayer = l;
                         break;
                     }
                 }
             }
-            if (nextLayer >= -10) {
-                this.queueDig(index, nextLayer);
+
+            if (targetLayer !== -1) {
+                this.queueDig(index, targetLayer);
             }
             config.onTileClick?.(index);
         } else {

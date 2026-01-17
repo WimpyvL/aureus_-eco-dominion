@@ -83,12 +83,12 @@ export class AgentRenderSystem {
         // this.scene.add(this.eagle);
     }
 
-    public update(dt: number, totalTime: number, agents: Agent[], zoomLevel: number = 20) {
+    public update(dt: number, totalTime: number, agents: Agent[], zoomLevel: number = 20, viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE') {
         // Sync Agents
         this.syncMeshes(agents);
 
         // Animate
-        this.animate(dt, totalTime, zoomLevel);
+        this.animate(dt, totalTime, zoomLevel, viewMode);
     }
 
     public setSelectedAgent(id: string | null) {
@@ -181,8 +181,8 @@ export class AgentRenderSystem {
             if (agent.state === 'MOVING') {
                 if (agent.path && agent.path.length > 0) {
                     const nextWaypoint = agent.path[0];
-                    const nextX = (nextWaypoint % this.gridSize) - offset;
-                    const nextZ = Math.floor(nextWaypoint / this.gridSize) - offset;
+                    const nextX = (nextWaypoint.index % this.gridSize) - offset;
+                    const nextZ = Math.floor(nextWaypoint.index / this.gridSize) - offset;
                     targetRot = Math.atan2(nextX - worldX, nextZ - worldZ);
                 } else {
                     const dx = worldX - prevX;
@@ -222,12 +222,12 @@ export class AgentRenderSystem {
         });
     }
 
-    private animate(dt: number, time: number, zoomLevel: number) {
+    private animate(dt: number, time: number, zoomLevel: number, viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE') {
         const LOD_LOW = 160;
 
         // Eagle
         if (this.eagle) {
-            if (zoomLevel > LOD_LOW) {
+            if (zoomLevel > LOD_LOW || viewMode === 'UNDERGROUND') {
                 this.eagle.visible = false;
             } else {
                 this.eagle.visible = true;
@@ -238,13 +238,24 @@ export class AgentRenderSystem {
         // Agents
         this.agentMeshes.forEach((meshGroup, agentId) => {
             const targetPos = meshGroup.userData.targetPos;
+            const agentData = meshGroup.userData.agentData as Agent;
+            const layerOffset = agentData?.layer || 0;
+
+            // NEW: Visibility filter based on layer and viewMode
+            if (viewMode === 'UNDERGROUND') {
+                // Hide agents on surface (layer 0) when underground
+                meshGroup.visible = (layerOffset < 0);
+            } else {
+                // Hide agents deep underground when on surface
+                meshGroup.visible = (layerOffset === 0);
+            }
 
             // Pos Lerp
             if (targetPos) {
                 meshGroup.position.x = THREE.MathUtils.lerp(meshGroup.position.x, targetPos.x, 0.15);
                 meshGroup.position.z = THREE.MathUtils.lerp(meshGroup.position.z, targetPos.z, 0.15);
                 const h = this.getHeightAt(meshGroup.position.x, meshGroup.position.z);
-                meshGroup.position.y = THREE.MathUtils.lerp(meshGroup.position.y, h + 0.05, 0.3);
+                meshGroup.position.y = THREE.MathUtils.lerp(meshGroup.position.y, h + layerOffset + 0.05, 0.3);
             }
 
             // Rot Lerp
@@ -263,21 +274,21 @@ export class AgentRenderSystem {
                 if (meshGroup.userData.agentData) {
                     this.updateStatusIndicators(meshGroup.userData.agentData, statusGroup, time);
                 }
-                statusGroup.visible = zoomLevel <= 130;
+                statusGroup.visible = meshGroup.visible && zoomLevel <= 130;
             }
 
             // Selection Ring
             if (this.selectedAgentId === agentId) {
                 this.agentSelectionRing.position.set(meshGroup.position.x, meshGroup.position.y + 0.02, meshGroup.position.z);
                 this.agentSelectionRing.scale.setScalar(1 + Math.sin(time * 10) * 0.05);
-                this.agentSelectionRing.visible = true;
+                this.agentSelectionRing.visible = meshGroup.visible;
             }
 
             // Animations (Simple/LOD aware)
             this.updateAgentAnimation(meshGroup, time, zoomLevel, agentId);
         });
 
-        if (!this.agentMeshes.has(this.selectedAgentId || '')) {
+        if (!this.agentMeshes.has(this.selectedAgentId || '') || !this.agentMeshes.get(this.selectedAgentId!)?.visible) {
             this.agentSelectionRing.visible = false;
         }
     }
