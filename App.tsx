@@ -158,6 +158,7 @@ const App: React.FC = () => {
     const [selectedTileForAction, setSelectedTileForAction] = useState<number | null>(null);
     const [isIntroAnim, setIsIntroAnim] = useState(false);
     const [pendingPlacementIndex, setPendingPlacementIndex] = useState<number | null>(null);
+    const [pinnedTileIndex, setPinnedTileIndex] = useState<number | null>(null); // Track pinned tile for two-tap system
     const [showWorldMap, setShowWorldMap] = useState(false);
     const [showHomePage, setShowHomePage] = useState(true);
     const [hasSave, setHasSave] = useState(false);
@@ -175,10 +176,23 @@ const App: React.FC = () => {
     // Engine integration - state is owned by engine
     const { world, ready, state, loading, getDebugStats } = useAureusEngine({
         container,
-        onTileClick: (index) => {
-            // On mobile, this will be called to show confirmation
+        onTileClick: (index, isTouch) => {
+            // Context-aware building placement system
             if (state?.interactionMode === 'BUILD' && state?.selectedBuilding) {
-                setPendingPlacementIndex(index);
+                // If it's a mouse click (PC), show confirmation immediately
+                // On mobile (touch), we keep the two-tap system to prevent accidents
+                if (!isTouch || pinnedTileIndex === index) {
+                    // PC Click OR second tap on mobile → Show confirmation modal
+                    setPendingPlacementIndex(index);
+                    playSfx(SfxType.UI_CLICK);
+                } else {
+                    // First tap on mobile → Pin ghost building
+                    if (world) {
+                        world.pinBuildingForConfirmation(index);
+                    }
+                    setPinnedTileIndex(index);
+                    playSfx(SfxType.UI_CLICK);
+                }
             }
             // Dungeon Keeper: Click to dig
             else if (state?.interactionMode === 'DIG') {
@@ -202,6 +216,17 @@ const App: React.FC = () => {
         const saved = localStorage.getItem('aureus_save_v2');
         if (saved) setHasSave(true);
     }, []);
+
+    // Clear pinned tile when selected building or interaction mode changes
+    useEffect(() => {
+        if (world && pinnedTileIndex !== null) {
+            // If user changed building or mode, clear the pin
+            if (!state?.selectedBuilding || state?.interactionMode !== 'BUILD') {
+                world.clearPinnedBuilding();
+                setPinnedTileIndex(null);
+            }
+        }
+    }, [world, state?.selectedBuilding, state?.interactionMode, pinnedTileIndex]);
 
 
     // Intro animation (Disabled)
@@ -543,6 +568,7 @@ const App: React.FC = () => {
                                 world.placeBuilding(pendingPlacementIndex);
                                 world.clearPinnedBuilding();
                                 setPendingPlacementIndex(null);
+                                setPinnedTileIndex(null); // Reset two-tap flow
                             }
                         }}
                         onCancel={() => {
@@ -550,6 +576,7 @@ const App: React.FC = () => {
                                 world.clearPinnedBuilding();
                             }
                             setPendingPlacementIndex(null);
+                            setPinnedTileIndex(null); // Reset two-tap flow
                         }}
                         playSfx={playSfx}
                     />

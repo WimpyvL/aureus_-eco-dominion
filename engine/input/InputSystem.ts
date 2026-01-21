@@ -26,8 +26,8 @@ export class InputSystem {
 
     // Callbacks provided by AureusWorld to dispatch to Redux/Engine
     // In a pure engine, we would dispatch actions directly, but we are bridging.
-    public onTileClick?: (index: number) => void;
-    public onTileRightClick?: (index: number) => void;
+    public onTileClick?: (index: number, isTouch: boolean) => void;
+    public onTileRightClick?: (index: number, isTouch: boolean) => void;
     public onTileHover?: (index: number | null) => void;
 
     // We still assume 'surface' interaction at height 0 for now
@@ -141,10 +141,11 @@ export class InputSystem {
 
         if (!this.isDragging) {
             // Click confirmed
+            const isTouch = e.pointerType === 'touch';
             if (this.isRightClick) {
-                this.handleClick(e.clientX, e.clientY, true);
+                this.handleClick(e.clientX, e.clientY, true, isTouch);
             } else {
-                this.handleClick(e.clientX, e.clientY, false);
+                this.handleClick(e.clientX, e.clientY, false, isTouch);
             }
         }
 
@@ -190,13 +191,13 @@ export class InputSystem {
         return null;
     }
 
-    private handleClick(x: number, y: number, isRight: boolean) {
+    private handleClick(x: number, y: number, isRight: boolean, isTouch: boolean) {
         const hit = this.getIntersection(x, y);
         if (hit) {
             if (isRight) {
-                this.onTileRightClick?.(hit.index);
+                this.onTileRightClick?.(hit.index, isTouch);
             } else {
-                this.onTileClick?.(hit.index);
+                this.onTileClick?.(hit.index, isTouch);
             }
         }
     }

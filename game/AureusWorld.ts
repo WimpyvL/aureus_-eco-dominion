@@ -39,8 +39,8 @@ import { UndergroundDecorationSystem } from './render/systems/UndergroundDecorat
 
 export interface AureusWorldConfig {
     container: HTMLElement;
-    onTileClick?: (index: number) => void;
-    onTileRightClick?: (index: number) => void;
+    onTileClick?: (index: number, isTouch?: boolean) => void;
+    onTileRightClick?: (index: number, isTouch?: boolean) => void;
     onAgentClick?: (agentId: string | null) => void;
     onTileHover?: (index: number | null) => void;
     onSfx?: (type: SfxType) => void;
@@ -452,6 +452,21 @@ export class AureusWorld extends BaseWorld {
         }
     }
 
+    /**
+     * Zoom camera to focus on a specific agent
+     * Useful for UI features like clicking on agent in a list
+     */
+    zoomToAgent(agentId: string): void {
+        const state = this.stateManager.getState();
+        const agent = state.agents.find(a => a.id === agentId);
+        if (!agent) return;
+
+        const offset = (GRID_SIZE - 1) / 2;
+        const worldX = agent.x - offset;
+        const worldZ = agent.z - offset;
+        this.cameraSystem.zoomToPosition(worldX, worldZ, 2);
+    }
+
     toggleViewMode(): void {
         const state = this.stateManager.getMutableState();
         if (state.viewMode === 'SURFACE') {
@@ -619,19 +634,19 @@ export class AureusWorld extends BaseWorld {
 
         this.inputSystem = new InputSystem(this.render);
 
-        this.inputSystem.onTileClick = (index) => {
+        this.inputSystem.onTileClick = (index, isTouch) => {
             if (this.stateManager.getState().viewMode === 'UNDERGROUND') {
-                this.handleUndergroundInteraction(index, 'click');
+                this.handleUndergroundInteraction(index, 'click', isTouch);
             } else {
-                this.handleSurfaceInteraction(index, 'click');
+                this.handleSurfaceInteraction(index, 'click', isTouch);
             }
         };
 
-        this.inputSystem.onTileRightClick = (index) => {
+        this.inputSystem.onTileRightClick = (index, isTouch) => {
             if (this.stateManager.getState().viewMode === 'UNDERGROUND') {
-                this.handleUndergroundInteraction(index, 'right-click');
+                this.handleUndergroundInteraction(index, 'right-click', isTouch);
             } else {
-                this.handleSurfaceInteraction(index, 'right-click');
+                this.handleSurfaceInteraction(index, 'right-click', isTouch);
             }
         };
 
@@ -699,6 +714,16 @@ export class AureusWorld extends BaseWorld {
 
         this.workerPool.broadcast({ type: 'SYNC_GRID', payload: state.grid });
         this.terrainRenderSystem.syncGrid(state.grid);
+
+        // Zoom camera to first agent on game start for better initial view
+        if (state.agents.length > 0) {
+            const firstAgent = state.agents[0];
+            const offset = (GRID_SIZE - 1) / 2;
+            const worldX = firstAgent.x - offset;
+            const worldZ = firstAgent.z - offset;
+            this.cameraSystem.zoomToPosition(worldX, worldZ, 2); // Zoom level 2 for nice close view
+            console.log(`[AureusWorld] Camera focused on agent "${firstAgent.name}" at (${worldX}, ${worldZ})`);
+        }
 
         console.log('[AureusWorld] Ready');
     }
@@ -870,7 +895,7 @@ export class AureusWorld extends BaseWorld {
     // INTERACTION STATES
     // ═══════════════════════════════════════════════════════════════
 
-    private handleSurfaceInteraction(index: number, type: 'click' | 'right-click' | 'hover') {
+    private handleSurfaceInteraction(index: number, type: 'click' | 'right-click' | 'hover', isTouch: boolean = false) {
         const state = this.stateManager.getState();
         const config = this.config!;
 
@@ -882,7 +907,7 @@ export class AureusWorld extends BaseWorld {
             if (state.selectedAgentId) {
                 this.commandAgent(state.selectedAgentId, index);
             }
-            config.onTileRightClick?.(index);
+            config.onTileRightClick?.(index, isTouch);
             return;
         }
 
@@ -903,29 +928,24 @@ export class AureusWorld extends BaseWorld {
         }
 
         // 2. Building / Bulldoze
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ('ontouchstart' in window);
-
-        console.log('[handleSurfaceInteraction] interactionMode:', state.interactionMode, 'selectedBuilding:', state.selectedBuilding, 'isMobile:', isMobile);
+        console.log('[handleSurfaceInteraction] interactionMode:', state.interactionMode, 'selectedBuilding:', state.selectedBuilding, 'isTouch:', isTouch);
 
         if (state.interactionMode === 'BUILD' && state.selectedBuilding) {
-            console.log('[handleSurfaceInteraction] BUILD mode active, placing at index:', index);
-            if (isMobile) {
-                this.pinBuildingForConfirmation(index);
-                config.onTileClick?.(index);
-            } else {
-                this.placeBuilding(index);
-            }
+            console.log('[handleSurfaceInteraction] BUILD mode active, checking for confirmation:', index);
+            // Always delegate to config.onTileClick so App.tsx can show the confirmation modal
+            // App.tsx now handles the differentiation between touch (pinning) and mouse (direct modal)
+            config.onTileClick?.(index, isTouch);
         } else if (state.interactionMode === 'BULLDOZE') {
             this.bulldozeTile(index);
-            config.onTileClick?.(index);
+            config.onTileClick?.(index, isTouch);
         } else {
             this.selectAgent(null);
             config.onAgentClick?.(null);
-            config.onTileClick?.(index);
+            config.onTileClick?.(index, isTouch);
         }
     }
 
-    private handleUndergroundInteraction(index: number, type: 'click' | 'right-click' | 'hover') {
+    private handleUndergroundInteraction(index: number, type: 'click' | 'right-click' | 'hover', isTouch: boolean = false) {
         const state = this.stateManager.getState();
         const config = this.config!;
 
@@ -963,44 +983,35 @@ export class AureusWorld extends BaseWorld {
                     this.commandAgent(agent.id, index);
                 }
             }
-            config.onTileRightClick?.(index);
+            config.onTileRightClick?.(index, isTouch);
             return;
         }
 
         // Logic for Underground Clicks
         if (state.interactionMode === 'BUILD' && state.selectedBuilding) {
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-
-            if (isMobile) {
-                this.pinBuildingForConfirmation(index);
-                config.onTileClick?.(index);
-            } else {
-                this.placeBuilding(index);
-            }
+            config.onTileClick?.(index, isTouch);
         } else if (state.interactionMode === 'BULLDOZE') {
             this.bulldozeTile(index);
-            config.onTileClick?.(index);
+            config.onTileClick?.(index, isTouch);
         } else if (state.interactionMode === 'DIG') {
             const tile = state.grid[index];
 
             // Find first unexcavated layer that is ACCESSIBLE
             let targetLayer = -1;
-            for (let l = -1; l >= -10; l--) {
-                if (!tile.underground[l].excavated && (!tile.digState || tile.digState[l] !== 1)) {
-                    if (this.isLayerAccessible(index, l, state.grid)) {
-                        targetLayer = l;
-                        break;
-                    }
+            const viewedLayer = state.currentUndergroundLayer || -1;
+            if (tile.underground && tile.underground[viewedLayer] && !tile.underground[viewedLayer].excavated && (!tile.digState || tile.digState[viewedLayer] !== 1)) {
+                if (this.isLayerAccessible(index, viewedLayer, state.grid)) {
+                    targetLayer = viewedLayer;
                 }
             }
 
             if (targetLayer !== -1) {
                 this.queueDig(index, targetLayer);
             }
-            config.onTileClick?.(index);
+            config.onTileClick?.(index, isTouch);
         } else {
             // In underground, inspect might show ore data
-            config.onTileClick?.(index);
+            config.onTileClick?.(index, isTouch);
         }
     }
 

@@ -17,7 +17,7 @@ export class IsoCameraSystem {
 
     // Camera State - Public for read access
     public cameraZoom: number;
-    public zoomLevel = 7; // Max zoom out (7 steps)
+    public zoomLevel = 5; // Max zoom out (5 steps) - reduced from 7 for better gameplay
     public cameraFocus = new THREE.Vector3(0, 0, 0);
     public cameraAngle = Math.PI / 4;  // 45 degrees - isometric view
     public cameraElevation = Math.PI / 3.5;  // ~51 degrees
@@ -415,7 +415,7 @@ export class IsoCameraSystem {
     public zoom(delta: number): void {
         // Step-based zoom: each tick is roughly 1 step
         const direction = delta > 0 ? 1 : -1;
-        this.zoomLevel = Math.max(0, Math.min(7, this.zoomLevel + direction));
+        this.zoomLevel = Math.max(0, Math.min(5, this.zoomLevel + direction)); // Max 5 steps
 
         // Calculate cameraZoom based on steps: 
         // Surface: 15 (min) to 85 (max)
@@ -482,5 +482,19 @@ export class IsoCameraSystem {
 
     public getZoom(): number {
         return this.cameraZoom;
+    }
+
+    /**
+     * Zoom camera to focus on a specific world position
+     * Used for game start to focus on an agent
+     */
+    public zoomToPosition(worldX: number, worldZ: number, zoomLevel: number = 2): void {
+        this.cameraFocus.set(worldX, this.cameraFocus.y, worldZ);
+        this.zoomLevel = Math.max(0, Math.min(5, zoomLevel));
+
+        // Calculate cameraZoom based on steps
+        const stepSize = this.undergroundMode ? 5 : 10;
+        this.cameraZoom = 15 + (this.zoomLevel * stepSize);
+        this.updateCameraTransform();
     }
 }

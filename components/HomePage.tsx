@@ -72,8 +72,8 @@ export const HomePage: React.FC<HomePageProps> = ({ onStartGame, onContinueGame,
 
                 {/* Pillars / Subheader */}
                 <div className={`mb-12 transition-all duration-1000 delay-300 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}>
-                    <p className="text-white/80 font-black text-sm md:text-base uppercase tracking-[0.25em]">
-                        Industrial Supremacy <span className="text-emerald-500 mx-2">//</span> Civil Stability <span className="text-amber-500 mx-2">//</span> Eco Integrity
+                    <p className="text-white/80 font-black text-[10px] sm:text-xs md:text-sm lg:text-base uppercase tracking-tight sm:tracking-wide md:tracking-[0.25em] px-4">
+                        Industrial Supremacy <span className="text-emerald-500 mx-1 sm:mx-2">//</span> Civil Stability <span className="text-amber-500 mx-1 sm:mx-2">//</span> Eco Integrity
                     </p>
                 </div>
 
@@ -104,37 +104,37 @@ export const HomePage: React.FC<HomePageProps> = ({ onStartGame, onContinueGame,
                     </button>
                 </div>
 
-                <p className={`mt-6 text-white/40 font-black uppercase tracking-[0.3em] text-[10px] transition-all duration-1000 delay-500 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}>
+                <p className={`mt-6 text-white/40 font-black uppercase tracking-tight sm:tracking-wide md:tracking-[0.3em] text-[9px] sm:text-[10px] transition-all duration-1000 delay-500 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}>
                     Press Space to Start New mission
                 </p>
             </div>
 
             {/* Bottom Category Chunks */}
-            <div className={`grid grid-cols-3 gap-6 max-w-6xl w-full mx-auto transition-all duration-1000 delay-600 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+            <div className={`grid grid-cols-3 gap-2 sm:gap-4 md:gap-6 max-w-6xl w-full mx-auto transition-all duration-1000 delay-600 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
                 {/* Industry Card */}
-                <div className="bg-[#0c0c14]/90 backdrop-blur-lg border-2 border-slate-800 p-6 flex flex-col gap-4 shadow-[6px_6px_0_rgba(0,0,0,0.4)] border-l-amber-500 border-l-4">
-                    <Mountain size={28} className="text-white/60" />
-                    <div>
-                        <h4 className="text-white font-black text-xl tracking-widest mb-1 italic">INDUSTRY</h4>
-                        <p className="text-white/40 text-[11px] font-bold uppercase tracking-widest leading-none">Build Extraction Grids</p>
+                <div className="bg-[#0c0c14]/90 backdrop-blur-lg border-2 border-slate-800 p-3 sm:p-4 md:p-6 flex flex-col gap-2 sm:gap-3 md:gap-4 shadow-[6px_6px_0_rgba(0,0,0,0.4)] border-l-amber-500 border-l-4">
+                    <Mountain size={20} className="text-white/60 sm:w-6 sm:h-6 md:w-7 md:h-7" />
+                    <div className="overflow-hidden">
+                        <h4 className="text-white font-black text-sm sm:text-base md:text-xl tracking-wide md:tracking-widest mb-1 italic">INDUSTRY</h4>
+                        <p className="text-white/40 text-[9px] sm:text-[10px] md:text-[11px] font-bold uppercase tracking-tight sm:tracking-normal md:tracking-wide leading-tight break-words">Build Extraction Grids</p>
                     </div>
                 </div>
 
                 {/* Ecology Card */}
-                <div className="bg-[#0c0c14]/90 backdrop-blur-lg border-2 border-slate-800 p-6 flex flex-col gap-4 shadow-[6px_6px_0_rgba(0,0,0,0.4)] border-l-emerald-500 border-l-4">
-                    <Leaf size={28} className="text-white/60" />
-                    <div>
-                        <h4 className="text-white font-black text-xl tracking-widest mb-1 italic">ECOLOGY</h4>
-                        <p className="text-white/40 text-[11px] font-bold uppercase tracking-widest leading-none">Balance Atmosphere</p>
+                <div className="bg-[#0c0c14]/90 backdrop-blur-lg border-2 border-slate-800 p-3 sm:p-4 md:p-6 flex flex-col gap-2 sm:gap-3 md:gap-4 shadow-[6px_6px_0_rgba(0,0,0,0.4)] border-l-emerald-500 border-l-4">
+                    <Leaf size={20} className="text-white/60 sm:w-6 sm:h-6 md:w-7 md:h-7" />
+                    <div className="overflow-hidden">
+                        <h4 className="text-white font-black text-sm sm:text-base md:text-xl tracking-wide md:tracking-widest mb-1 italic">ECOLOGY</h4>
+                        <p className="text-white/40 text-[9px] sm:text-[10px] md:text-[11px] font-bold uppercase tracking-tight sm:tracking-normal md:tracking-wide leading-tight break-words">Balance Atmosphere</p>
                     </div>
                 </div>
 
                 {/* Humanity Card */}
-                <div className="bg-[#0c0c14]/90 backdrop-blur-lg border-2 border-slate-800 p-6 flex flex-col gap-4 shadow-[6px_6px_0_rgba(0,0,0,0.4)] border-l-blue-500 border-l-4">
-                    <Users size={28} className="text-white/60" />
-                    <div>
-                        <h4 className="text-white font-black text-xl tracking-widest mb-1 italic">HUMANITY</h4>
-                        <p className="text-white/40 text-[11px] font-bold uppercase tracking-widest leading-none">Manage Colonist Needs</p>
+                <div className="bg-[#0c0c14]/90 backdrop-blur-lg border-2 border-slate-800 p-3 sm:p-4 md:p-6 flex flex-col gap-2 sm:gap-3 md:gap-4 shadow-[6px_6px_0_rgba(0,0,0,0.4)] border-l-blue-500 border-l-4">
+                    <Users size={20} className="text-white/60 sm:w-6 sm:h-6 md:w-7 md:h-7" />
+                    <div className="overflow-hidden">
+                        <h4 className="text-white font-black text-sm sm:text-base md:text-xl tracking-wide md:tracking-widest mb-1 italic">HUMANITY</h4>
+                        <p className="text-white/40 text-[9px] sm:text-[10px] md:text-[11px] font-bold uppercase tracking-tight sm:tracking-normal md:tracking-wide leading-tight break-words">Manage Colonist Needs</p>
                     </div>
                 </div>
             </div>
