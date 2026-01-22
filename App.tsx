@@ -200,6 +200,14 @@ const App: React.FC = () => {
                 setDigPromptIndex(index);
                 playSfx(SfxType.UI_CLICK);
             }
+            // INSPECT Mode: Check for construction or special tiles
+            else if (state?.interactionMode === 'INSPECT') {
+                const tile = state.grid[index];
+                if (tile && (tile.isUnderConstruction || tile.foliage === 'MINE_HOLE')) {
+                    setSelectedTileForAction(index);
+                    playSfx(SfxType.UI_CLICK);
+                }
+            }
         },
         onTileHover: (index) => setHoverTile(index),
         onSfx: (type) => playSfx(type),

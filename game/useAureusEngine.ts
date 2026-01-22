@@ -14,7 +14,7 @@ import { WorldHost, Runtime } from '../engine';
 import { ThreeRenderAdapter } from '../engine/render';
 import { DebugHud } from '../engine/tools';
 import { AureusWorld, AureusWorldConfig } from './AureusWorld';
-import { GameState } from '../types';
+import { GameState, SfxType } from '../types';
 
 export interface LoadingProgress {
     stage: string;
@@ -27,8 +27,8 @@ export interface UseAureusEngineOptions {
     container: HTMLElement | null;
 
     /** Callbacks for external game interactions (optional, for compatibility) */
-    onTileClick?: (index: number) => void;
-    onTileRightClick?: (index: number) => void;
+    onTileClick?: (index: number, isTouch?: boolean) => void;
+    onTileRightClick?: (index: number, isTouch?: boolean) => void;
     onAgentClick?: (id: string | null) => void;
     onTileHover?: (index: number | null) => void;
     onSfx?: (type: SfxType) => void;

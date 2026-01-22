@@ -239,23 +239,32 @@ export class AgentRenderSystem {
         this.agentMeshes.forEach((meshGroup, agentId) => {
             const targetPos = meshGroup.userData.targetPos;
             const agentData = meshGroup.userData.agentData as Agent;
-            const layerOffset = agentData?.layer || 0;
-
-            // NEW: Visibility filter based on layer and viewMode
-            if (viewMode === 'UNDERGROUND') {
-                // Hide agents on surface (layer 0) when underground
-                meshGroup.visible = (layerOffset < 0);
-            } else {
-                // Hide agents deep underground when on surface
-                meshGroup.visible = (layerOffset === 0);
-            }
+            const agentLayer = agentData?.layer || 0;
 
             // Pos Lerp
             if (targetPos) {
                 meshGroup.position.x = THREE.MathUtils.lerp(meshGroup.position.x, targetPos.x, 0.15);
                 meshGroup.position.z = THREE.MathUtils.lerp(meshGroup.position.z, targetPos.z, 0.15);
-                const h = this.getHeightAt(meshGroup.position.x, meshGroup.position.z);
-                meshGroup.position.y = THREE.MathUtils.lerp(meshGroup.position.y, h + layerOffset + 0.05, 0.3);
+
+                // Get terrain height at agent position
+                const terrainHeight = this.getHeightAt(meshGroup.position.x, meshGroup.position.z);
+
+                // Calculate Y position based on layer with 2.0 depth scaling
+                // Surface (layer 0): place directly on terrain
+                // Underground (layer < 0): place at terrain + (layer * 2.0) for proper depth
+                const targetY = agentLayer < 0 ? (terrainHeight + agentLayer * 2.0) : terrainHeight;
+                meshGroup.position.y = THREE.MathUtils.lerp(meshGroup.position.y, targetY, 0.3);
+            }
+
+            // Visibility logic based on view mode and layer
+            if (viewMode === 'UNDERGROUND') {
+                // In underground mode, show agents that are underground
+                // Show agents at the current layer or within 1 layer of it for better visibility
+                const currentLayer = agentData?.layer || 0;
+                meshGroup.visible = currentLayer < 0;
+            } else {
+                // In surface mode, only show surface agents
+                meshGroup.visible = agentLayer === 0;
             }
 
             // Rot Lerp

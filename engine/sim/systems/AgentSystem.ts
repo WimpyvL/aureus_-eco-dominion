@@ -246,7 +246,7 @@ export class AgentSystem extends BaseSimSystem {
 
         } else if (tile.isUnderConstruction) {
             // Use specialized system to handle multi-tile buildings
-            const amount = (1 + agent.skills.construction / 10);
+            const amount = (1 + agent.skills.construction / 10) * dt;
             const finished = this.constructionSystem.progressConstruction(job.targetTileId, amount, state);
 
             if (finished) {

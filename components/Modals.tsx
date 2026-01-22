@@ -271,18 +271,21 @@ export const ConstructionModal: React.FC<{
                         <p className="text-xs font-bold mb-2 text-slate-300 uppercase">{bDef.name}</p>
 
                         <div className="relative h-3 bg-slate-950 w-full border border-slate-700 mb-2">
-                            <div className="absolute inset-y-0 left-0 bg-amber-500 h-full w-1/2">
-                                {/* Striped pattern via css or simple block */}
+                            {/* Dynamic Progress Bar */}
+                            <div
+                                className="absolute inset-y-0 left-0 bg-amber-500 h-full transition-all duration-300 overflow-hidden"
+                                style={{ width: `${Math.max(0, 100 - ((tile.constructionTimeLeft || 0) / (bDef.buildTime || 1) * 100))}%` }}
+                            >
                                 <div className="w-full h-full opacity-50 bg-[repeating-linear-gradient(45deg,transparent,transparent_5px,#000_5px,#000_10px)]" />
                             </div>
                         </div>
 
-                        <div className="text-xl font-mono text-white mb-3 font-bold">{Math.floor(tile.constructionTimeLeft || 0)}s</div>
+                        <div className="text-xl font-mono text-white mb-3 font-bold">{Math.ceil(tile.constructionTimeLeft || 0)}s</div>
 
                         <button
                             onClick={() => {
                                 if (gems >= 1) {
-                                    dispatch({ type: 'SPEED_UP_BUILDING', payload: { index: selectedTile } });
+                                    dispatch({ type: 'SPEED_UP_CONSTRUCTION', payload: { index: selectedTile } });
                                     playSfx('CONSTRUCT_SPEEDUP');
                                     onClose();
                                 } else {

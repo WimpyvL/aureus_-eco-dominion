@@ -300,6 +300,15 @@ export class AureusWorld extends BaseWorld {
         const state = this.stateManager.getMutableState();
         state.selectedBuilding = type as BuildingType | null;
         this.buildingRenderSystem.setGhostBuilding(type as BuildingType | null);
+
+        // CRITICAL: Set interaction mode to BUILD when selecting a building
+        // This was the missing link causing buildings not to be placed!
+        if (type) {
+            state.interactionMode = 'BUILD';
+        } else {
+            // When deselecting, revert to INSPECT
+            state.interactionMode = 'INSPECT';
+        }
     }
 
     pinBuildingForConfirmation(index: number): void {
@@ -309,7 +318,8 @@ export class AureusWorld extends BaseWorld {
 
         let y = surfaceY;
         if (state.viewMode === 'UNDERGROUND') {
-            y = surfaceY + state.currentUndergroundLayer;
+            // Use 2.0 depth scaling for underground layers
+            y = surfaceY + (state.currentUndergroundLayer * 2.0);
         }
 
         // Pin the ghost building at this location for mobile confirmation
@@ -440,13 +450,10 @@ export class AureusWorld extends BaseWorld {
         const tile = state.grid[index];
         if (!tile || !tile.isUnderConstruction) return;
 
-        const cost = 50; // Flat fee for now
-        if (state.resources.agt >= cost) {
-            state.resources.agt -= cost;
-            tile.isUnderConstruction = false;
-            tile.constructionTimeLeft = 0;
+        const rushCost = 1; // 1 gem per rush
+        if (state.resources.gems >= rushCost) {
+            this.stateManager.pushCommand('SPEED_UP', { index });
             state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.CONSTRUCT_SPEEDUP });
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.COMPLETE });
         } else {
             state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
         }
@@ -486,8 +493,9 @@ export class AureusWorld extends BaseWorld {
             state.viewMode = 'UNDERGROUND';
             this.cameraSystem.setUndergroundMode(true);
 
-            // Focus on current layer
-            const layerY = (state.currentUndergroundLayer ?? -1) * 1.0;
+            // Focus on current layer with proper depth scaling
+            // Each layer is 2 units deep for better visibility
+            const layerY = (state.currentUndergroundLayer ?? -1) * 2.0;
             this.cameraSystem.setTargetHeight(layerY);
             this.inputSystem?.setRayPlaneHeight(layerY);
         } else {
@@ -515,9 +523,9 @@ export class AureusWorld extends BaseWorld {
 
         state.currentUndergroundLayer = nextLayer;
 
-        // Update Camera & Interaction
-        this.cameraSystem.setTargetHeight(state.currentUndergroundLayer * 1.0);
-        this.inputSystem?.setRayPlaneHeight(state.currentUndergroundLayer * 1.0);
+        // Update Camera & Interaction with proper depth scaling
+        this.cameraSystem.setTargetHeight(state.currentUndergroundLayer * 2.0);
+        this.inputSystem?.setRayPlaneHeight(state.currentUndergroundLayer * 2.0);
 
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
 
@@ -837,9 +845,10 @@ export class AureusWorld extends BaseWorld {
             // To hide everything ABOVE depth D, we use Normal(0, -1, 0)
             subterraneanClippingPlane.normal.set(0, -1, 0);
 
-            // Set the cut-off at (baseSurfaceY + currentLayer + 0.5)
-            // This ensures we see the floor of the current layer but not the one above.
-            subterraneanClippingPlane.constant = baseSurfaceY + state.currentUndergroundLayer + 0.5;
+            // Set the cut-off with proper depth scaling (2 units per layer)
+            // This ensures we see the excavated volume properly
+            const layerDepth = state.currentUndergroundLayer * 2.0;
+            subterraneanClippingPlane.constant = baseSurfaceY + layerDepth + 1.0;
         } else {
             // Restore to "no clipping"
             subterraneanClippingPlane.normal.set(0, 1, 0);

@@ -18,8 +18,21 @@ export class ConstructionSystem extends BaseSimSystem {
         // 1. Process Command Queue
         this.processCommandQueue(state);
 
-        // 2. Periodic consistency check for multi-tile buildings
+        // 2. Passive Construction Progress (All head tiles under construction progress slowly)
+        // Construction is normally 1:1 with real seconds if not being worked on by an agent.
+        // agent.ts handles the boosted work speed.
         if (state.tickCount % 60 === 0) {
+            for (let i = 0; i < state.grid.length; i++) {
+                const tile = state.grid[i];
+                // Only progress if it's a head tile (or single-tile) under construction
+                if (tile.isUnderConstruction && (tile.structureHeadIndex === undefined || tile.structureHeadIndex === i)) {
+                    this.progressConstruction(i, 1.0, state);
+                }
+            }
+        }
+
+        // 3. Periodic consistency check for multi-tile buildings
+        if (state.tickCount % 120 === 0) {
             this.enforceMultiTileConsistency(state);
         }
     }
