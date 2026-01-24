@@ -487,6 +487,15 @@ export const BuildingInspectorModal: React.FC<{
                         </div>
                     </div>
 
+                    {def.production && (
+                        <div className="bg-emerald-950/20 border border-emerald-900/50 p-2 mb-3 rounded-sm">
+                            <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-emerald-500 font-bold uppercase tracking-widest">Yield</span>
+                                <span className="text-white font-mono font-bold">+{def.production} {def.productionType}/s</span>
+                            </div>
+                        </div>
+                    )}
+
                     <button
                         onClick={() => {
                             dispatch({ type: 'BULLDOZE_TILE', payload: { index: selectedTile } });

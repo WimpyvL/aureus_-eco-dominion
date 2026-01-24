@@ -1,7 +1,7 @@
 
 import { BaseSimSystem } from '../Simulation';
 import { FixedContext } from '../../kernel';
-import { GameState, Job } from '../../../types';
+import { GameState, Job, GridTile, BuildingType } from '../../../types';
 
 export class JobGenerationSystem extends BaseSimSystem {
     readonly id = 'job_generation';
@@ -14,105 +14,90 @@ export class JobGenerationSystem extends BaseSimSystem {
         const grid = state.grid;
         if (!grid) return;
 
-        // Use the mutable jobs array from state
-        // In a pure engine this would be its own structure, but we bridge to React state
-        const jobs = state.jobs;
-
-        // 1. GENERATE CONSTRUCTION JOBS
-        // Scan grid for tiles under construction
         // Throttle to avoid per-frame grid scanning
         if (ctx.time - this.lastRunTime < this.RUN_INTERVAL) return;
         this.lastRunTime = ctx.time;
 
+        const jobs = state.jobs;
+
+        // Clean up completed or invalid jobs first
+        this.cleanupJobs(jobs, grid);
+
         for (let i = 0; i < grid.length; i++) {
             const tile = grid[i];
 
+            // 1. GENERATE CONSTRUCTION JOBS
             if (tile.isUnderConstruction && (tile.structureHeadIndex === undefined || tile.id === tile.structureHeadIndex)) {
-                const jobId = `build_${tile.id}`;
-
-                // Check if job exists
-                let exists = false;
-                for (let j = 0; j < jobs.length; j++) {
-                    if (jobs[j].id === jobId) {
-                        exists = true;
-                        break;
-                    }
-                }
-
-                if (!exists) {
-                    // Check if it's a sub-building (underground)
-                    let layer: number | undefined = undefined;
-                    // If tile has subBuildings, we need to know WHICH one is under construction.
-                    // Simplified: If head index is set, we can look at the tile.
-                    // But wait, tile.subBuildings is a map.
-                    // If isUnderConstruction is true, check if any subBuilding is also under construction?
-                    // The tile.isUnderConstruction flag is shared.
-                    // We need a smart way to detect layer.
-                    // If ViewMode is underground? No, JobSystem runs independently.
-
-                    if (tile.subBuildings) {
-                        // Find the layer that matches the construction state?
-                        // Actually ConstructionSystem updates tile.isUnderConstruction.
-                        // But if we have multiple layers?
-                        // For now, heuristic: default to surface layer (undefined/0).
-                        // If we want to support underground building jobs, we need to store 'constructionLayer' on the tile
-                        // OR infer from `structureHeadIndex`.
-                    }
-
-                    // IMPROVEMENT: If the tile is solid earth at layer 0 implies nothing there, but we are constructing? 
-                    // Actually, let's look at `subBuildings`.
-                    // If tile.buildingType is EMPTY but `subBuildings` has entries, assume underground job?
-                    // No, `placeSubBuilding` sets `buildingType` to EMPTY usually? No, it leaves it alone.
-
-                    const job: Job = {
-                        id: jobId,
-                        type: 'BUILD',
-                        targetTileId: tile.id,
-                        priority: 90,
-                        assignedAgentId: null,
-                        layer: layer // Explicitly include layer if found (currently logic defaults to undefined=0)
-                    };
-                    jobs.push(job);
-                }
+                this.ensureJob(jobs, `build_${tile.id}`, 'BUILD', tile.id, 90, 0);
             }
-        }
-        // 2. GENERATE DIGGING JOBS
-        for (let i = 0; i < grid.length; i++) {
-            const tile = grid[i];
 
-            // Check legacy digState or new underground designation
-            // Assuming digState[layer] == 1 means "Marked for Digging"
+            // 2. GENERATE DIGGING JOBS
             if (tile.digState) {
                 for (const layerStr in tile.digState) {
                     const layer = parseInt(layerStr);
                     const status = tile.digState[layer];
-
                     if (status === 1 || status === 4) { // 1 = Tunnel, 4 = Entrance
-                        const jobId = `dig_${tile.id}_${layer}`;
-
-                        // Check if job exists
-                        let exists = false;
-                        for (let j = 0; j < jobs.length; j++) {
-                            if (jobs[j].id === jobId) {
-                                exists = true;
-                                break;
-                            }
-                        }
-
-                        if (!exists) {
-                            const job: Job = {
-                                id: jobId,
-                                type: 'DIG', // New JobType
-                                targetTileId: tile.id,
-                                priority: 80, // High priority but below emergency repairs
-                                assignedAgentId: null,
-                                // Store layer in ID or we need a payload field (Job interface doesn't have one, usually parsed from ID or lookup)
-                            };
-                            // Add layer metadata if we can, or parse from ID later
-                            jobs.push(job);
-                        }
+                        this.ensureJob(jobs, `dig_${tile.id}_${layer}`, 'DIG', tile.id, 80, layer);
                     }
                 }
+            }
+
+            // 3. GENERATE SURFACE MINING JOBS
+            if (tile.foliage === 'GOLD_VEIN') {
+                this.ensureJob(jobs, `mine_surf_${tile.id}`, 'MINE', tile.id, 70, 0);
+            }
+
+            // 4. GENERATE UNDERGROUND MINING JOBS
+            if (tile.underground) {
+                for (let layer = -1; layer >= -10; layer--) {
+                    const strata = tile.underground[layer];
+                    if (strata && strata.oreType && strata.oreVisible && !strata.excavated) {
+                        this.ensureJob(jobs, `mine_under_${tile.id}_${layer}`, 'MINE', tile.id, 75, layer);
+                    }
+                }
+            }
+        }
+    }
+
+    private ensureJob(jobs: Job[], id: string, type: any, targetTileId: number, priority: number, layer: number): void {
+        const exists = jobs.some(j => j.id === id);
+        if (!exists) {
+            jobs.push({
+                id,
+                type,
+                targetTileId,
+                priority,
+                layer,
+                assignedAgentId: null
+            });
+        }
+    }
+
+    private cleanupJobs(jobs: Job[], grid: GridTile[]): void {
+        for (let i = jobs.length - 1; i >= 0; i--) {
+            const job = jobs[i];
+            const tile = grid[job.targetTileId];
+            if (!tile) {
+                jobs.splice(i, 1);
+                continue;
+            }
+
+            let valid = true;
+            if (job.type === 'BUILD') {
+                if (!tile.isUnderConstruction) valid = false;
+            } else if (job.type === 'DIG') {
+                if (!tile.digState || (tile.digState[job.layer || 0] !== 1 && tile.digState[job.layer || 0] !== 4)) valid = false;
+            } else if (job.type === 'MINE') {
+                if (job.layer === 0 || job.layer === undefined) {
+                    if (tile.foliage !== 'GOLD_VEIN') valid = false;
+                } else {
+                    const strata = tile.underground?.[job.layer];
+                    if (!strata || !strata.oreType || strata.excavated) valid = false;
+                }
+            }
+
+            if (!valid) {
+                jobs.splice(i, 1);
             }
         }
     }

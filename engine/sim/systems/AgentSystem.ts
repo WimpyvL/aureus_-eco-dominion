@@ -125,10 +125,20 @@ export class AgentSystem extends BaseSimSystem {
             return;
         }
 
+        const mineJob = state.jobs.find(j =>
+            j.type === 'MINE' &&
+            (!j.assignedAgentId || j.assignedAgentId === agent.id)
+        );
+        if (mineJob) {
+            mineJob.assignedAgentId = agent.id;
+            this.goTo(agent, mineJob.targetTileId, mineJob.layer || 0, mineJob.id, state.grid);
+            return;
+        }
+
         // --- PRIORITY 4: Idleness / Wander ---
         if (agent.state === 'IDLE' && Math.random() < 0.3) {
             const wanderTarget = this.getRandomNearby(agent);
-            this.goTo(agent, wanderTarget, 0, 'sys_wander', state.grid);
+            this.goTo(agent, wanderTarget, agent.layer || 0, 'sys_wander', state.grid);
         }
     }
 
@@ -259,23 +269,33 @@ export class AgentSystem extends BaseSimSystem {
             }
         } else if (job.type === 'MINE') {
             // Instant mine for now
-            state.resources.minerals += 15 * (1 + agent.skills.mining / 5);
+            state.resources.minerals += 25 * (1 + agent.skills.mining / 5);
             state.pendingEffects.push({ type: 'FX', fxType: 'MINING', index: tile.id });
             state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.MINING_HIT });
 
             // Skill XP
             agent.skills.mining += 0.5;
 
-            // Deplete or finish
+            // If underground, we excavate the strata too
+            if (job.layer !== undefined && job.layer < 0) {
+                const strata = tile.underground?.[job.layer];
+                if (strata) {
+                    strata.excavated = true;
+                    // Reveal neighbors
+                    state.pendingEffects.push({ type: 'GRID_UPDATE', updates: [tile] });
+                }
+            } else {
+                // Surface depletion
+                if (tile.foliage === 'GOLD_VEIN' && Math.random() < 0.2) {
+                    tile.foliage = 'NONE';
+                    state.pendingEffects.push({ type: 'GRID_UPDATE', updates: [tile] });
+                }
+            }
+
             state.jobs.splice(jobIdx, 1);
             this.finishActivity(agent);
-
-            // Deplete vein?
-            if (tile.foliage === 'GOLD_VEIN' && Math.random() < 0.1) {
-                tile.foliage = 'NONE';
-                state.pendingEffects.push({ type: 'GRID_UPDATE', updates: [tile] });
-            }
-        } else {
+        }
+        else {
             // Already finished or site removed
             state.jobs.splice(jobIdx, 1);
             this.finishActivity(agent);

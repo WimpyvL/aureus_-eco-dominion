@@ -168,7 +168,9 @@ export class ConstructionSystem extends BaseSimSystem {
                         isUnderConstruction: !isInstant,
                         constructionTimeLeft: isInstant ? 0 : def.buildTime,
                         structureHeadIndex: index,
-                        explored: true
+                        explored: true,
+                        // Set entrance property for mining buildings
+                        hasEntrance: buildingType === BuildingType.MINING_HEADFRAME
                     };
                     updates.push(grid[idx]);
                 }
@@ -211,7 +213,8 @@ export class ConstructionSystem extends BaseSimSystem {
                                 buildingType: BuildingType.EMPTY,
                                 isUnderConstruction: false,
                                 structureHeadIndex: undefined,
-                                constructionTimeLeft: 0
+                                constructionTimeLeft: 0,
+                                hasEntrance: false
                             };
                             updates.push(grid[idx]);
                         }
