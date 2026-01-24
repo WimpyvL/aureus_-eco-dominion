@@ -8,7 +8,8 @@ import {
     GameState, BuildingType, Agent, GridTile, GameStep,
     SfxType, GameCommand, Era
 } from '../../types';
-import { generateInitialGrid, GRID_SIZE } from '../utils/GameUtils';
+import { GRID_SIZE } from '../utils/GameUtils';
+import { generateInitialGrid } from '../worldgen';
 import { INITIAL_RESOURCES } from '../data/VoxelConstants';
 
 export type StateListener = (state: GameState) => void;
@@ -155,6 +156,7 @@ export class StateManager {
             currentJobId: null,
             targetTileId: null,
             path: null,
+            layer: 0,
         }));
     }
 

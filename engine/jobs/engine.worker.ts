@@ -6,7 +6,7 @@
  */
 
 import { GridTile } from '../../types';
-import { getBiomeAt as getBiomeAtImpl, getFoliageAt as getFoliageAtImpl } from '../sim/logic/Procedural';
+import { getBiomeAt as getBiomeAtImpl, getFoliageAt as getFoliageAtImpl } from '../worldgen/Core';
 import { Job, PathfindJob, PathfindResult, MeshChunkJob, MeshChunkResult } from './jobs.types';
 import { findPath, GRID_SIZE } from '../sim/algorithms/Pathfinding';
 
@@ -84,7 +84,8 @@ self.onmessage = (e: MessageEvent) => {
             kind: job.kind,
             success: false,
             error: String(err),
-            completedAt: Date.now()
+            completedAt: Date.now(),
+            queuedAt: job.queuedAt
         });
     }
 };
@@ -113,9 +114,10 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
         return Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
     }
 
-    const h = 0.5;
+    // Default half-height for standard blocks (1 unit tall)
+    const stdH = 0.5;
 
-    const addFace = (dest: any, sx: number, sy: number, sz: number, type: number, color: number[]) => {
+    const addFace = (dest: any, sx: number, sy: number, sz: number, type: number, color: number[], h: number = 0.5) => {
         let v1, v2, v3, v4, nx, ny, nz;
         // 0: +X, 1: -X, 2: +Y (Top), 3: -Y (Bottom), 4: +Z, 5: -Z
         if (type === 0) { v1 = [h, -h, h]; v2 = [h, -h, -h]; v3 = [h, h, -h]; v4 = [h, h, h]; nx = 1; ny = 0; nz = 0; }
@@ -167,74 +169,75 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
                 const ceilingColor = PALETTE['dirt'];
                 const ghostColor = PALETTE[data.b] || PALETTE['grass'];
 
-                // --- Surface Ghost Removed (User requested top side hidden) ---
-                /*
-                if (tile?.hasEntrance) {
-                    addFace(ghost, x, surfaceY - 0.5, z, 2, ghostColor);
-                }
-                */
-
                 // Render Underground Layers (-1 to -10) with Neighbor Culling
                 for (let layer = -1; layer >= -10; layer--) {
-                    const layerY = surfaceY + layer + 0.5;
-                    const isSolid = (uTile: any) => !uTile || !uTile[layer] || !uTile[layer].excavated;
-                    const myU = tile?.underground;
-                    const amISolid = isSolid(myU);
+                    try {
+                        // FIX: Use 2.0 depth scaling to match logic & camera
+                        // Surface is at surfaceY. Layer -1 is from surfaceY to surfaceY-2. Center is surfaceY-1.
+                        const layerY = surfaceY + (layer * 2.0) + 1.0;
+                        const layerH = 1.0; // 2.0 units tall, so half-height is 1.0
 
-                    if (amISolid) {
-                        const myStrata = myU ? myU[layer] : null;
-                        const ore = myStrata?.oreVisible ? myStrata.oreType : null;
+                        const myU = tile?.underground;
+                        const amISolid = !myU || !myU[layer] || !myU[layer].excavated;
 
-                        // Use layer palette for visual distinctiveness
-                        const layerIndex = Math.abs(layer) - 1;
-                        let color = LAYER_PALETTE[layerIndex % 10];
+                        if (amISolid) {
+                            const myStrata = myU ? myU[layer] : null;
+                            const ore = myStrata?.oreVisible ? myStrata.oreType : null;
 
-                        // Blend with ore color if present
-                        if (ore === 'GOLD') color = [color[0] * 0.5 + 0.5, color[1] * 0.5 + 0.42, color[2] * 0.5];
-                        else if (ore === 'GEM') color = [color[0] * 0.5 + 0.2, color[1] * 0.5 + 0.5, color[2] * 0.5 + 0.5];
-                        else if (ore === 'IRON') color = [color[0] * 0.5 + 0.3, color[1] * 0.5 + 0.2, color[2] * 0.5 + 0.15];
-                        else if (ore === 'COAL') color = [color[0] * 0.2, color[1] * 0.2, color[2] * 0.2];
+                            // Use layer palette for visual distinctiveness
+                            const layerIndex = Math.abs(layer) - 1;
+                            let color = LAYER_PALETTE[layerIndex % 10];
 
-                        // Check 6 neighbors
-                        const isNeighborSolid = (nx: number, nz: number, nLayer: number) => {
-                            // Bedrock is solid
-                            if (nLayer < -10) return true;
+                            // Blend with ore color if present
+                            if (ore === 'GOLD') color = [color[0] * 0.5 + 0.5, color[1] * 0.5 + 0.42, color[2] * 0.5];
+                            else if (ore === 'GEM') color = [color[0] * 0.5 + 0.2, color[1] * 0.5 + 0.5, color[2] * 0.5 + 0.5];
+                            else if (ore === 'IRON') color = [color[0] * 0.5 + 0.3, color[1] * 0.5 + 0.2, color[2] * 0.5 + 0.15];
+                            else if (ore === 'COAL') color = [color[0] * 0.2, color[1] * 0.2, color[2] * 0.2];
 
-                            // Surface transition
-                            if (nLayer === 0) {
+                            // Check 6 neighbors
+                            const isNeighborSolid = (nx: number, nz: number, nLayer: number) => {
+                                // Bedrock is solid
+                                if (nLayer < -10) return true;
+
+                                // Surface transition (Layer 0)
+                                if (nLayer === 0) {
+                                    const nKey = `${nx},${nz}`;
+                                    const nTile = tileMap.get(nKey);
+                                    // If the tile has an entrance (hole), it's open (not solid)
+                                    // Otherwise it's the solid surface of the world
+                                    return !nTile?.hasEntrance;
+                                }
+
                                 const nKey = `${nx},${nz}`;
                                 const nTile = tileMap.get(nKey);
-                                // If the tile has an entrance (hole), it's open (not solid)
-                                return !nTile?.hasEntrance;
-                            }
+                                if (nTile && nTile.underground && nTile.underground[nLayer]) {
+                                    return !nTile.underground[nLayer].excavated;
+                                }
+                                // Outside map or uninitialized = solid earth
+                                return true;
+                            };
 
-                            const nKey = `${nx},${nz}`;
-                            const nTile = tileMap.get(nKey);
-                            if (nTile && nTile.underground) {
-                                return !nTile.underground[nLayer].excavated;
+                            // Top (2) - Only if neighbor above is NOT solid (excavated)
+                            if (!isNeighborSolid(worldX, worldZ, layer + 1)) addFace(solid, x, layerY, z, 2, color, layerH);
+                            // Bottom (3)
+                            if (!isNeighborSolid(worldX, worldZ, layer - 1)) addFace(solid, x, layerY, z, 3, color, layerH);
+                            // +X (0)
+                            if (!isNeighborSolid(worldX + 1, worldZ, layer)) addFace(solid, x, layerY, z, 0, color, layerH);
+                            // -X (1)
+                            if (!isNeighborSolid(worldX - 1, worldZ, layer)) addFace(solid, x, layerY, z, 1, color, layerH);
+                            // +Z (4)
+                            if (!isNeighborSolid(worldX, worldZ + 1, layer)) addFace(solid, x, layerY, z, 4, color, layerH);
+                            // -Z (5)
+                            if (!isNeighborSolid(worldX, worldZ - 1, layer)) addFace(solid, x, layerY, z, 5, color, layerH);
+                        } else {
+                            // I am excavated. Render rubble?
+                            if (myU && myU[layer] && myU[layer].collapsed) {
+                                const rubbleColor = [0.3, 0.2, 0.1];
+                                addFace(solid, x, layerY - 0.9, z, 2, rubbleColor, 0.1); // Small rubble
                             }
-                            // Outside map or uninitialized = solid earth
-                            return true;
-                        };
-
-                        // Top (2) - Only if neighbor above is NOT solid (excavated)
-                        if (!isNeighborSolid(worldX, worldZ, layer + 1)) addFace(solid, x, layerY, z, 2, color);
-                        // Bottom (3)
-                        if (!isNeighborSolid(worldX, worldZ, layer - 1)) addFace(solid, x, layerY, z, 3, color);
-                        // +X (0)
-                        if (!isNeighborSolid(worldX + 1, worldZ, layer)) addFace(solid, x, layerY, z, 0, color);
-                        // -X (1)
-                        if (!isNeighborSolid(worldX - 1, worldZ, layer)) addFace(solid, x, layerY, z, 1, color);
-                        // +Z (4)
-                        if (!isNeighborSolid(worldX, worldZ + 1, layer)) addFace(solid, x, layerY, z, 4, color);
-                        // -Z (5)
-                        if (!isNeighborSolid(worldX, worldZ - 1, layer)) addFace(solid, x, layerY, z, 5, color);
-                    } else {
-                        // I am excavated. Render rubble?
-                        if (myU && myU[layer].collapsed) {
-                            const rubbleColor = [0.3, 0.2, 0.1];
-                            addFace(solid, x, layerY - 0.3, z, 2, rubbleColor);
                         }
+                    } catch (err) {
+                        console.warn(`Worker: Error meshing underground layer ${layer} at ${worldX},${worldZ}:`, err);
                     }
                 }
                 continue;
@@ -325,7 +328,8 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
         water: serialize(water),
         ghost: serialize(ghost),
         foliage: foliageItems,
-        cx, cz, lod
+        cx, cz, lod,
+        queuedAt: job.queuedAt
     };
 }
 
@@ -339,6 +343,7 @@ function processPathfind(job: PathfindJob): PathfindResult {
         kind: 'PATHFIND',
         success: !!path,
         completedAt: Date.now(),
+        queuedAt: job.queuedAt,
         agentId: job.agentId,
         path: path
     };

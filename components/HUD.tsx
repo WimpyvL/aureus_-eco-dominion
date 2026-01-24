@@ -186,7 +186,7 @@ const EraBlock = ({ currentEra, state }: { currentEra: Era; state: GameState }) 
           bg-slate-900 
           border-2 border-slate-700
           rounded-[4px] px-2 py-1 sm:px-3 sm:py-2
-          ${isExpanded ? 'min-w-[100px]' : 'w-10 h-10 sm:w-12 sm:h-12 justify-center'}
+          ${isExpanded ? 'min-w-[120px]' : 'w-10 h-10 sm:w-12 sm:h-12 justify-center'}
           shadow-[4px_4px_0px_0px_rgba(0,0,0,0.4)]
           transition-all duration-200
           hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_0px_rgba(0,0,0,0.3)]
@@ -207,7 +207,7 @@ const EraBlock = ({ currentEra, state }: { currentEra: Era; state: GameState }) 
         {isExpanded && (
           <div className="flex flex-col items-start leading-none gap-0.5 pr-2 animate-in fade-in slide-in-from-left-1 duration-200">
             <span className="text-[7px] sm:text-[9px] text-slate-500 font-bold uppercase tracking-wider">Evolution</span>
-            <span className="text-xs sm:text-sm font-['Rajdhani'] font-bold text-white tracking-wide truncate max-w-[80px]">{eraDef.name.replace('Era ', 'E')}</span>
+            <span className="text-xs sm:text-sm font-['Rajdhani'] font-bold text-white tracking-wide truncate max-w-[100px]">{eraDef.name.replace('Era ', 'E')}</span>
           </div>
         )}
 
@@ -234,7 +234,7 @@ const EraBlock = ({ currentEra, state }: { currentEra: Era; state: GameState }) 
 
       {/* Requirements Tooltip */}
       {nextDef && isExpanded && (
-        <div className="absolute top-full left-0 mt-2 w-48 bg-slate-900 border-2 border-slate-700 p-2 shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 rounded">
+        <div className="absolute top-full left-0 mt-2 w-56 bg-slate-900 border-2 border-slate-700 p-2 shadow-2xl z-50 rounded pointer-events-none animate-in fade-in slide-in-from-top-2 duration-200">
           <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-1">Next: {nextDef.name}</h4>
           <p className="text-[8px] text-slate-400 mb-2 italic">{nextDef.description}</p>
           <div className="space-y-1">
@@ -287,7 +287,7 @@ const EraBlock = ({ currentEra, state }: { currentEra: Era; state: GameState }) 
 
 export const HUD: React.FC<HUDProps> = React.memo(({ resources, financials, population, currentEra, state }) => {
   return (
-    <div className="absolute top-0 left-0 right-0 p-2 sm:p-3 pt-3 sm:pt-4 z-10 flex flex-nowrap overflow-x-auto no-scrollbar gap-2 sm:gap-3 pointer-events-none items-start justify-start sm:justify-center px-3 sm:px-4">
+    <div className="absolute top-0 left-0 right-0 p-2 sm:p-3 pt-3 sm:pt-4 z-10 flex flex-wrap gap-2 sm:gap-3 pointer-events-none items-start justify-start sm:justify-center px-3 sm:px-4">
       <EraBlock currentEra={currentEra} state={state} />
       <ResourceBlock
         icon={Coins}

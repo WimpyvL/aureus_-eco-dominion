@@ -12,3 +12,4 @@ export * from './EraSystem';
 export * from './PowerGridSystem';
 export * from './WaterNetworkSystem';
 export * from './ExcavationSystem';
+export * from './TutorialDemoSystem';

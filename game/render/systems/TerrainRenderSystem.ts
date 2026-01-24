@@ -148,6 +148,13 @@ export class TerrainRenderSystem {
         for (const res of results) {
             if (res.success) {
                 this.applyChunkUpdate(res);
+            } else {
+                console.error(`[TerrainRenderSystem] Chunk build failed for ${res.chunkId}:`, res.error);
+                const chunk = this.chunks.get(res.chunkId);
+                if (chunk) {
+                    chunk.loading = false;
+                    // chunk.dirty = true; // Retry? Or leave broken?
+                }
             }
         }
     }
@@ -232,10 +239,12 @@ export class TerrainRenderSystem {
                 cz,
                 tiles,
                 gridSize: this.gridSize,
-                viewMode: this.viewMode,
+                viewMode: this.viewMode === 'UNDERGROUND' ? 'UNDERGROUND' : 'SURFACE',
                 lod
             }
         };
+
+        console.log(`[TerrainRenderSystem] Requesting build for ${key} (View: ${this.viewMode})`);
 
         this.jobSystem.enqueue(job);
 
@@ -294,6 +303,8 @@ export class TerrainRenderSystem {
         chunk.mesh = createMesh(res.solid, matMaster, true);
         if (chunk.mesh) {
             this.scene.add(chunk.mesh);
+        } else {
+            console.warn(`[TerrainRenderSystem] Mesh IS NULL for ${res.chunkId}`);
         }
 
         chunk.waterMesh = createMesh(res.water, mats.reservoirWater, false);

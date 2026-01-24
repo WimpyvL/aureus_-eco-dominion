@@ -25,6 +25,7 @@ export enum BuildingType {
   POND = 'POND',
   RESERVOIR = 'RESERVOIR',
   PIPE = 'PIPE',
+  POWER_LINE = 'POWER_LINE',
   ROAD = 'ROAD',
   FENCE = 'FENCE',
   STORAGE_DEPOT = 'STORAGE_DEPOT',
@@ -264,6 +265,7 @@ export interface GridTile {
   constructionTimeLeft?: number;
   structureHeadIndex?: number;
   waterStatus?: 'CONNECTED' | 'DISCONNECTED';
+  powerStatus?: 'CONNECTED' | 'DISCONNECTED';
   rehabProgress?: number; // 0-100
   explored?: boolean;
 
@@ -377,10 +379,17 @@ export interface ResearchState {
 
 export enum GameStep {
   INTRO = 'INTRO',
+  TUTORIAL_NAV = 'TUTORIAL_NAV',
   TUTORIAL_MINE = 'TUTORIAL_MINE',
   TUTORIAL_SELL = 'TUTORIAL_SELL',
   TUTORIAL_BUY = 'TUTORIAL_BUY',
   TUTORIAL_PLACE = 'TUTORIAL_PLACE',
+  TUTORIAL_NEEDS = 'TUTORIAL_NEEDS',
+  TUTORIAL_POWER = 'TUTORIAL_POWER',
+  TUTORIAL_UNDERGROUND = 'TUTORIAL_UNDERGROUND',
+  TUTORIAL_RESEARCH = 'TUTORIAL_RESEARCH',
+  TUTORIAL_ERA = 'TUTORIAL_ERA',
+  DEMO = 'DEMO',
   PLAYING = 'PLAYING',
   GAME_OVER = 'GAME_OVER',
   VICTORY = 'VICTORY'

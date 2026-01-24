@@ -23,6 +23,7 @@ export class InputSystem {
     // Dependencies
     private renderAdapter: ThreeRenderAdapter;
     private domElement: HTMLElement;
+    private getTerrainHeight: (worldX: number, worldZ: number) => number;
 
     // Callbacks provided by AureusWorld to dispatch to Redux/Engine
     // In a pure engine, we would dispatch actions directly, but we are bridging.
@@ -30,12 +31,10 @@ export class InputSystem {
     public onTileRightClick?: (index: number, isTouch: boolean) => void;
     public onTileHover?: (index: number | null) => void;
 
-    // We still assume 'surface' interaction at height 0 for now
-    // Future: Use heightmap from simulation state for accurate raycast
-
-    constructor(renderAdapter: ThreeRenderAdapter) {
+    constructor(renderAdapter: ThreeRenderAdapter, getTerrainHeight: (worldX: number, worldZ: number) => number) {
         this.renderAdapter = renderAdapter;
         this.domElement = renderAdapter.getCanvas();
+        this.getTerrainHeight = getTerrainHeight;
 
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
@@ -168,26 +167,51 @@ export class InputSystem {
 
         this.raycaster.setFromCamera(this.mouse, this.renderAdapter.getCamera());
 
-        // Intersect against mathematical plane y=0 for base grid
+        // ITERATIVE TERRAIN INTERSECTION:
+        // Raycast against y=0 gives wrong XZ for elevated terrain due to perspective.
+        // We iterate: raycast at estimated height, get terrain height at that XZ, refine.
+
         const target = new THREE.Vector3();
-        const hit = this.raycaster.ray.intersectPlane(this.rayPlane, target);
+        const offset = (GRID_SIZE - 1) / 2;
+        let currentPlaneHeight = -this.rayPlane.constant; // rayPlane.constant is negative of height
 
-        if (hit) {
-            // Convert world pos to grid index
-            // Grid is centered? Let's check Utils.
-            // Assuming 0,0 is center or not? 
-            // In gameUtils: x = index % GRID_SIZE. 
-            // Usually we offset so world center is 0,0. 
-            // offset = (GRID_SIZE - 1) / 2
-            const offset = (GRID_SIZE - 1) / 2;
-            const x = Math.round(hit.x + offset);
-            const z = Math.round(hit.z + offset);
+        for (let iter = 0; iter < 3; iter++) {
+            const iterPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -currentPlaneHeight);
+            const hit = this.raycaster.ray.intersectPlane(iterPlane, target);
 
-            if (x >= 0 && x < GRID_SIZE && z >= 0 && z < GRID_SIZE) {
-                const index = z * GRID_SIZE + x;
+            if (!hit) return null;
+
+            const gridX = Math.round(hit.x + offset);
+            const gridZ = Math.round(hit.z + offset);
+
+            if (gridX < 0 || gridX >= GRID_SIZE || gridZ < 0 || gridZ >= GRID_SIZE) {
+                return null;
+            }
+
+            // Query actual terrain height at this XZ
+            const terrainHeight = this.getTerrainHeight(hit.x, hit.z);
+
+            // If we're close enough (within 0.1 units), accept this result
+            if (Math.abs(terrainHeight - currentPlaneHeight) < 0.1) {
+                const index = gridZ * GRID_SIZE + gridX;
+                hit.y = terrainHeight;
                 return { index, point: hit };
             }
+
+            // Refine: use terrain height for next iteration
+            currentPlaneHeight = terrainHeight;
         }
+
+        // After max iterations, use last result
+        const gridX = Math.round(target.x + offset);
+        const gridZ = Math.round(target.z + offset);
+
+        if (gridX >= 0 && gridX < GRID_SIZE && gridZ >= 0 && gridZ < GRID_SIZE) {
+            const index = gridZ * GRID_SIZE + gridX;
+            target.y = this.getTerrainHeight(target.x, target.z);
+            return { index, point: target };
+        }
+
         return null;
     }
 

@@ -51,6 +51,18 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     pollution: 0,
     era: Era.SETTLEMENT
   },
+  [BuildingType.POWER_LINE]: {
+    type: BuildingType.POWER_LINE,
+    name: 'Power Line',
+    cost: 10,
+    desc: 'Conducts electricity from generators to buildings.',
+    ecoReq: 0,
+    stats: 'Infrastructure',
+    buildTime: 3,
+    maintenance: 0.5,
+    pollution: 0,
+    era: Era.SETTLEMENT
+  },
   [BuildingType.FENCE]: {
     type: BuildingType.FENCE,
     name: 'Perimeter Fence',

@@ -21,7 +21,8 @@ import {
     AgentSystem, JobGenerationSystem, EnvironmentSystem, EconomySystem,
     ColonySystem, LogisticsSystem, EventSystem, MissionSystem,
     ProductionSystem, ConstructionSystem, EraSystem,
-    PowerGridSystem, WaterNetworkSystem, ExcavationSystem
+    PowerGridSystem, WaterNetworkSystem, ExcavationSystem,
+    TutorialDemoSystem
 } from '../engine/sim/systems';
 
 import { GameState, GameStep, Agent, GridTile, BuildingType, SfxType, TechId } from '../types';
@@ -71,6 +72,9 @@ export class AureusWorld extends BaseWorld {
     private undergroundDecorationSystem: UndergroundDecorationSystem;
     private cameraSystem: IsoCameraSystem;
 
+    // Terrain height callback (used by agents and input)
+    private getTerrainHeight: (worldX: number, worldZ: number) => number;
+
     // Game State
     private gamePaused = false;
     private config: AureusWorldConfig | null = null;
@@ -108,6 +112,7 @@ export class AureusWorld extends BaseWorld {
         this.sim.addSystem(new WaterNetworkSystem());
         this.sim.addSystem(new ProductionSystem());
         this.sim.addSystem(new EraSystem());
+        this.sim.addSystem(new TutorialDemoSystem());
 
         // Dungeon Keeper Systems
         this.sim.addSystem(new ExcavationSystem());
@@ -142,8 +147,8 @@ export class AureusWorld extends BaseWorld {
             getHeight
         );
 
-        // Store reference for cursor height calculation
-        const getTerrainHeight = getHeight;
+        // Store reference for later use with InputSystem
+        this.getTerrainHeight = getHeight;
 
         this.terrainRenderSystem = new TerrainRenderSystem(
             this.render.getScene(),
@@ -445,6 +450,11 @@ export class AureusWorld extends BaseWorld {
         state.debugMode = !state.debugMode;
     }
 
+    toggleCheats(): void {
+        const state = this.stateManager.getMutableState();
+        state.cheatsEnabled = !state.cheatsEnabled;
+    }
+
     speedUpConstruction(index: number): void {
         const state = this.stateManager.getMutableState();
         const tile = state.grid[index];
@@ -590,10 +600,17 @@ export class AureusWorld extends BaseWorld {
         const state = this.stateManager.getMutableState();
         const steps = [
             GameStep.INTRO,
+            GameStep.TUTORIAL_NAV,
             GameStep.TUTORIAL_MINE,
             GameStep.TUTORIAL_SELL,
             GameStep.TUTORIAL_BUY,
             GameStep.TUTORIAL_PLACE,
+            GameStep.TUTORIAL_NEEDS,
+            GameStep.TUTORIAL_POWER,
+            GameStep.TUTORIAL_UNDERGROUND,
+            GameStep.TUTORIAL_RESEARCH,
+            GameStep.TUTORIAL_ERA,
+            GameStep.DEMO,
             GameStep.PLAYING
         ];
 
@@ -602,6 +619,12 @@ export class AureusWorld extends BaseWorld {
             state.step = steps[idx + 1];
             state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
         }
+    }
+
+    startDemo(): void {
+        const state = this.stateManager.getMutableState();
+        state.step = GameStep.DEMO;
+        this.setGamePaused(false);
     }
 
     deliverContract(contractId: string): void {
@@ -640,7 +663,7 @@ export class AureusWorld extends BaseWorld {
     configure(config: AureusWorldConfig): void {
         this.config = config;
 
-        this.inputSystem = new InputSystem(this.render);
+        this.inputSystem = new InputSystem(this.render, this.getTerrainHeight);
 
         this.inputSystem.onTileClick = (index, isTouch) => {
             if (this.stateManager.getState().viewMode === 'UNDERGROUND') {
@@ -681,43 +704,62 @@ export class AureusWorld extends BaseWorld {
 
         // Procedural Underground Generation (Once per save)
         // If underground layer is missing, generate it now
-        if (state.grid.length > 0 && (!state.grid[0].underground || Object.keys(state.grid[0].underground).length === 0)) {
-            console.log("Generating underground layers...");
-            for (const tile of state.grid) {
-                // Initialize underground structure
-                tile.underground = {};
+        if (state.grid.length > 0) {
+            let needsGen = false;
+            for (let i = 0; i < Math.min(10, state.grid.length); i++) {
+                const t = state.grid[i];
+                if (!t.underground || Object.keys(t.underground).length === 0) {
+                    needsGen = true;
+                    break;
+                }
+            }
 
-                // Layers -1 to -10
-                for (let layer = -1; layer >= -10; layer--) {
-                    // Default solid earth
-                    tile.underground[layer] = {
-                        excavated: false,
-                        collapseRisk: 0,
-                        oreVisible: false
-                    };
+            if (needsGen) {
+                console.log("Generating underground layers...");
+                for (const tile of state.grid) {
+                    // Initialize underground structure if missing
+                    if (!tile.underground) tile.underground = {};
 
-                    // Ore Generation Logic
-                    // Deeper layers = better ores, but rarer
-                    const rand = Math.random();
-                    let oreType: 'GOLD' | 'IRON' | 'GEM' | 'COAL' | undefined;
+                    // Layers -1 to -10
+                    for (let layer = -1; layer >= -10; layer--) {
+                        // Skip if already exists
+                        if (tile.underground[layer]) continue;
 
-                    if (layer <= -8) { // Deep layers (-8 to -10): Gems, Gold
-                        if (rand < 0.05) oreType = 'GEM';
-                        else if (rand < 0.15) oreType = 'GOLD';
-                    } else if (layer <= -4) { // Mid layers (-4 to -7): Gold, Iron
-                        if (rand < 0.05) oreType = 'GOLD';
-                        else if (rand < 0.20) oreType = 'IRON';
-                        else if (rand < 0.30) oreType = 'COAL';
-                    } else { // Shallow layers (-1 to -3): Coal, Iron
-                        if (rand < 0.05) oreType = 'IRON';
-                        else if (rand < 0.15) oreType = 'COAL';
-                    }
+                        // Default solid earth
+                        tile.underground[layer] = {
+                            excavated: false,
+                            collapseRisk: 0,
+                            oreVisible: false
+                        };
 
-                    if (oreType) {
-                        tile.underground[layer].oreType = oreType;
+                        // Ore Generation Logic
+                        // Deeper layers = better ores, but rarer
+                        const rand = Math.random();
+                        let oreType: 'GOLD' | 'IRON' | 'GEM' | 'COAL' | undefined;
+
+                        if (layer <= -8) { // Deep layers (-8 to -10): Gems, Gold
+                            if (rand < 0.05) oreType = 'GEM';
+                            else if (rand < 0.15) oreType = 'GOLD';
+                        } else if (layer <= -4) { // Mid layers (-4 to -7): Gold, Iron
+                            if (rand < 0.05) oreType = 'GOLD';
+                            else if (rand < 0.20) oreType = 'IRON';
+                            else if (rand < 0.30) oreType = 'COAL';
+                        } else { // Shallow layers (-1 to -3): Coal, Iron
+                            if (rand < 0.05) oreType = 'IRON';
+                            else if (rand < 0.15) oreType = 'COAL';
+                        }
+
+                        if (oreType) {
+                            tile.underground[layer].oreType = oreType;
+                        }
                     }
                 }
             }
+        }
+
+        console.log(`[AureusWorld] Initializing grid with ${state.grid.length} tiles.`);
+        if (state.grid.length === 0) {
+            console.error('[AureusWorld] CRITICAL: Grid is empty! World generation failed or save data is corrupt.');
         }
 
         this.workerPool.broadcast({ type: 'SYNC_GRID', payload: state.grid });
@@ -853,6 +895,13 @@ export class AureusWorld extends BaseWorld {
             // Restore to "no clipping"
             subterraneanClippingPlane.normal.set(0, 1, 0);
             subterraneanClippingPlane.constant = 1000;
+            // Force disable clipping to be safe
+            this.render.getRenderer().localClippingEnabled = false;
+        }
+
+        // Enable clipping only in Underground mode
+        if (state.viewMode === 'UNDERGROUND') {
+            this.render.getRenderer().localClippingEnabled = true;
         }
 
         this.buildingRenderSystem.updateCursor(

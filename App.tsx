@@ -23,7 +23,7 @@ import {
 import { HUD } from './components/HUD';
 import { OpsDrawer } from './components/OpsDrawer';
 import { SupplySidebar } from './components/SupplySidebar';
-import { TutorialOverlay, GameOverScreen, ConstructionModal, UndergroundOverlay } from './components/Modals';
+import { TutorialOverlay, GameOverScreen, ConstructionModal, BuildingInspectorModal, UndergroundOverlay } from './components/Modals';
 import { Controls } from './components/Controls';
 import { NewsTicker } from './components/NewsTicker';
 import { GoalWidget } from './components/GoalWidget';
@@ -200,12 +200,14 @@ const App: React.FC = () => {
                 setDigPromptIndex(index);
                 playSfx(SfxType.UI_CLICK);
             }
-            // INSPECT Mode: Check for construction or special tiles
-            else if (state?.interactionMode === 'INSPECT') {
+            // INSPECT or Neutral BUILD Mode: Check for buildings to show info
+            else if (state?.interactionMode === 'INSPECT' || (state?.interactionMode === 'BUILD' && !state?.selectedBuilding)) {
                 const tile = state.grid[index];
-                if (tile && (tile.isUnderConstruction || tile.foliage === 'MINE_HOLE')) {
+                if (tile && (tile.buildingType !== BuildingType.EMPTY || tile.foliage === 'MINE_HOLE')) {
                     setSelectedTileForAction(index);
                     playSfx(SfxType.UI_CLICK);
+                } else if (selectedTileForAction !== null) {
+                    setSelectedTileForAction(null);
                 }
             }
         },
@@ -278,6 +280,14 @@ const App: React.FC = () => {
         }
     }, [world]);
 
+    const handleStartDemo = useCallback(() => {
+        if (world) {
+            world.startDemo();
+            setShowHomePage(false);
+            audioRef.current.init();
+        }
+    }, [world]);
+
     // Calculate financials from state (Optimized: engine provides target sums)
     const calculateFinancials = (gameState: GameState) => {
         const income = gameState.resources.income || 0;
@@ -322,6 +332,9 @@ const App: React.FC = () => {
             case 'TOGGLE_DEBUG':
                 world.toggleDebug();
                 break;
+            case 'TOGGLE_CHEATS':
+                world.toggleCheats();
+                break;
             case 'SELL_MINERALS':
                 world.sellMinerals();
                 break;
@@ -331,7 +344,7 @@ const App: React.FC = () => {
             case 'RESEARCH_TECH':
                 world.researchTech(action.payload);
                 break;
-            case 'SPEED_UP_CONSTRUCTION':
+            case 'SPEED_UP_BUILDING':
                 world.speedUpConstruction(action.payload.index);
                 break;
             case 'ACCEPT_CONTRACT':
@@ -436,6 +449,7 @@ const App: React.FC = () => {
                 <div className="absolute inset-0 z-50 bg-gradient-to-b from-black/30 via-transparent to-black/50">
                     <HomePage
                         onStartGame={handleStartGame}
+                        onStartDemo={handleStartDemo}
                         onContinueGame={handleContinueGame}
                         hasSave={hasSave}
                     />
@@ -563,6 +577,14 @@ const App: React.FC = () => {
                         selectedTile={selectedTileForAction}
                         grid={state.grid}
                         gems={state.resources.gems}
+                        dispatch={dispatch}
+                        onClose={() => setSelectedTileForAction(null)}
+                        playSfx={playSfx}
+                    />
+
+                    <BuildingInspectorModal
+                        selectedTile={selectedTileForAction}
+                        grid={state.grid}
                         dispatch={dispatch}
                         onClose={() => setSelectedTileForAction(null)}
                         playSfx={playSfx}

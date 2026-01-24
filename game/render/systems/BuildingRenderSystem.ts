@@ -94,7 +94,7 @@ export class BuildingRenderSystem {
 
                 // For infrastructure tiles, include connection state in the hash so neighbors trigger updates
                 let connectionHash = '';
-                if (tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE) {
+                if (tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE || tile.buildingType === BuildingType.POWER_LINE) {
                     const conn = this.getInfrastructureConnections(tile, grid);
                     connectionHash = `_${conn.north}_${conn.south}_${conn.east}_${conn.west}`;
                 }
@@ -106,7 +106,7 @@ export class BuildingRenderSystem {
                     });
                 }
 
-                const stateHash = `${tile.buildingType}_${tile.isUnderConstruction}_${tile.integrity}_${tile.waterStatus}${connectionHash}${subHash}_VM:${viewMode}`;
+                const stateHash = `${tile.buildingType}_${tile.isUnderConstruction}_${tile.integrity}_${tile.waterStatus}_${tile.powerStatus}${connectionHash}${subHash}_VM:${viewMode}`;
 
                 // Detect Changes
                 if (!cached || cached.type !== tile.buildingType || Math.abs(cached.progress - currentProgress) > 0.05 || cached.state !== stateHash) {
@@ -171,7 +171,7 @@ export class BuildingRenderSystem {
 
         // Skip multi-tile tails (infrastructure excluded)
         if (tile.structureHeadIndex !== undefined && tile.id !== tile.structureHeadIndex &&
-            !(tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE)) {
+            !(tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE || tile.buildingType === BuildingType.POWER_LINE)) {
             return;
         }
 
@@ -198,11 +198,12 @@ export class BuildingRenderSystem {
                 progress: progress,
                 integrity: tile.integrity,
                 waterStatus: tile.waterStatus,
+                powerStatus: tile.powerStatus,
                 seed
             };
 
             let connections = undefined;
-            if (grid && (tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE)) {
+            if (grid && (tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE || tile.buildingType === BuildingType.POWER_LINE)) {
                 connections = this.getInfrastructureConnections(tile, grid);
             }
 

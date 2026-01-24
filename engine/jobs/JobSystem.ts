@@ -6,6 +6,7 @@
 
 import { Job, JobResult, JobKind } from './jobs.types';
 import { BinaryHeap } from '../utils/BinaryHeap';
+import { telemetry } from '../utils/Telemetry';
 
 /** Job system statistics */
 export interface JobStats {
@@ -107,6 +108,12 @@ export class JobSystem {
         } else {
             this.stats.failed++;
         }
+
+        // Record latency telemetry
+        const latency = Date.now() - result.queuedAt;
+        const metricType = result.kind === 'PATHFIND' ? 'job_pathfind' :
+            result.kind === 'MESH_CHUNK' ? 'job_mesh' : 'job_other';
+        telemetry.record(metricType, latency);
     }
 
     /**

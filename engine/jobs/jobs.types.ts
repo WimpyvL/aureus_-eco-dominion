@@ -95,6 +95,7 @@ export interface BaseJobResult {
     success: boolean;
     error?: string;
     completedAt: number;
+    queuedAt: number;
 }
 export interface MeshChunkResult extends BaseJobResult {
     kind: 'MESH_CHUNK';

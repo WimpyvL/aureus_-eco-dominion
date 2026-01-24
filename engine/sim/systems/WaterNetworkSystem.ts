@@ -31,42 +31,115 @@ export class WaterNetworkSystem extends BaseSimSystem {
         let totalProduced = 0;
         let totalConsumed = 0;
 
-        for (const tile of state.grid) {
-            if (!tile) continue; // Skip undefined tiles
+        // 1. Identify Sources and reset network state
+        const openSet: number[] = []; // Tiles with water
+        const suppliedTiles = new Set<number>(); // Tiles that have received water
+        const grid = state.grid;
+        const size = Math.sqrt(grid.length);
 
-            // Skip empty or under construction
-            if (tile.buildingType === BuildingType.EMPTY || tile.isUnderConstruction) continue;
-
-            // Skip multi-tile tails (only process head)
-            if (tile.structureHeadIndex !== undefined && tile.id !== tile.structureHeadIndex) continue;
+        // Pre-scan to reset status and find sources
+        for (const tile of grid) {
+            if (!tile) continue;
 
             const def = BUILDINGS[tile.buildingType];
             if (!def) continue;
 
-            // Water Production
+            // Reset status primarily for Pipes and Consumers
+            // Sources start connected
             if (def.water?.produces) {
+                // Determine actual production
                 let production = def.water.produces;
 
-                // Ponds produce more during rainy weather
+                // Weather effects
                 if (tile.buildingType === BuildingType.POND) {
                     if (state.weather?.current === 'RAINY' || state.weather?.current === 'STORM') {
                         production = Math.floor(def.water.produces * 1.5);
                     } else if (state.weather?.current === 'DUST_STORM') {
-                        production = Math.floor(def.water.produces * 0.5); // Evaporation
+                        production = Math.floor(def.water.produces * 0.5);
                     }
                 }
 
-                // Reservoirs need power to pump - if power deficit, reduced output
+                // Power dependency for Reservoirs
                 if (tile.buildingType === BuildingType.RESERVOIR && state.powerGrid?.deficit > 0) {
                     production = Math.floor(def.water.produces * 0.25);
                 }
 
                 totalProduced += production;
-            }
 
-            // Water Consumption
-            if (def.water?.consumes) {
+                // Mark as a source for BFS
+                openSet.push(tile.id);
+                suppliedTiles.add(tile.id);
+                tile.waterStatus = 'CONNECTED';
+            } else if (tile.buildingType === BuildingType.PIPE || def.water?.consumes) {
+                // Default to disconnected, will be set to CONNECTED if reached by BFS
+                tile.waterStatus = 'DISCONNECTED';
+            }
+        }
+
+        // 2. BFS Propagation
+        // Flows from Sources -> Pipes -> Pipes/Consumers
+        // Note: Consumers don't extend flow (unless they are also pipes/sources, which they aren't)
+        let head = 0;
+        while (head < openSet.length) {
+            const currentId = openSet[head++];
+            const currentTile = grid[currentId];
+
+            // Get neighbors (NSEW)
+            const neighbors = [
+                currentId - size, // North
+                currentId + size, // South
+                currentId + 1,    // East
+                currentId - 1     // West
+            ];
+
+            // Validate and process neighbors
+            for (const nIdx of neighbors) {
+                // Bounds check
+                if (nIdx < 0 || nIdx >= grid.length) continue;
+                // Wrap-around check (ensure same row for east/west)
+                if (Math.abs((nIdx % size) - (currentId % size)) > 1) continue;
+
+                // Skip if already visited
+                if (suppliedTiles.has(nIdx)) continue;
+
+                const neighbor = grid[nIdx];
+                const nDef = BUILDINGS[neighbor.buildingType];
+                if (!nDef) continue;
+
+                // Logic:
+                // Water flows INTO Pipes.
+                // Water flows FROM Pipes INTO Consumers.
+                // Water flows FROM Sources INTO Pipes.
+
+                // If it's a Pipe, it accepts water and continues the flow
+                if (neighbor.buildingType === BuildingType.PIPE) {
+                    neighbor.waterStatus = 'CONNECTED';
+                    suppliedTiles.add(nIdx);
+                    openSet.push(nIdx); // Continue flow
+                }
+                // If it's a Consumer, it accepts water but STOPS flow (terminal node)
+                else if (nDef.water?.consumes) {
+                    neighbor.waterStatus = 'CONNECTED';
+                    suppliedTiles.add(nIdx);
+                    // Do NOT push to openSet; consumers don't output water to neighbors
+                }
+            }
+        }
+
+        // 3. Calculate Consumption & Deficit
+        // Only CONNECTED consumers count towards "valid" consumption satisfaction
+        // But for "deficit", we usually compare Total Potential Demand vs Total Supply
+        // Or simply: Deficit = Demand - Supply.
+        // If a building is disconnected, it still "demands" water (it's thirsty).
+
+        for (const tile of grid) {
+            if (!tile) continue;
+            const def = BUILDINGS[tile.buildingType];
+            if (def && def.water?.consumes) {
                 totalConsumed += def.water.consumes;
+
+                // Optional: Gameplay effect for disconnected buildings?
+                // For now, we trust the deficit calc.
             }
         }
 

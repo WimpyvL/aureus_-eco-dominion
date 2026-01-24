@@ -383,6 +383,8 @@ export class IsoCameraSystem {
             this.cameraFocus.y = this.currentFocusY;
             this.updateCameraTransform();
         }
+
+
     }
 
     // --- Camera Actions (Based on legacy SceneManager) ---
@@ -449,6 +451,7 @@ export class IsoCameraSystem {
             this.cameraFocus.z + z
         );
         this.camera.lookAt(this.cameraFocus);
+        this.camera.updateMatrixWorld();
     }
 
     // --- Intro Animation ---

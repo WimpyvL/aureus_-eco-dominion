@@ -351,6 +351,7 @@ export interface FactoryOptions {
     width?: number;
     depth?: number;
     waterStatus?: 'CONNECTED' | 'DISCONNECTED';
+    powerStatus?: 'CONNECTED' | 'DISCONNECTED';
     isUnderConstruction?: boolean;
     connections?: {
         north?: boolean;

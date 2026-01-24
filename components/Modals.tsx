@@ -5,7 +5,7 @@
 */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Gem, AlertTriangle, RefreshCw, Lock, ArrowRight, Radio, XCircle, CheckCircle2, ArrowUp, ChevronDown, ChevronUp, Leaf, Hammer, X } from 'lucide-react';
+import { Gem, AlertTriangle, RefreshCw, Lock, ArrowRight, Radio, XCircle, CheckCircle2, ArrowUp, ChevronDown, ChevronUp, Leaf, Hammer, X, Zap, Droplets, Trash2, Info } from 'lucide-react';
 import { GameStep, Action, GameState, BuildingType } from '../types';
 import { BUILDINGS } from '../engine/data/VoxelConstants';
 
@@ -35,44 +35,97 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ step, dispatch
         [GameStep.INTRO]: {
             title: "DIRECTIVE: ESTABLISH COLONY",
             subtitle: "Mission Briefing",
-            text: "Director, operational status confirmed. Objective: Harmonize industry with the ecosystem. Establish a sustainable foothold.",
+            text: "Director, operational status confirmed. Objective: Harmonize industry with the ecosystem. Establish a sustainable foothold on this frontier.",
             buttonText: "INITIATE PROTOCOLS",
             action: () => dispatch({ type: 'ADVANCE_TUTORIAL' })
         },
+        [GameStep.TUTORIAL_NAV]: {
+            title: "SYSTEM: NAVIGATION",
+            subtitle: "Situational Awareness",
+            text: "Master your view of the terminal. Use Mouse to Pan, Scroll to Zoom, and Right-Click to Rotate. On mobile, use standard touch gestures.",
+            tasks: ["Observe the environment", "Locate starting agents"],
+            buttonText: "CONFIRM CONTROLS",
+            action: () => dispatch({ type: 'ADVANCE_TUTORIAL' })
+        },
         [GameStep.TUTORIAL_MINE]: {
-            title: "PHASE 1: WORKFORCE",
-            subtitle: "Maintenance",
-            text: "Colonists require habitation and industry. Access Supply Catalog to deploy Staff Quarters and Wash Plant.",
-            tasks: ["Buy a Staff Quarters", "Buy a Wash Plant"],
-            buttonText: "ACCESS SUPPLY",
-            action: () => setSidebarOpen('SHOP')
+            title: "PHASE 1: PRODUCTION",
+            subtitle: "Resource Extraction",
+            text: "Gathering resources is vital. Your Miners will automatically seek out Gold Veins and Rock outcrops. Ensure they have clear paths.",
+            tasks: ["Watch Miners gather Gold", "Identify Mineral deposits"],
+            buttonText: "PROCEED",
+            action: () => dispatch({ type: 'ADVANCE_TUTORIAL' })
         },
         [GameStep.TUTORIAL_SELL]: {
             title: "PHASE 2: REVENUE",
-            subtitle: "Operations",
-            text: "Mineral extraction authorized. Liquidate stockpiles at Operations Terminal to fund expansion.",
-            tasks: ["Open Operations", "Sell Minerals"],
-            buttonText: "ACCESS OPERATIONS",
+            subtitle: "Market Operations",
+            text: "Minerals must be converted to AGT (Aureus Global Tender). Access the Operations Menu to liquidate your gathered stocks.",
+            tasks: ["Open Operations", "Sell Minerals for AGT"],
+            buttonText: "OPEN OPS",
             action: () => setSidebarOpen('OPS')
         },
         [GameStep.TUTORIAL_BUY]: {
-            title: "PHASE 3: BALANCE",
-            subtitle: "Sustainability",
-            text: "Biosphere degradation detected. Deploy Solar Arrays to mitigate industrial pollution.",
-            tasks: ["Buy Solar Arrays"],
-            buttonText: "ACCESS SUPPLY",
-            action: () => {
-                setSidebarOpen('SHOP');
-                dispatch({ type: 'ADVANCE_TUTORIAL' });
-            }
+            title: "PHASE 3: ACQUISITION",
+            subtitle: "Supply Procurement",
+            text: "Expansion requires infrastructure. Use the Supply Shop to purchase prefabricated modules like Staff Quarters and Wash Plants.",
+            tasks: ["Open Supply Shop", "Purchase basic buildings"],
+            buttonText: "OPEN SHOP",
+            action: () => setSidebarOpen('SHOP')
         },
         [GameStep.TUTORIAL_PLACE]: {
             title: "PHASE 4: CONSTRUCTION",
-            subtitle: "Expansion",
-            text: "Select units from inventory dock to begin construction. Maintain positive AGT/Eco balance.",
-            tasks: ["Place from Inventory"],
-            buttonText: null,
-            action: null
+            subtitle: "Structural Deployment",
+            text: "Select items from your Inventory Dock (bottom of screen) to deploy them. Construction takes time, but ensures your colony's growth.",
+            tasks: ["Select a building", "Place on valid terrain"],
+            buttonText: "CONTINUE",
+            action: () => dispatch({ type: 'ADVANCE_TUTORIAL' })
+        },
+        [GameStep.TUTORIAL_NEEDS]: {
+            title: "PHASE 5: SUSTAINANCE",
+            subtitle: "Colonist Welfare",
+            text: "Workers have needs: Energy, Hunger, and Mood. Staff Quarters provide rest, while Canteens provide nutrition. Keep them happy!",
+            tasks: ["Deploy Staff Quarters", "Deploy Canteen modules"],
+            buttonText: "I UNDERSTAND",
+            action: () => dispatch({ type: 'ADVANCE_TUTORIAL' })
+        },
+        [GameStep.TUTORIAL_POWER]: {
+            title: "PHASE 6: NETWORKS",
+            subtitle: "Utilities",
+            text: "Advanced buildings require Power and Water. Deploy Solar Arrays for energy and Water Wells for hydration. Minimize deficit.",
+            tasks: ["Monitor Power consumption", "Check Water availability"],
+            buttonText: "MASTER UTILITIES",
+            action: () => dispatch({ type: 'ADVANCE_TUTORIAL' })
+        },
+        [GameStep.TUTORIAL_UNDERGROUND]: {
+            title: "PHASE 7: DEPTHS",
+            subtitle: "Subterranean Expansion",
+            text: "Build a Mine Entrance to access the underground. Use Layer Navigator to descend. Beware of collapse risks—use Support Pillars.",
+            tasks: ["Construct Mine Entrance", "Explore underground layers"],
+            buttonText: "DIG DEEPER",
+            action: () => dispatch({ type: 'ADVANCE_TUTORIAL' })
+        },
+        [GameStep.TUTORIAL_RESEARCH]: {
+            title: "PHASE 8: INNOVATION",
+            subtitle: "Tech R&D",
+            text: "Invest AGT into Research. Unlock advanced drilling, solar tech, and social reforms to solve complex colony problems.",
+            tasks: ["Access Research panel", "Select a technology upgrade"],
+            buttonText: "EVOLVE TECH",
+            action: () => dispatch({ type: 'ADVANCE_TUTORIAL' })
+        },
+        [GameStep.TUTORIAL_ERA]: {
+            title: "COMMAND: ASCENSION",
+            subtitle: "Progression",
+            text: "Achieve specific population and wealth milestones to ascend Eras. Each era unlocks superior technologies and global influence.",
+            tasks: ["Check Era requirements", "Prepair for the Growth Era"],
+            buttonText: "START MISSION",
+            action: () => dispatch({ type: 'ADVANCE_TUTORIAL' })
+        },
+        [GameStep.DEMO]: {
+            title: "SYSTEM: DEMO MODE",
+            subtitle: "Automated Overview",
+            text: "Demonstrating core functionality. Observe the automated deployment of infrastructure and production facilities. This sequence highlights the process of building and era progression.",
+            tasks: ["Observe road & power placement", "Watch automated Wash Plant setup", "Witness Era ascension"],
+            buttonText: "SKIP TO PLAY",
+            action: () => dispatch({ type: 'ADVANCE_TUTORIAL' })
         }
     }[step];
 
@@ -285,7 +338,7 @@ export const ConstructionModal: React.FC<{
                         <button
                             onClick={() => {
                                 if (gems >= 1) {
-                                    dispatch({ type: 'SPEED_UP_CONSTRUCTION', payload: { index: selectedTile } });
+                                    dispatch({ type: 'SPEED_UP_BUILDING', payload: { index: selectedTile } });
                                     playSfx('CONSTRUCT_SPEEDUP');
                                     onClose();
                                 } else {
@@ -360,3 +413,99 @@ export const UndergroundOverlay: React.FC<{
         </div>
     );
 }
+
+export const BuildingInspectorModal: React.FC<{
+    selectedTile: number | null;
+    grid: GameState['grid'];
+    dispatch: React.Dispatch<Action>;
+    onClose: () => void;
+    playSfx: (type: any) => void;
+}> = ({ selectedTile, grid, dispatch, onClose, playSfx }) => {
+    if (selectedTile === null || !grid[selectedTile]) return null;
+    const tile = grid[selectedTile];
+
+    // Only show if it's a building and NOT under construction (ConstructionModal handles that)
+    if (tile.buildingType === BuildingType.EMPTY || tile.isUnderConstruction) return null;
+
+    const def = BUILDINGS[tile.buildingType];
+    if (!def) return null;
+
+    const containerClass = "absolute bottom-32 sm:bottom-24 left-1/2 -translate-x-1/2 z-50 animate-in zoom-in-95 duration-200 w-64";
+    const cardClass = "bg-slate-900 border-2 border-blue-500 rounded-[4px] shadow-[4px_4px_0_0_rgba(0,0,0,0.5)] overflow-hidden";
+
+    return (
+        <div className={containerClass}>
+            <div className={cardClass}>
+                <div className="bg-blue-900/30 p-2 border-b-2 border-blue-500/50 flex items-center justify-between">
+                    <h3 className="font-black text-blue-400 text-[10px] uppercase tracking-widest font-['Rajdhani']">System Inspector</h3>
+                    <Info size={12} className="text-blue-500" />
+                </div>
+
+                <div className="p-3">
+                    <div className="flex items-start gap-3 mb-3">
+                        <div className="w-10 h-10 bg-slate-800 border-2 border-slate-700 flex items-center justify-center shrink-0">
+                            <div className="text-blue-400 font-bold text-xs">{def.name[0]}</div>
+                        </div>
+                        <div>
+                            <h2 className="text-sm font-black text-white uppercase leading-none mb-1 font-['Rajdhani']">{def.name}</h2>
+                            <p className="text-[9px] text-slate-400 leading-tight font-mono uppercase">{def.desc}</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                        <div className="bg-slate-950 p-1.5 border border-slate-800">
+                            <div className="flex items-center gap-1 text-[8px] text-slate-500 uppercase font-bold mb-1">
+                                <Zap size={8} /> Power
+                            </div>
+                            <div className="text-[10px] text-white font-mono">
+                                {def.power?.consumes ? `-${def.power.consumes}` : def.power?.produces ? `+${def.power.produces}` : '0'} /s
+                            </div>
+                        </div>
+                        <div className="bg-slate-950 p-1.5 border border-slate-800">
+                            <div className="flex items-center gap-1 text-[8px] text-slate-500 uppercase font-bold mb-1">
+                                <Droplets size={8} /> Water
+                            </div>
+                            <div className="text-[10px] text-white font-mono">
+                                {def.water?.consumes ? `-${def.water.consumes}` : def.water?.produces ? `+${def.water.produces}` : '0'} /s
+                            </div>
+                        </div>
+                        <div className="bg-slate-950 p-1.5 border border-slate-800">
+                            <div className="flex items-center gap-1 text-[8px] text-slate-500 uppercase font-bold mb-1">
+                                <Leaf size={8} /> Eco
+                            </div>
+                            <div className="text-[10px] text-white font-mono">
+                                {(def.pollution || 0) > 0 ? `-${def.pollution}` : (def.pollution || 0) < 0 ? `+${Math.abs(def.pollution || 0)}` : '0'} /s
+                            </div>
+                        </div>
+                        <div className="bg-slate-950 p-1.5 border border-slate-800">
+                            <div className="flex items-center gap-1 text-[8px] text-slate-500 uppercase font-bold mb-1">
+                                <RefreshCw size={8} /> Maint.
+                            </div>
+                            <div className="text-[10px] text-white font-mono">
+                                {def.maintenance || 0} AGT
+                            </div>
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={() => {
+                            dispatch({ type: 'BULLDOZE_TILE', payload: { index: selectedTile } });
+                            playSfx('BULLDOZE');
+                            onClose();
+                        }}
+                        className="w-full bg-rose-900/50 hover:bg-rose-600 text-rose-500 hover:text-white py-2 px-2 border-2 border-rose-900/50 hover:border-rose-400 transition-all font-black text-[10px] flex items-center justify-center gap-1.5 uppercase tracking-wider mb-2"
+                    >
+                        <Trash2 size={12} /> Decommission
+                    </button>
+
+                    <button
+                        onClick={onClose}
+                        className="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-[9px] text-slate-400 hover:text-white uppercase font-bold tracking-widest transition-colors border border-slate-700"
+                    >
+                        Dismiss
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};

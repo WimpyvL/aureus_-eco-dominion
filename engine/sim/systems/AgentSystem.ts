@@ -105,9 +105,11 @@ export class AgentSystem extends BaseSimSystem {
         const digJob = state.jobs.find(j =>
             j.type === 'DIG' &&
             (!j.assignedAgentId || j.assignedAgentId === agent.id) &&
-            Math.random() < 0.8 // Random chance to pick up digging (autonomy placeholder)
+            Math.random() < 0.8 // Random chance to pick up digging
         );
         if (digJob) {
+            // CLAIM JOB
+            digJob.assignedAgentId = agent.id;
             this.goTo(agent, digJob.targetTileId, digJob.layer || 0, digJob.id, state.grid);
             return;
         }
@@ -117,6 +119,8 @@ export class AgentSystem extends BaseSimSystem {
             (!j.assignedAgentId || j.assignedAgentId === agent.id)
         );
         if (buildJob) {
+            // CLAIM JOB
+            buildJob.assignedAgentId = agent.id;
             this.goTo(agent, buildJob.targetTileId, buildJob.layer || 0, buildJob.id, state.grid);
             return;
         }
@@ -145,7 +149,7 @@ export class AgentSystem extends BaseSimSystem {
                 break;
 
             case 'WORKING':
-                this.performWork(agent, state);
+                this.performWork(agent, state, dt);
                 break;
         }
     }
@@ -194,7 +198,7 @@ export class AgentSystem extends BaseSimSystem {
         }
     }
 
-    private performWork(agent: Agent, state: GameState): void {
+    private performWork(agent: Agent, state: GameState, dt: number): void {
         const jobIdx = state.jobs.findIndex(j => j.id === agent.currentJobId);
         if (jobIdx === -1) {
             this.finishActivity(agent);

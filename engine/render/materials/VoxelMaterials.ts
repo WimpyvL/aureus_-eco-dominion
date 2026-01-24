@@ -128,7 +128,7 @@ export const matMaster = new THREE.MeshStandardMaterial({
   roughness: 1.0,
   vertexColors: true, // ENABLED for merged geometry
   side: THREE.DoubleSide, // Fixes invisible faces if winding is off
-  clippingPlanes: [subterraneanClippingPlane],
+  // clippingPlanes: [subterraneanClippingPlane],
   clipShadows: true
 });
 

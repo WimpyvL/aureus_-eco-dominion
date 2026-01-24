@@ -40,13 +40,37 @@ export class JobGenerationSystem extends BaseSimSystem {
                 }
 
                 if (!exists) {
-                    // Create Job
+                    // Check if it's a sub-building (underground)
+                    let layer: number | undefined = undefined;
+                    // If tile has subBuildings, we need to know WHICH one is under construction.
+                    // Simplified: If head index is set, we can look at the tile.
+                    // But wait, tile.subBuildings is a map.
+                    // If isUnderConstruction is true, check if any subBuilding is also under construction?
+                    // The tile.isUnderConstruction flag is shared.
+                    // We need a smart way to detect layer.
+                    // If ViewMode is underground? No, JobSystem runs independently.
+
+                    if (tile.subBuildings) {
+                        // Find the layer that matches the construction state?
+                        // Actually ConstructionSystem updates tile.isUnderConstruction.
+                        // But if we have multiple layers?
+                        // For now, heuristic: default to surface layer (undefined/0).
+                        // If we want to support underground building jobs, we need to store 'constructionLayer' on the tile
+                        // OR infer from `structureHeadIndex`.
+                    }
+
+                    // IMPROVEMENT: If the tile is solid earth at layer 0 implies nothing there, but we are constructing? 
+                    // Actually, let's look at `subBuildings`.
+                    // If tile.buildingType is EMPTY but `subBuildings` has entries, assume underground job?
+                    // No, `placeSubBuilding` sets `buildingType` to EMPTY usually? No, it leaves it alone.
+
                     const job: Job = {
                         id: jobId,
                         type: 'BUILD',
                         targetTileId: tile.id,
                         priority: 90,
-                        assignedAgentId: null
+                        assignedAgentId: null,
+                        layer: layer // Explicitly include layer if found (currently logic defaults to undefined=0)
                     };
                     jobs.push(job);
                 }

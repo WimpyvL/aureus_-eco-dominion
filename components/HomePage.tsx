@@ -1,14 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
-import { Play, Leaf, Mountain, Users, Hexagon, Volume2, VolumeX, Info, Terminal } from 'lucide-react';
+import { Play, Leaf, Mountain, Users, Hexagon, Volume2, VolumeX, Info, Terminal, Radio } from 'lucide-react';
 
 interface HomePageProps {
     onStartGame: () => void;
+    onStartDemo: () => void;
     onContinueGame: () => void;
     hasSave: boolean;
 }
 
-export const HomePage: React.FC<HomePageProps> = ({ onStartGame, onContinueGame, hasSave }) => {
+export const HomePage: React.FC<HomePageProps> = ({ onStartGame, onStartDemo, onContinueGame, hasSave }) => {
     const [isLoaded, setIsLoaded] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
 
@@ -100,6 +101,17 @@ export const HomePage: React.FC<HomePageProps> = ({ onStartGame, onContinueGame,
                         <div className="text-left">
                             <span className="block text-4xl font-black text-black italic tracking-tighter leading-none mb-0.5">INITIALIZE</span>
                             <span className="block text-[10px] font-black text-black/60 tracking-[0.3em] uppercase leading-none">New Mission</span>
+                        </div>
+                    </button>
+
+                    <button
+                        onClick={onStartDemo}
+                        className="group relative px-6 py-6 bg-amber-500 border-2 border-black shadow-[6px_6px_0_#000] hover:translate-y-[-2px] hover:shadow-[8px_8px_0_#000] active:translate-y-[4px] active:shadow-none transition-all flex items-center gap-4"
+                    >
+                        <Radio size={24} className="text-black/80 animate-pulse" />
+                        <div className="text-left">
+                            <span className="block text-xl font-black text-black italic tracking-tighter leading-none mb-0.5 uppercase">Play Demo</span>
+                            <span className="block text-[8px] font-black text-black/60 tracking-[0.3em] uppercase leading-none">Auto-Sim</span>
                         </div>
                     </button>
                 </div>
