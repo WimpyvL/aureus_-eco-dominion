@@ -5,7 +5,7 @@
 import { GridTile, BuildingType } from '../../../types';
 import { GRID_SIZE } from '../../utils/GameUtils';
 import { BinaryHeap } from '../../utils/BinaryHeap';
-export { GRID_SIZE };
+// GRID_SIZE is imported from GameUtils
 
 // Costs for different terrains
 // Costs for different terrains

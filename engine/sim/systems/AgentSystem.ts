@@ -1,5 +1,5 @@
 /**
- * Simple Agent System
+ * Simple Agent System (FORCE RELOAD v1)
  * A streamlined, easy-to-read Finite State Machine for colony agents.
  * This version uses Synchronous Pathfinding for immediate response.
  */
@@ -7,10 +7,11 @@
 import { BaseSimSystem } from '../Simulation';
 import { FixedContext } from '../../kernel';
 import { Agent, GameState, GridTile, BuildingType, SfxType, PathStep } from '../../../types';
-import { GRID_SIZE, findPath3D } from '../algorithms/Pathfinding';
+import { findPath3D } from '../algorithms/Pathfinding';
 import { JobSystem, PathfindResult } from '../../jobs';
 import { ConstructionSystem } from './ConstructionSystem';
 import { PathPool } from '../../utils/PathPool';
+import { GRID_SIZE, HARVESTABLE_ROCKS, HARVESTABLE_TREES } from '../../utils/GameUtils';
 
 // Configuration
 const CONFIG = {
@@ -50,17 +51,15 @@ export class AgentSystem extends BaseSimSystem {
             this.updateNeeds(agent, ctx.fixedDt);
 
             // 2. Decide what to do (AI)
-            // We think if we are IDLE or if it's been a second.
-            // BUGFIX: Previously IDLE agents thought EVERY TICK. If pathfinding failed, 
-            // 50 agents would run 5000 iterations each every frame = Freeze.
-            if (this.tickCounter % CONFIG.THINK_INTERVAL === 0) {
+            // Faster thinking for better responsiveness
+            if (agent.state === 'IDLE' || this.tickCounter % CONFIG.THINK_INTERVAL === 0) {
                 this.updateAI(agent, state);
             }
 
             // 3. Act based on current state
             this.executeState(agent, state, ctx.fixedDt);
 
-            // 4. Update Visuals (must match logic position for the renderer)
+            // 4. Update Visuals
             agent.visualX = agent.x;
             agent.visualZ = agent.z;
         }
@@ -75,12 +74,11 @@ export class AgentSystem extends BaseSimSystem {
 
     private updateAI(agent: Agent, state: GameState): void {
         // Don't interrupt persistent actions (work/eat/sleep) until they are done
+        // Unless it's a MOVING state to a job that was stolen or cancelled (handled in executeState/move)
         if (['SLEEPING', 'EATING', 'WORKING'].includes(agent.state)) return;
 
         // --- PRIORITY 1: Manual Commands ---
         if (agent.currentJobId?.startsWith('manual_')) {
-            // If we are MOVING to a manual target, keep going.
-            // If we are already there and IDLE, it means we finished.
             if (agent.state === 'MOVING') return;
         }
 
@@ -100,43 +98,22 @@ export class AgentSystem extends BaseSimSystem {
             }
         }
 
-        // --- PRIORITY 3: Work (Digging & Construction) ---
-        // Digging
-        const digJob = state.jobs.find(j =>
-            j.type === 'DIG' &&
-            (!j.assignedAgentId || j.assignedAgentId === agent.id) &&
-            Math.random() < 0.8 // Random chance to pick up digging
-        );
-        if (digJob) {
-            // CLAIM JOB
-            digJob.assignedAgentId = agent.id;
-            this.goTo(agent, digJob.targetTileId, digJob.layer || 0, digJob.id, state.grid);
-            return;
-        }
+        // --- PRIORITY 3: Work (Construction, Digging, Mining) ---
+        // Find highest priority available job
+        // Sorting jobs by priority (descending)
+        const availableJob = state.jobs
+            .filter(j => !j.assignedAgentId || j.assignedAgentId === agent.id)
+            .sort((a, b) => b.priority - a.priority)[0];
 
-        const buildJob = state.jobs.find(j =>
-            j.type === 'BUILD' &&
-            (!j.assignedAgentId || j.assignedAgentId === agent.id)
-        );
-        if (buildJob) {
+        if (availableJob) {
             // CLAIM JOB
-            buildJob.assignedAgentId = agent.id;
-            this.goTo(agent, buildJob.targetTileId, buildJob.layer || 0, buildJob.id, state.grid);
-            return;
-        }
-
-        const mineJob = state.jobs.find(j =>
-            j.type === 'MINE' &&
-            (!j.assignedAgentId || j.assignedAgentId === agent.id)
-        );
-        if (mineJob) {
-            mineJob.assignedAgentId = agent.id;
-            this.goTo(agent, mineJob.targetTileId, mineJob.layer || 0, mineJob.id, state.grid);
+            availableJob.assignedAgentId = agent.id;
+            this.goTo(agent, availableJob.targetTileId, availableJob.layer || 0, availableJob.id, state.grid);
             return;
         }
 
         // --- PRIORITY 4: Idleness / Wander ---
-        if (agent.state === 'IDLE' && Math.random() < 0.3) {
+        if (agent.state === 'IDLE' && Math.random() < 0.2) {
             const wanderTarget = this.getRandomNearby(agent);
             this.goTo(agent, wanderTarget, agent.layer || 0, 'sys_wander', state.grid);
         }
@@ -145,17 +122,17 @@ export class AgentSystem extends BaseSimSystem {
     private executeState(agent: Agent, state: GameState, dt: number): void {
         switch (agent.state) {
             case 'MOVING':
-                this.moveAlongPath(agent, dt);
+                this.moveAlongPath(agent, state, dt);
                 break;
 
             case 'SLEEPING':
                 agent.energy = Math.min(100, agent.energy + 15 * dt);
-                if (agent.energy >= CONFIG.NEED_SATISFIED) this.finishActivity(agent);
+                if (agent.energy >= CONFIG.NEED_SATISFIED) this.finishActivity(agent, state);
                 break;
 
             case 'EATING':
                 agent.hunger = Math.min(100, agent.hunger + 20 * dt);
-                if (agent.hunger >= CONFIG.NEED_SATISFIED) this.finishActivity(agent);
+                if (agent.hunger >= CONFIG.NEED_SATISFIED) this.finishActivity(agent, state);
                 break;
 
             case 'WORKING':
@@ -164,7 +141,7 @@ export class AgentSystem extends BaseSimSystem {
         }
     }
 
-    private moveAlongPath(agent: Agent, dt: number): void {
+    private moveAlongPath(agent: Agent, state: GameState, dt: number): void {
         if (!agent.path || agent.path.length === 0) {
             // Arrival ceremony: Snap to grid coordinate
             agent.x = Math.round(agent.x);
@@ -173,8 +150,12 @@ export class AgentSystem extends BaseSimSystem {
             // Transition to the actual activity we traveled for
             if (agent.currentJobId === 'sys_sleep') agent.state = 'SLEEPING';
             else if (agent.currentJobId === 'sys_eat') agent.state = 'EATING';
-            else if (agent.currentJobId?.startsWith('build_') || agent.currentJobId?.startsWith('dig_') || agent.currentJobId?.includes('mine')) agent.state = 'WORKING';
-            else this.finishActivity(agent); // Wander or manual move finished
+            else if (agent.currentJobId?.includes('build_') || agent.currentJobId?.includes('dig_') || agent.currentJobId?.includes('mine') || agent.currentJobId?.includes('rehab')) {
+                agent.state = 'WORKING';
+            }
+            else {
+                this.finishActivity(agent, state); // Wander or manual move finished
+            }
             return;
         }
 
@@ -211,7 +192,7 @@ export class AgentSystem extends BaseSimSystem {
     private performWork(agent: Agent, state: GameState, dt: number): void {
         const jobIdx = state.jobs.findIndex(j => j.id === agent.currentJobId);
         if (jobIdx === -1) {
-            this.finishActivity(agent);
+            this.finishActivity(agent, state);
             return;
         }
 
@@ -255,7 +236,7 @@ export class AgentSystem extends BaseSimSystem {
                 }
 
                 state.jobs.splice(jobIdx, 1);
-                this.finishActivity(agent);
+                this.finishActivity(agent, state);
             }
 
         } else if (tile.isUnderConstruction) {
@@ -265,49 +246,70 @@ export class AgentSystem extends BaseSimSystem {
 
             if (finished) {
                 state.jobs.splice(jobIdx, 1);
-                this.finishActivity(agent);
+                this.finishActivity(agent, state);
             }
         } else if (job.type === 'MINE') {
-            // Instant mine for now
-            state.resources.minerals += 25 * (1 + agent.skills.mining / 5);
-            state.pendingEffects.push({ type: 'FX', fxType: 'MINING', index: tile.id });
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.MINING_HIT });
+            if (job.layer !== undefined && job.layer < 0) {
+                // Underground Mining
+                state.resources.minerals += 25 * (1 + agent.skills.mining / 5);
+                const strata = tile.underground?.[job.layer];
+                if (strata) {
+                    strata.excavated = true;
+                    state.pendingEffects.push({ type: 'GRID_UPDATE', updates: [tile] });
+                }
+                state.pendingEffects.push({ type: 'FX', fxType: 'MINING', index: tile.id });
+                state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.MINING_HIT });
+            } else {
+                // Surface Mining/Harvesting
+                const yieldAmt = 20 * (1 + agent.skills.mining / 5);
+                const foliage = tile.foliage as any;
+
+                if (foliage === 'GOLD_VEIN') {
+                    state.resources.minerals += yieldAmt;
+                    state.pendingEffects.push({ type: 'FX', fxType: 'MINING', index: tile.id });
+                    state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.MINING_HIT });
+                } else if (HARVESTABLE_ROCKS.includes(foliage)) {
+                    state.resources.stone += yieldAmt;
+                    state.pendingEffects.push({ type: 'FX', fxType: 'MINING', index: tile.id });
+                    state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.MINING_HIT });
+                } else if (HARVESTABLE_TREES.includes(foliage)) {
+                    state.resources.wood += yieldAmt;
+                    state.pendingEffects.push({ type: 'FX', fxType: 'FARM', index: tile.id });
+                    state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK }); // Temporary sound for tree harvest
+                }
+
+                // Surface depletion
+                if (Math.random() < 0.25) {
+                    tile.foliage = 'NONE' as any;
+                    tile.markedForHarvest = false;
+                    state.pendingEffects.push({ type: 'GRID_UPDATE', updates: [tile] });
+                }
+            }
 
             // Skill XP
             agent.skills.mining += 0.5;
 
-            // If underground, we excavate the strata too
-            if (job.layer !== undefined && job.layer < 0) {
-                const strata = tile.underground?.[job.layer];
-                if (strata) {
-                    strata.excavated = true;
-                    // Reveal neighbors
-                    state.pendingEffects.push({ type: 'GRID_UPDATE', updates: [tile] });
-                }
-            } else {
-                // Surface depletion
-                if (tile.foliage === 'GOLD_VEIN' && Math.random() < 0.2) {
-                    tile.foliage = 'NONE';
-                    state.pendingEffects.push({ type: 'GRID_UPDATE', updates: [tile] });
-                }
-            }
-
             state.jobs.splice(jobIdx, 1);
-            this.finishActivity(agent);
+            this.finishActivity(agent, state);
         }
         else {
             // Already finished or site removed
             state.jobs.splice(jobIdx, 1);
-            this.finishActivity(agent);
+            this.finishActivity(agent, state);
         }
     }
 
-    private finishActivity(agent: Agent): void {
+    private finishActivity(agent: Agent, state: GameState): void {
         agent.state = 'IDLE';
         agent.currentJobId = null;
         agent.targetTileId = null;
-        PathPool.release(agent.path);
-        agent.path = null;
+        if (agent.path) {
+            PathPool.release(agent.path);
+            agent.path = null;
+        }
+
+        // Immediately try to find new work so we don't wait for the next tick interval
+        this.updateAI(agent, state);
     }
 
     private goTo(agent: Agent, targetIdx: number, targetLayer: number, jobId: string, grid: GridTile[]): void {

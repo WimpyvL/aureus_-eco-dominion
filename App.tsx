@@ -155,6 +155,7 @@ const App: React.FC = () => {
 
     // UI-only state (not game logic)
     const [sidebarOpen, setSidebarOpen] = useState<'NONE' | 'OPS' | 'SHOP' | 'TRADE' | 'CREW' | 'TECH'>('NONE');
+    const [activeHUDBlock, setActiveHUDBlock] = useState<string | null>(null);
     const [selectedTileForAction, setSelectedTileForAction] = useState<number | null>(null);
     const [isIntroAnim, setIsIntroAnim] = useState(false);
     const [pendingPlacementIndex, setPendingPlacementIndex] = useState<number | null>(null);
@@ -260,10 +261,20 @@ const App: React.FC = () => {
     }, [showHomePage]);
 
     // Sidebar handler
-    const handleSidebarOpen = useCallback((mode: 'NONE' | 'OPS' | 'SHOP') => {
-        if (mode !== 'NONE') playSfx(SfxType.UI_OPEN);
+    const handleSidebarOpen = useCallback((mode: 'NONE' | 'OPS' | 'SHOP' | 'TRADE' | 'CREW' | 'TECH') => {
+        if (mode !== 'NONE') {
+            playSfx(SfxType.UI_OPEN);
+            setActiveHUDBlock(null); // Close HUD when sidebar opens
+        }
         setSidebarOpen(mode);
     }, [playSfx]);
+
+    const handleHUDToggle = useCallback((id: string | null) => {
+        if (id) {
+            setSidebarOpen('NONE'); // Close sidebars when HUD opens
+        }
+        setActiveHUDBlock(id);
+    }, []);
 
     // Start game handlers
     const handleStartGame = useCallback(() => {
@@ -368,6 +379,12 @@ const App: React.FC = () => {
                 }
                 playSfx(SfxType.UI_CLICK);
                 break;
+            case 'UPGRADE_BUILDING':
+                if (world['upgradeBuilding']) {
+                    world.upgradeBuilding(action.payload.index);
+                }
+                playSfx(SfxType.UI_CLICK);
+                break;
             default:
                 console.warn(`Unhandled action: ${action.type}`);
         }
@@ -466,6 +483,8 @@ const App: React.FC = () => {
                         population={state.agents.filter(a => a.type !== 'ILLEGAL_MINER').length}
                         currentEra={state.currentEra}
                         state={state}
+                        activeBlock={activeHUDBlock}
+                        onToggleBlock={handleHUDToggle}
                     />
                     <Minimap
                         grid={state.grid}
@@ -585,6 +604,9 @@ const App: React.FC = () => {
                     <BuildingInspectorModal
                         selectedTile={selectedTileForAction}
                         grid={state.grid}
+                        unlockedEras={state.unlockedEras}
+                        resources={state.resources}
+                        cheatsEnabled={state.cheatsEnabled}
                         dispatch={dispatch}
                         onClose={() => setSelectedTileForAction(null)}
                         playSfx={playSfx}

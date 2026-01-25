@@ -74,6 +74,7 @@ export interface EraDef {
     tutorialComplete?: boolean;
   };
   color: string;
+  milestones?: { id: string; name: string; target: number }[];
 }
 
 export type AgentRole = 'WORKER' | 'MINER' | 'BOTANIST' | 'ENGINEER' | 'SECURITY' | 'ILLEGAL_MINER';
@@ -267,6 +268,7 @@ export interface GridTile {
   waterStatus?: 'CONNECTED' | 'DISCONNECTED';
   powerStatus?: 'CONNECTED' | 'DISCONNECTED';
   rehabProgress?: number; // 0-100
+  markedForHarvest?: boolean;
   explored?: boolean;
 
   // Dungeon Keeper System
@@ -282,6 +284,8 @@ export interface GameResources {
   agt: number;
   minerals: number;
   gems: number;
+  wood: number;
+  stone: number;
   eco: number;
   trust: number;
   income: number;      // New: Pre-calculated income/s
@@ -298,6 +302,21 @@ export interface WaterConfig {
   consumes?: number;  // Water units required
 }
 
+export interface BuildingUpgrade {
+  level: number;
+  name: string;
+  description: string;
+  statsDiff: string; // Text description of changes
+  costs?: Partial<Record<keyof GameResources, number>>; // Upgrade cost
+  // Overrides if defined
+  production?: number;
+  maintenance?: number;
+  pollution?: number;
+  power?: PowerConfig;
+  water?: WaterConfig;
+  era: Era; // Required Era
+}
+
 export interface BuildingDef {
   type: BuildingType;
   name: string;
@@ -312,10 +331,12 @@ export interface BuildingDef {
   maintenance: number;
   pollution: number;
   production?: number;
-  productionType?: 'MINERALS' | 'AGT' | 'ECO' | 'TRUST' | 'GEMS';
+  productionType?: 'MINERALS' | 'AGT' | 'ECO' | 'TRUST' | 'GEMS' | 'WOOD' | 'STONE';
+  costs?: Partial<Record<keyof GameResources, number>>;
   era: Era;
   power?: PowerConfig;
   water?: WaterConfig;
+  upgrades?: BuildingUpgrade[];
 }
 
 export interface LogisticsState {
@@ -415,7 +436,7 @@ export enum SfxType {
 
 export type GameDiff =
   | { type: 'GRID_UPDATE', updates: GridTile[] }
-  | { type: 'FX', fxType: 'MINING' | 'THEFT' | 'ECO_REHAB' | 'DEATH' | 'SMOKE' | 'DUST', index: number };
+  | { type: 'FX', fxType: 'MINING' | 'THEFT' | 'ECO_REHAB' | 'DEATH' | 'SMOKE' | 'DUST' | 'FARM', index: number };
 
 export type SimulationEffect =
   | GameDiff
@@ -488,7 +509,7 @@ export interface GameState {
 
 export interface GameCommand {
   id: string; // Unique ID to prevent double execution
-  type: 'PLACE_BUILDING' | 'PLACE_SUB_BUILDING' | 'BULLDOZE' | 'BULLDOZE_SUB' | 'SPEED_UP' | 'REHABILITATE';
+  type: 'PLACE_BUILDING' | 'PLACE_SUB_BUILDING' | 'BULLDOZE' | 'BULLDOZE_SUB' | 'SPEED_UP' | 'REHABILITATE' | 'UPGRADE_BUILDING';
   payload: any;
 }
 
@@ -539,6 +560,7 @@ export type Action =
   | { type: 'BULLDOZE_TILE', payload: { index: number } }
   | { type: 'SPEED_UP_BUILDING', payload: { index: number } }
   | { type: 'REHABILITATE_TILE', payload: { index: number } }
+  | { type: 'UPGRADE_BUILDING', payload: { index: number } }
   | { type: 'ADVANCE_TUTORIAL' }
   | { type: 'SKIP_TUTORIAL' }
   | { type: 'RESET_GAME' }

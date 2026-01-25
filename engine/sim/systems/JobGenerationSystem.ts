@@ -1,14 +1,15 @@
 
 import { BaseSimSystem } from '../Simulation';
 import { FixedContext } from '../../kernel';
-import { GameState, Job, GridTile, BuildingType } from '../../../types';
+import { GameState, Job, GridTile } from '../../../types';
+import { isHarvestable } from '../../utils/GameUtils';
 
 export class JobGenerationSystem extends BaseSimSystem {
     readonly id = 'job_generation';
     readonly priority = 10; // Run early to ensure work is available
 
     private lastRunTime = 0;
-    private readonly RUN_INTERVAL = 0.5; // Run every 0.5 seconds
+    private readonly RUN_INTERVAL = 0.1; // Run every 0.1 seconds
 
     tick(ctx: FixedContext, state: GameState): void {
         const grid = state.grid;
@@ -26,9 +27,11 @@ export class JobGenerationSystem extends BaseSimSystem {
         for (let i = 0; i < grid.length; i++) {
             const tile = grid[i];
 
-            // 1. GENERATE CONSTRUCTION JOBS
+            // 1. GENERATE CONSTRUCTION JOBS (Allow swarming with up to 3 jobs per building)
             if (tile.isUnderConstruction && (tile.structureHeadIndex === undefined || tile.id === tile.structureHeadIndex)) {
-                this.ensureJob(jobs, `build_${tile.id}`, 'BUILD', tile.id, 90, 0);
+                for (let j = 0; j < 3; j++) {
+                    this.ensureJob(jobs, `build_${tile.id}_${j}`, 'BUILD', tile.id, 90, 0);
+                }
             }
 
             // 2. GENERATE DIGGING JOBS
@@ -43,7 +46,10 @@ export class JobGenerationSystem extends BaseSimSystem {
             }
 
             // 3. GENERATE SURFACE MINING JOBS
-            if (tile.foliage === 'GOLD_VEIN') {
+            const isGold = tile.foliage === 'GOLD_VEIN';
+            const canHarvest = isHarvestable(tile.foliage);
+
+            if (isGold || (canHarvest && tile.markedForHarvest)) {
                 this.ensureJob(jobs, `mine_surf_${tile.id}`, 'MINE', tile.id, 70, 0);
             }
 
@@ -89,7 +95,9 @@ export class JobGenerationSystem extends BaseSimSystem {
                 if (!tile.digState || (tile.digState[job.layer || 0] !== 1 && tile.digState[job.layer || 0] !== 4)) valid = false;
             } else if (job.type === 'MINE') {
                 if (job.layer === 0 || job.layer === undefined) {
-                    if (tile.foliage !== 'GOLD_VEIN') valid = false;
+                    if (tile.foliage !== 'GOLD_VEIN' && !isHarvestable(tile.foliage)) valid = false;
+                    // If it's a regular harvestable foliage, it MUST be marked for harvest to stay a job
+                    if (tile.foliage !== 'GOLD_VEIN' && !tile.markedForHarvest) valid = false;
                 } else {
                     const strata = tile.underground?.[job.layer];
                     if (!strata || !strata.oreType || strata.excavated) valid = false;

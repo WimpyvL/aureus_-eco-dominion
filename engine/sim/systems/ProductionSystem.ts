@@ -25,6 +25,8 @@ export class ProductionSystem extends BaseSimSystem {
         if (!grid) return;
 
         let mineralProd = 0;
+        let woodProd = 0;
+        let stoneProd = 0;
         let ecoChange = 0;
         let totalMaintenance = 0;
 
@@ -51,23 +53,33 @@ export class ProductionSystem extends BaseSimSystem {
             const def = BUILDINGS[tile.buildingType];
             if (!def) continue;
 
+            // <UPGRADE LOGIC>
+            let currentDef: any = def;
+            if (def.upgrades && (tile.level || 1) > 1) {
+                const upgrade = def.upgrades.find(u => u.level === tile.level);
+                if (upgrade) {
+                    currentDef = { ...def, ...upgrade };
+                }
+            }
+            // </UPGRADE LOGIC>
+
             // Maintenance (Cost per second)
-            totalMaintenance += def.maintenance * modifiers.upkeep;
+            totalMaintenance += (currentDef.maintenance || 0) * modifiers.upkeep;
 
             // Pollution (Eco impact)
-            ecoChange += (def.pollution > 0 ? (def.pollution * 0.05 / 10) : (def.pollution / 10));
+            ecoChange += (currentDef.pollution > 0 ? (currentDef.pollution * 0.05 / 10) : (currentDef.pollution / 10));
 
             // Power/Water efficiency
             let powerEfficiency = 1.0;
             let waterEfficiency = 1.0;
 
             // Buildings with power consumption operate at 25% if grid has deficit
-            if (def.power?.consumes && state.powerGrid?.deficit > 0) {
+            if (currentDef.power?.consumes && state.powerGrid?.deficit > 0) {
                 powerEfficiency = 0.25;
             }
 
             // Buildings with water consumption depend on being connected to pipes
-            if (def.water?.consumes) {
+            if (currentDef.water?.consumes) {
                 if (tile.waterStatus !== 'CONNECTED') {
                     waterEfficiency = 0.1; // Virtually idle without water connection
                 } else if (state.waterNetwork?.deficit > 0) {
@@ -78,10 +90,14 @@ export class ProductionSystem extends BaseSimSystem {
             const utilityEfficiency = powerEfficiency * waterEfficiency;
 
             // Production
-            if (def.productionType === 'MINERALS') {
-                mineralProd += (def.production || 0) * modifiers.production * utilityEfficiency * 0.05;
-            } else if (def.productionType === 'AGT') {
-                totalIncome += (def.production || 0) * ecoMult * trustMult * utilityEfficiency;
+            if (currentDef.productionType === 'MINERALS') {
+                mineralProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05;
+            } else if (currentDef.productionType === 'WOOD') {
+                woodProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05;
+            } else if (currentDef.productionType === 'STONE') {
+                stoneProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05;
+            } else if (currentDef.productionType === 'AGT') {
+                totalIncome += (currentDef.production || 0) * ecoMult * trustMult * utilityEfficiency;
             }
         }
 
@@ -89,6 +105,8 @@ export class ProductionSystem extends BaseSimSystem {
         state.resources.agt += (totalIncome - totalMaintenance) * dt;
         state.resources.eco = Math.max(0, Math.min(100, state.resources.eco - (ecoChange / 8) * dt));
         state.resources.minerals += mineralProd * dt;
+        state.resources.wood += woodProd * dt;
+        state.resources.stone += stoneProd * dt;
 
         // Cache summary for UI
         state.resources.income = totalIncome;

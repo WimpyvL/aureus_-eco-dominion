@@ -417,10 +417,13 @@ export const UndergroundOverlay: React.FC<{
 export const BuildingInspectorModal: React.FC<{
     selectedTile: number | null;
     grid: GameState['grid'];
+    unlockedEras: GameState['unlockedEras'];
+    resources: GameState['resources'];
+    cheatsEnabled: boolean;
     dispatch: React.Dispatch<Action>;
     onClose: () => void;
     playSfx: (type: any) => void;
-}> = ({ selectedTile, grid, dispatch, onClose, playSfx }) => {
+}> = ({ selectedTile, grid, unlockedEras, resources, cheatsEnabled, dispatch, onClose, playSfx }) => {
     if (selectedTile === null || !grid[selectedTile]) return null;
     const tile = grid[selectedTile];
 
@@ -430,6 +433,39 @@ export const BuildingInspectorModal: React.FC<{
     const def = BUILDINGS[tile.buildingType];
     if (!def) return null;
 
+    // Resolve current stats based on level
+    let currentDef: any = def;
+    if (def.upgrades && (tile.level || 1) > 1) {
+        const upgrade = def.upgrades.find(u => u.level === tile.level);
+        if (upgrade) {
+            currentDef = { ...def, ...upgrade };
+        }
+    }
+
+    // Check for next upgrade
+    const nextLevel = (tile.level || 1) + 1;
+    const nextUpgrade = def.upgrades?.find(u => u.level === nextLevel);
+    let canUpgrade = false;
+    let upgradeLocked = false;
+    let missingUpgradeResources: string[] = [];
+
+    if (nextUpgrade) {
+        const eraUnlocked = cheatsEnabled || unlockedEras.includes(nextUpgrade.era);
+        if (!eraUnlocked) upgradeLocked = true;
+
+        canUpgrade = true; // Assume true, check costs
+        if (!cheatsEnabled && nextUpgrade.costs) {
+            Object.entries(nextUpgrade.costs).forEach(([res, amt]) => {
+                const resourceKey = res as keyof typeof resources;
+                if (amt && (resources[resourceKey] as number) < amt) {
+                    canUpgrade = false;
+                    missingUpgradeResources.push(`${amt} ${res.toUpperCase()}`);
+                }
+            });
+        }
+        if (upgradeLocked) canUpgrade = false;
+    }
+
     const containerClass = "absolute bottom-32 sm:bottom-24 left-1/2 -translate-x-1/2 z-50 animate-in zoom-in-95 duration-200 w-64";
     const cardClass = "bg-slate-900 border-2 border-blue-500 rounded-[4px] shadow-[4px_4px_0_0_rgba(0,0,0,0.5)] overflow-hidden";
 
@@ -438,17 +474,26 @@ export const BuildingInspectorModal: React.FC<{
             <div className={cardClass}>
                 <div className="bg-blue-900/30 p-2 border-b-2 border-blue-500/50 flex items-center justify-between">
                     <h3 className="font-black text-blue-400 text-[10px] uppercase tracking-widest font-['Rajdhani']">System Inspector</h3>
-                    <Info size={12} className="text-blue-500" />
+                    {/* Level Indicator */}
+                    <div className="flex items-center gap-1 bg-blue-950 border border-blue-700 px-1.5 rounded-[2px]">
+                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></div>
+                        <span className="text-[9px] font-mono text-blue-200 font-bold">LVL {tile.level || 1}</span>
+                    </div>
                 </div>
 
                 <div className="p-3">
                     <div className="flex items-start gap-3 mb-3">
-                        <div className="w-10 h-10 bg-slate-800 border-2 border-slate-700 flex items-center justify-center shrink-0">
-                            <div className="text-blue-400 font-bold text-xs">{def.name[0]}</div>
+                        <div className="w-10 h-10 bg-slate-800 border-2 border-slate-700 flex items-center justify-center shrink-0 relative">
+                            <div className="text-blue-400 font-bold text-xs">{currentDef.name[0]}</div>
+                            {(tile.level || 1) > 1 && (
+                                <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-slate-900 flex items-center justify-center text-[9px] font-black border border-slate-900 rounded-full shadow-md z-10">
+                                    {tile.level}
+                                </div>
+                            )}
                         </div>
                         <div>
-                            <h2 className="text-sm font-black text-white uppercase leading-none mb-1 font-['Rajdhani']">{def.name}</h2>
-                            <p className="text-[9px] text-slate-400 leading-tight font-mono uppercase">{def.desc}</p>
+                            <h2 className="text-sm font-black text-white uppercase leading-none mb-1 font-['Rajdhani']">{currentDef.name}</h2>
+                            <p className="text-[9px] text-slate-400 leading-tight font-mono uppercase">{currentDef.description || maxDesc(currentDef.desc)}</p>
                         </div>
                     </div>
 
@@ -458,7 +503,7 @@ export const BuildingInspectorModal: React.FC<{
                                 <Zap size={8} /> Power
                             </div>
                             <div className="text-[10px] text-white font-mono">
-                                {def.power?.consumes ? `-${def.power.consumes}` : def.power?.produces ? `+${def.power.produces}` : '0'} /s
+                                {currentDef.power?.consumes ? `-${currentDef.power.consumes}` : currentDef.power?.produces ? `+${currentDef.power.produces}` : '0'} /s
                             </div>
                         </div>
                         <div className="bg-slate-950 p-1.5 border border-slate-800">
@@ -466,7 +511,7 @@ export const BuildingInspectorModal: React.FC<{
                                 <Droplets size={8} /> Water
                             </div>
                             <div className="text-[10px] text-white font-mono">
-                                {def.water?.consumes ? `-${def.water.consumes}` : def.water?.produces ? `+${def.water.produces}` : '0'} /s
+                                {currentDef.water?.consumes ? `-${currentDef.water.consumes}` : currentDef.water?.produces ? `+${currentDef.water.produces}` : '0'} /s
                             </div>
                         </div>
                         <div className="bg-slate-950 p-1.5 border border-slate-800">
@@ -474,7 +519,7 @@ export const BuildingInspectorModal: React.FC<{
                                 <Leaf size={8} /> Eco
                             </div>
                             <div className="text-[10px] text-white font-mono">
-                                {(def.pollution || 0) > 0 ? `-${def.pollution}` : (def.pollution || 0) < 0 ? `+${Math.abs(def.pollution || 0)}` : '0'} /s
+                                {(currentDef.pollution || 0) > 0 ? `-${currentDef.pollution}` : (currentDef.pollution || 0) < 0 ? `+${Math.abs(currentDef.pollution || 0)}` : '0'} /s
                             </div>
                         </div>
                         <div className="bg-slate-950 p-1.5 border border-slate-800">
@@ -482,17 +527,48 @@ export const BuildingInspectorModal: React.FC<{
                                 <RefreshCw size={8} /> Maint.
                             </div>
                             <div className="text-[10px] text-white font-mono">
-                                {def.maintenance || 0} AGT
+                                {currentDef.maintenance || 0} AGT
                             </div>
                         </div>
                     </div>
 
-                    {def.production && (
+                    {currentDef.production && (
                         <div className="bg-emerald-950/20 border border-emerald-900/50 p-2 mb-3 rounded-sm">
                             <div className="flex justify-between items-center text-[10px]">
                                 <span className="text-emerald-500 font-bold uppercase tracking-widest">Yield</span>
-                                <span className="text-white font-mono font-bold">+{def.production} {def.productionType}/s</span>
+                                <span className="text-white font-mono font-bold">+{currentDef.production} {currentDef.productionType}/s</span>
                             </div>
+                        </div>
+                    )}
+
+                    {/* UPGRADE BUTTON */}
+                    {nextUpgrade ? (
+                        <button
+                            onClick={() => {
+                                if (canUpgrade) {
+                                    dispatch({ type: 'UPGRADE_BUILDING', payload: { index: selectedTile } });
+                                    // Keep modal open or close? Maybe close to see effect?
+                                    // onClose(); 
+                                } else {
+                                    playSfx('ERROR');
+                                }
+                            }}
+                            disabled={!canUpgrade}
+                            className={`w-full mb-3 py-2 px-2 border-b-4 active:border-b-0 active:translate-y-1 transition-all font-black text-[10px] flex flex-col items-center justify-center gap-0.5 uppercase tracking-wider relative group ${canUpgrade ? 'bg-amber-600 hover:bg-amber-500 text-white border-amber-800' : 'bg-slate-800 text-slate-500 border-slate-900 cursor-not-allowed'}`}
+                        >
+                            <div className="flex items-center gap-1">
+                                <ArrowUp size={10} />
+                                <span>Upgrade to LVL {nextLevel}</span>
+                            </div>
+                            {upgradeLocked && <span className="text-[8px] text-rose-500 font-bold">LOCKED: Requires {nextUpgrade.era} Era</span>}
+                            {!upgradeLocked && !canUpgrade && missingUpgradeResources.length > 0 && (
+                                <span className="text-[8px] text-rose-300 font-bold">Missing: {missingUpgradeResources.join(', ')}</span>
+                            )}
+                            <span className="text-[8px] opacity-70 font-mono mt-1">{nextUpgrade.statsDiff}</span>
+                        </button>
+                    ) : (
+                        <div className="w-full mb-3 py-1.5 bg-slate-950 border border-slate-800 text-center">
+                            <span className="text-[9px] text-slate-600 uppercase font-bold tracking-widest">Max Level Reached</span>
                         </div>
                     )}
 
@@ -518,3 +594,9 @@ export const BuildingInspectorModal: React.FC<{
         </div>
     );
 };
+
+// Helper to truncate desc
+function maxDesc(str: string) {
+    if (str.length > 50) return str.substring(0, 48) + '...';
+    return str;
+}

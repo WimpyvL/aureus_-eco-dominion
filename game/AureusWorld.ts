@@ -26,7 +26,7 @@ import {
 } from '../engine/sim/systems';
 
 import { GameState, GameStep, Agent, GridTile, BuildingType, SfxType, TechId } from '../types';
-import { GRID_SIZE, getEcoMultiplier } from '../engine/utils/GameUtils';
+import { GRID_SIZE, getEcoMultiplier, isHarvestable } from '../engine/utils/GameUtils';
 import { BUILDINGS, TECHNOLOGIES } from '../engine/data/VoxelConstants';
 import { TerrainRenderSystem } from './render/systems/TerrainRenderSystem';
 import { FoliageRenderSystem } from './render/systems/FoliageRenderSystem';
@@ -381,15 +381,27 @@ export class AureusWorld extends BaseWorld {
 
     buyBuilding(buildingType: string, cost: number): void {
         const state = this.stateManager.getMutableState();
+        const def = BUILDINGS[buildingType as BuildingType];
 
-        // Deduct cost
-        state.resources.agt -= cost;
+        // Deduct multi-resource costs if defined
+        if (def && def.costs) {
+            Object.entries(def.costs).forEach(([res, amt]) => {
+                const resourceKey = res as keyof typeof state.resources;
+                if (amt && typeof state.resources[resourceKey] === 'number') {
+                    (state.resources[resourceKey] as number) -= amt;
+                }
+            });
+        } else {
+            // Legacy fall-back (usually AGT)
+            state.resources.agt -= cost;
+        }
 
         // Add to inventory
-        if (!state.inventory[buildingType]) {
-            state.inventory[buildingType] = 0;
+        const bType = buildingType as BuildingType;
+        if (!state.inventory[bType]) {
+            state.inventory[bType] = 0;
         }
-        state.inventory[buildingType]++;
+        state.inventory[bType]!++;
 
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
     }
@@ -398,6 +410,62 @@ export class AureusWorld extends BaseWorld {
         const state = this.stateManager.getMutableState();
         state.logistics.autoSell = enabled;
         state.logistics.sellThreshold = threshold;
+    }
+
+    upgradeBuilding(index: number): void {
+        const state = this.stateManager.getMutableState();
+        const tile = state.grid[index];
+        if (!tile || tile.buildingType === BuildingType.EMPTY) return;
+
+        const def = BUILDINGS[tile.buildingType];
+        if (!def || !def.upgrades) return;
+
+        const nextLevel = (tile.level || 1) + 1;
+        const upgrade = def.upgrades.find(u => u.level === nextLevel);
+
+        if (!upgrade) {
+            console.warn(`[upgradeBuilding] No upgrade found for level ${nextLevel}`);
+            return;
+        }
+
+        // Validate Era
+        if (!state.cheatsEnabled && !state.unlockedEras.includes(upgrade.era)) {
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+            return;
+        }
+
+        // Validate Costs
+        let canAfford = true;
+        if (!state.cheatsEnabled) {
+            if (upgrade.costs) {
+                Object.entries(upgrade.costs).forEach(([res, amt]) => {
+                    const resourceKey = res as keyof typeof state.resources;
+                    if (amt && (state.resources[resourceKey] as number) < amt) {
+                        canAfford = false;
+                    }
+                });
+            } else {
+                // No cost defined? Assume free? Or error? Let's assume free if no cost defined in upgrade.
+            }
+        }
+
+        if (!canAfford) {
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+            return;
+        }
+
+        // Deduct Resources
+        if (!state.cheatsEnabled && upgrade.costs) {
+            Object.entries(upgrade.costs).forEach(([res, amt]) => {
+                const resourceKey = res as keyof typeof state.resources;
+                if (amt && typeof state.resources[resourceKey] === 'number') {
+                    (state.resources[resourceKey] as number) -= amt;
+                }
+            });
+        }
+
+        // Push Command
+        this.stateManager.pushCommand('UPGRADE_BUILDING', { index });
     }
 
     researchTech(techId: string): void {
@@ -985,7 +1053,28 @@ export class AureusWorld extends BaseWorld {
             return;
         }
 
-        // 2. Building / Bulldoze
+        // 2. Building/Tile Selection (notify React)
+        // If it's harvestable foliage, mark it for harvest
+        const tile = state.grid[index];
+        const canHarvest = isHarvestable(tile.foliage);
+
+        // If we are just clicking a tile with foliage in default mode, toggle harvest mark
+        if (canHarvest && state.interactionMode !== 'BULLDOZE' && (!state.selectedBuilding || state.interactionMode !== 'BUILD')) {
+            const stateMutable = this.stateManager.getMutableState();
+            const mutableTile = stateMutable.grid[index];
+            mutableTile.markedForHarvest = !mutableTile.markedForHarvest;
+
+            // Visual feedback
+            if (mutableTile.markedForHarvest) {
+                this.config?.onSfx?.(SfxType.UI_CLICK);
+            }
+
+            stateMutable.pendingEffects.push({ type: 'GRID_UPDATE', updates: [mutableTile] });
+            // onTileClick will notify UI if it wants to inspect
+            config.onTileClick?.(index, isTouch);
+            return;
+        }
+
         console.log('[handleSurfaceInteraction] interactionMode:', state.interactionMode, 'selectedBuilding:', state.selectedBuilding, 'isTouch:', isTouch);
 
         if (state.interactionMode === 'BUILD' && state.selectedBuilding) {

@@ -8,7 +8,8 @@
 import { GridTile } from '../../types';
 import { getBiomeAt as getBiomeAtImpl, getFoliageAt as getFoliageAtImpl } from '../worldgen/Core';
 import { Job, PathfindJob, PathfindResult, MeshChunkJob, MeshChunkResult } from './jobs.types';
-import { findPath, GRID_SIZE } from '../sim/algorithms/Pathfinding';
+import { findPath } from '../sim/algorithms/Pathfinding';
+import { GRID_SIZE } from '../utils/GameUtils';
 
 let localGrid: GridTile[] | null = null;
 
@@ -145,12 +146,12 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
         const key = `${wx},${wz}`;
         if (tileMap.has(key)) {
             const t = tileMap.get(key)!;
-            return { h: t.terrainHeight, b: t.biome, bt: t.buildingType, f: t.foliage, in: true };
+            return { h: t.terrainHeight, b: t.biome, bt: t.buildingType, f: t.foliage, in: true, marked: t.markedForHarvest };
         }
         const nx = wx - offsetX;
         const nz = wz - offsetZ;
         const data = getBiomeAtImpl(nx, nz);
-        return { h: data.height, b: data.biome, bt: 'EMPTY', f: null, in: false };
+        return { h: data.height, b: data.biome, bt: 'EMPTY', f: null, in: false, marked: false };
     };
 
     for (let z = 0; z < CHUNK_SIZE; z++) {
@@ -263,7 +264,7 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
             }
 
             if (fType && fType !== 'NONE' && fType !== 'GOLD_VEIN') {
-                foliageItems.push({ x: worldX, y: data.h * 0.5, z: worldZ, type: fType });
+                foliageItems.push({ x: worldX, y: data.h * 0.5, z: worldZ, type: fType, marked: data.marked });
             }
 
             // Hole Visibility on Surface

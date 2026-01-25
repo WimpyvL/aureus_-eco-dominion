@@ -37,6 +37,8 @@ export class StateManager {
                 agt: 5000,
                 minerals: 0,
                 gems: INITIAL_RESOURCES.gems,
+                wood: INITIAL_RESOURCES.wood,
+                stone: INITIAL_RESOURCES.stone,
                 eco: INITIAL_RESOURCES.eco,
                 trust: INITIAL_RESOURCES.trust,
                 income: 0,

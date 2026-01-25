@@ -134,6 +134,7 @@ const ITEM_CATEGORIES: Record<BuildingType, CategoryType> = {
     [BuildingType.MINING_DRILL]: 'PRODUCTION',
     [BuildingType.UNDERGROUND_FANS]: 'UTILITIES',
     [BuildingType.ORE_EXTRACTOR]: 'PRODUCTION',
+    [BuildingType.POWER_LINE]: 'BASICS',
     [BuildingType.EMPTY]: 'ALL'
 };
 
@@ -415,7 +416,22 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                             {(() => {
                                 const b = BUILDINGS[selectedItem];
                                 const scaledCost = calculateBuildingCost(selectedItem, state.grid);
-                                const canAfford = state.cheatsEnabled || state.resources.agt >= scaledCost;
+
+                                // NEW: Multi-resource affordance check
+                                let canAfford = state.cheatsEnabled || state.resources.agt >= scaledCost;
+                                const missingResources: string[] = [];
+
+                                if (!state.cheatsEnabled && b.costs) {
+                                    Object.entries(b.costs).forEach(([res, amt]) => {
+                                        if (amt && (state.resources as any)[res] < amt) {
+                                            canAfford = false;
+                                            missingResources.push(`${amt} ${res.toUpperCase()}`);
+                                        }
+                                    });
+                                } else if (!state.cheatsEnabled && state.resources.agt < scaledCost) {
+                                    missingResources.push(`${Math.ceil(scaledCost - state.resources.agt)} AGT`);
+                                }
+
                                 const isEcoLocked = state.resources.eco < b.ecoReq;
                                 let dependencyMet = true;
                                 if (b.dependency) {
@@ -486,8 +502,8 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                                                 <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded flex items-center gap-3">
                                                     <ShoppingCart className="text-amber-500 shrink-0" size={18} />
                                                     <div className="flex-1">
-                                                        <p className="text-[10px] font-black text-amber-500 uppercase">Credits Required</p>
-                                                        <p className="text-xs text-amber-200">You need {Math.ceil(scaledCost - state.resources.agt).toLocaleString()} more AGT credits.</p>
+                                                        <p className="text-[10px] font-black text-amber-500 uppercase">Resources Required</p>
+                                                        <p className="text-xs text-amber-200">Insufficient materials. Missing: {missingResources.join(', ')}</p>
                                                     </div>
                                                 </div>
                                             )}

@@ -66,6 +66,9 @@ export class ConstructionSystem extends BaseSimSystem {
                 case 'REHABILITATE':
                     this.rehabilitateTile(cmd.payload.index, state);
                     break;
+                case 'UPGRADE_BUILDING':
+                    this.upgradeBuilding(cmd.payload.index, state);
+                    break;
             }
         }
 
@@ -169,6 +172,7 @@ export class ConstructionSystem extends BaseSimSystem {
                         constructionTimeLeft: isInstant ? 0 : def.buildTime,
                         structureHeadIndex: index,
                         explored: true,
+                        level: 1,
                         // Set entrance property for mining buildings
                         hasEntrance: buildingType === BuildingType.MINING_HEADFRAME
                     };
@@ -344,5 +348,41 @@ export class ConstructionSystem extends BaseSimSystem {
                 }
             }
         }
+    }
+
+    /**
+     * Upgrades a building to the next level.
+     */
+    public upgradeBuilding(index: number, state: GameState): void {
+        const grid = state.grid;
+        const tile = grid[index];
+        if (!tile || tile.buildingType === BuildingType.EMPTY) return;
+
+        // Ensure we are operating on the head tile
+        const headIdx = tile.structureHeadIndex !== undefined ? tile.structureHeadIndex : index;
+        const headTile = grid[headIdx];
+        if (!headTile) return;
+
+        // Increment level
+        headTile.level = (headTile.level || 1) + 1;
+
+        // Sync to parts if multi-tile
+        const def = BUILDINGS[headTile.buildingType];
+        if (def && (def.width || 1) > 1 || (def.depth || 1) > 1) {
+            const w = def.width || 1;
+            const d = def.depth || 1;
+            for (let dz = 0; dz < d; dz++) {
+                for (let dx = 0; dx < w; dx++) {
+                    const idx = (Math.floor(headIdx / GRID_SIZE) + dz) * GRID_SIZE + ((headIdx % GRID_SIZE) + dx);
+                    if (grid[idx] && grid[idx].structureHeadIndex === headIdx) {
+                        grid[idx].level = headTile.level;
+                    }
+                }
+            }
+        }
+
+        // Trigger Effect
+        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.COMPLETE }); // Upgrade sound
+        state.pendingEffects.push({ type: 'GRID_UPDATE', updates: [headTile] });
     }
 }

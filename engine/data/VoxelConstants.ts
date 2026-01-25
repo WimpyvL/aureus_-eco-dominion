@@ -34,6 +34,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     desc: 'Connects buildings. Cheap infrastructure.',
     ecoReq: 0,
     stats: 'Infrastructure',
+    costs: { agt: 50, stone: 10 },
     buildTime: 1,
     maintenance: 0,
     pollution: 0,
@@ -54,10 +55,11 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   [BuildingType.POWER_LINE]: {
     type: BuildingType.POWER_LINE,
     name: 'Power Line',
-    cost: 10,
+    cost: 100,
     desc: 'Conducts electricity from generators to buildings.',
     ecoReq: 0,
     stats: 'Infrastructure',
+    costs: { agt: 100, stone: 15 },
     buildTime: 3,
     maintenance: 0.5,
     pollution: 0,
@@ -120,9 +122,23 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     pollution: 0.6,
     production: 20,
     productionType: 'AGT',
+    costs: { agt: 1000, wood: 150, stone: 80 },
     era: Era.SETTLEMENT,
     power: { consumes: 1 },
     water: { consumes: 1 },
+    upgrades: [
+      {
+        level: 2,
+        name: 'Crew Habitat',
+        description: 'Expanded living space with improved comfort.',
+        statsDiff: 'Capacity 4 -> 8, +Mood',
+        costs: { agt: 2000, wood: 200, stone: 100 },
+        era: Era.GROWTH,
+        power: { consumes: 2 },
+        water: { consumes: 2 },
+        maintenance: 4
+      }
+    ]
   },
   [BuildingType.CANTEEN]: {
     type: BuildingType.CANTEEN,
@@ -136,9 +152,23 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     buildTime: 20,
     maintenance: 3,
     pollution: -0.5,
+    costs: { agt: 800, wood: 300, stone: 200 },
     era: Era.SETTLEMENT,
     power: { consumes: 2 },
     water: { consumes: 2 },
+    upgrades: [
+      {
+        level: 2,
+        name: 'Culinary Synthesizer',
+        description: 'Advanced food processing for better meals.',
+        statsDiff: 'Faster Hunger Recovery',
+        costs: { agt: 1500, stone: 300, minerals: 50 },
+        era: Era.GROWTH,
+        power: { consumes: 4 },
+        water: { consumes: 3 },
+        maintenance: 6
+      }
+    ]
   },
   [BuildingType.SOCIAL_HUB]: {
     type: BuildingType.SOCIAL_HUB,
@@ -184,6 +214,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     pollution: 12.0,
     production: 35,
     productionType: 'MINERALS',
+    costs: { agt: 1200, stone: 500 },
     era: Era.SETTLEMENT,
     power: { consumes: 5 },
     water: { consumes: 5 },
@@ -635,44 +666,69 @@ export const ERAS: Record<Era, EraDef> = {
     name: 'Era 1: Settlement',
     description: 'Establish your colony basics',
     unlockConditions: { tutorialComplete: true },
-    color: '#94a3b8' // slate
+    color: '#94a3b8',
+    milestones: [
+      { id: 'founding', name: 'Colony Established', target: 1 },
+      { id: 'first_resources', name: 'Resource Chain', target: 1 }
+    ]
   },
   [Era.GROWTH]: {
     id: Era.GROWTH,
     name: 'Era 2: Growth',
-    description: 'Expand your workforce',
-    unlockConditions: { minColonists: 5, minAgt: 1000, minBuildings: 3 },
-    color: '#22c55e' // green
+    description: 'Expand your workforce and capital',
+    unlockConditions: { minColonists: 5, minAgt: 5000, minBuildings: 5 },
+    color: '#22c55e',
+    milestones: [
+      { id: 'pioneer_crew', name: 'Pioneer Crew', target: 5 },
+      { id: 'capital_seed', name: 'Seed Capital', target: 5000 },
+      { id: 'base_expansion', name: 'Base Expansion', target: 5 }
+    ]
   },
   [Era.INDUSTRY]: {
     id: Era.INDUSTRY,
     name: 'Era 3: Industry',
     description: 'Heavy production and resource scaling',
-    unlockConditions: { minColonists: 10, minEco: 50 },
-    color: '#eab308' // yellow
+    unlockConditions: { minColonists: 12, minEco: 40, minAgt: 20000 },
+    color: '#eab308',
+    milestones: [
+      { id: 'industrial_core', name: 'Industrial Core', target: 12 },
+      { id: 'eco_balance', name: 'Eco Awareness', target: 40 },
+      { id: 'massive_capital', name: 'Industrial Fund', target: 20000 }
+    ]
   },
   [Era.SUSTAINABILITY]: {
     id: Era.SUSTAINABILITY,
     name: 'Era 4: Sustainability',
     description: 'Balance restoration and advanced tech',
-    unlockConditions: { minEco: 60, minTrust: 50 },
-    color: '#3b82f6' // blue
+    unlockConditions: { minEco: 70, minTrust: 60, minAgt: 50000 },
+    color: '#3b82f6',
+    milestones: [
+      { id: 'green_future', name: 'Green Haven', target: 70 },
+      { id: 'social_harmony', name: 'Social Glue', target: 60 }
+    ]
   },
   [Era.PROSPERITY]: {
     id: Era.PROSPERITY,
     name: 'Era 5: Prosperity',
-    description: 'The height of galactic development',
-    unlockConditions: { minEco: 80, minTrust: 80, minColonists: 15 },
-    color: '#a855f7' // purple
+    description: 'The height of development',
+    unlockConditions: { minEco: 90, minTrust: 90, minColonists: 25 },
+    color: '#a855f7',
+    milestones: [
+      { id: 'utopia_eco', name: 'Eco Utopia', target: 90 },
+      { id: 'utopia_social', name: 'Social Utopia', target: 90 },
+      { id: 'galactic_hub', name: 'Galactic Hub', target: 25 }
+    ]
   }
 };
 
 export const INITIAL_RESOURCES = {
   agt: 0,
   minerals: 0,
-  gems: 5, // Reduced from 10
-  eco: 60, // Reduced from 75
-  trust: 15 // Reduced from 20
+  gems: 10,
+  wood: 50,
+  stone: 50,
+  eco: 75,
+  trust: 20
 };
 
 export const TECHNOLOGIES: Record<TechId, TechDefinition> = {

@@ -189,4 +189,42 @@ export function pseudoRandom(seed: number) {
     };
 }
 
-// generateInitialGrid moved to engine/worldgen/GridGenerator.ts
+
+// --- HARVESTABLE RESOURCES ---
+
+export const HARVESTABLE_ROCKS: FoliageType[] = [
+    'ROCK_ICY' as FoliageType,
+    'ROCK_SANDSTONE' as FoliageType,
+    'ROCK_BOULDER' as FoliageType,
+    'ROCK_PEBBLE' as FoliageType,
+    'ROCK_MOSSY' as FoliageType,
+    'CRYSTAL_SPIKE' as FoliageType,
+    'BONE_RIB' as FoliageType,
+    'ROCK_STUMP' as any // Fallback
+];
+
+export const HARVESTABLE_TREES: FoliageType[] = [
+    'TREE_OAK' as FoliageType,
+    'TREE_BIRCH' as FoliageType,
+    'TREE_WILLOW' as FoliageType,
+    'TREE_APPLE' as FoliageType,
+    'TREE_PINE' as FoliageType,
+    'TREE_FROSTED_PINE' as FoliageType,
+    'TREE_TALL_PINE' as FoliageType,
+    'TREE_PALM' as FoliageType,
+    'TREE_DEAD' as FoliageType,
+    'TREE_STUMP' as FoliageType,
+    'CACTUS_SAGUARO' as FoliageType,
+    'CACTUS_BARREL' as FoliageType,
+    'BUSH_OAK' as FoliageType,
+    'BUSH_THORN' as FoliageType,
+    'SHRUB_WINTER' as FoliageType,
+    'SHRUB_DRY' as FoliageType,
+    'MUSHROOM_GIANT' as FoliageType
+];
+
+export function isHarvestable(foliage: FoliageType | string | undefined): boolean {
+    if (!foliage || foliage === 'NONE') return false;
+    const f = foliage as FoliageType;
+    return HARVESTABLE_ROCKS.includes(f) || HARVESTABLE_TREES.includes(f);
+}

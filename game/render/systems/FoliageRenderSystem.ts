@@ -15,6 +15,7 @@ export interface FoliageItem {
     y: number;
     z: number;
     type: string;
+    marked?: boolean;
 }
 
 export class FoliageRenderSystem {
@@ -134,11 +135,20 @@ export class FoliageRenderSystem {
                 dummy.updateMatrix();
 
                 mesh!.setMatrixAt(idx, dummy.matrix);
+
+                // Tint if marked for harvest
+                if (item.marked) {
+                    mesh!.setColorAt(idx, new THREE.Color(1, 0.3, 0.3)); // Red tint
+                } else {
+                    mesh!.setColorAt(idx, new THREE.Color(1, 1, 1)); // White (Normal)
+                }
+
                 idx++;
             });
 
             mesh.count = count;
             mesh.instanceMatrix.needsUpdate = true;
+            if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
         });
 
         // 3. Cleanup Unused
