@@ -24,6 +24,7 @@ import {
     PowerGridSystem, WaterNetworkSystem, ExcavationSystem,
     TutorialDemoSystem, VoxelDestructionSystem
 } from '../engine/sim/systems';
+import { PersistenceManager } from '../engine/sim/PersistenceManager';
 
 import { GameState, GameStep, Agent, GridTile, BuildingType, SfxType, TechId } from '../types';
 import { GRID_SIZE, getEcoMultiplier, isHarvestable } from '../engine/utils/GameUtils';
@@ -72,6 +73,8 @@ export class AureusWorld extends BaseWorld {
     private undergroundDecorationSystem: UndergroundDecorationSystem;
     private cameraSystem: IsoCameraSystem;
 
+    private persistenceManager: PersistenceManager;
+
     // Terrain height callback (used by agents and input)
     private getTerrainHeight: (worldX: number, worldZ: number) => number;
 
@@ -85,6 +88,7 @@ export class AureusWorld extends BaseWorld {
 
         // Initialize State Manager (Engine owns state)
         this.stateManager = new StateManager();
+        this.persistenceManager = new PersistenceManager();
 
         // Initialize engine subsystems
         this.streamMgr = new StreamingManager({
@@ -778,17 +782,41 @@ export class AureusWorld extends BaseWorld {
     }
 
     saveGame(): void {
-        const data = this.stateManager.serializeState();
-        localStorage.setItem('aureus_save_v2', data);
+        const state = this.stateManager.getState();
+        const success = this.persistenceManager.saveGame(state);
+
+        if (success) {
+            state.newsFeed.unshift({
+                id: `save_${Date.now()}`,
+                headline: "Game Progress Saved.",
+                type: 'POSITIVE',
+                timestamp: Date.now()
+            });
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
+        } else {
+            state.newsFeed.unshift({
+                id: `save_err_${Date.now()}`,
+                headline: "Save Failed!",
+                type: 'CRITICAL',
+                timestamp: Date.now()
+            });
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+        }
     }
 
-    loadGame(data: string): void {
-        try {
-            const parsed = JSON.parse(data);
-            this.stateManager.loadState(parsed);
-            this.workerPool.broadcast({ type: 'SYNC_GRID', payload: parsed.grid });
-        } catch (e) {
-            console.error('Failed to load game:', e);
+    loadGame(): void {
+        const loadedState = this.persistenceManager.loadGame();
+        if (loadedState) {
+            this.stateManager.loadState(loadedState);
+            this.workerPool.broadcast({ type: 'SYNC_GRID', payload: loadedState.grid });
+
+            // Re-sync visual systems
+            this.terrainRenderSystem.syncGrid(loadedState.grid);
+            this.changeUndergroundLayer(0); // Reset layer view
+
+            console.log('[AureusWorld] Game Loaded.');
+        } else {
+            console.warn('[AureusWorld] No save file found.');
         }
     }
 

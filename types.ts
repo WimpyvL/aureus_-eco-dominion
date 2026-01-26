@@ -598,4 +598,5 @@ export type Action =
   | { type: 'SET_INTERACTION_MODE', payload: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG' | 'TEST_DESTRUCT' }
   | { type: 'CHANGE_LAYER', payload: { delta: number } }
   | { type: 'EXPLODE_TILE', payload: { index: number, radius: number, damage: number } }
+  | { type: 'SAVE_GAME' }
   | { type: 'LOAD_GAME', payload: GameState };
