@@ -8,6 +8,7 @@ import { FixedContext } from '../../kernel';
 import { GameState, BuildingType, SfxType } from '../../../types';
 import { BUILDINGS } from '../../data/VoxelConstants';
 import { getEcoMultiplier } from '../../utils/GameUtils';
+import { BASE_STORAGE_CAPACITY, DEPOT_CAPACITY_BONUS, STOCKPILE_CAPACITY_BONUS } from '../logic/SimulationLogic';
 
 export class ProductionSystem extends BaseSimSystem {
     readonly id = 'production';
@@ -101,16 +102,26 @@ export class ProductionSystem extends BaseSimSystem {
             }
         }
 
+        // Calculate Storage Capacity
+        const depots = grid.filter(t => t.buildingType === BuildingType.STORAGE_DEPOT && !t.isUnderConstruction).length;
+        const stockpiles = grid.filter(t => t.buildingType === BuildingType.STOCKPILE && !t.isUnderConstruction).length;
+        const totalCapacity = BASE_STORAGE_CAPACITY +
+            (depots * DEPOT_CAPACITY_BONUS) +
+            (stockpiles * STOCKPILE_CAPACITY_BONUS);
+
         // Apply Results
         state.resources.agt += (totalIncome - totalMaintenance) * dt;
         state.resources.eco = Math.max(0, Math.min(100, state.resources.eco - (ecoChange / 8) * dt));
-        state.resources.minerals += mineralProd * dt;
-        state.resources.wood += woodProd * dt;
-        state.resources.stone += stoneProd * dt;
+
+        // Resource Clamping
+        state.resources.minerals = Math.min(totalCapacity, state.resources.minerals + (mineralProd * dt));
+        state.resources.wood = Math.min(totalCapacity, state.resources.wood + (woodProd * dt));
+        state.resources.stone = Math.min(totalCapacity, state.resources.stone + (stoneProd * dt));
 
         // Cache summary for UI
         state.resources.income = totalIncome;
         state.resources.maintenance = totalMaintenance;
+        state.resources.maxCapacity = totalCapacity; // Store for UI to display
 
         // Auto-Sell Logic
         if (state.logistics.autoSell && state.resources.minerals >= state.logistics.sellThreshold) {

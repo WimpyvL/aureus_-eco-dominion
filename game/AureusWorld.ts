@@ -22,7 +22,7 @@ import {
     ColonySystem, LogisticsSystem, EventSystem, MissionSystem,
     ProductionSystem, ConstructionSystem, EraSystem,
     PowerGridSystem, WaterNetworkSystem, ExcavationSystem,
-    TutorialDemoSystem
+    TutorialDemoSystem, VoxelDestructionSystem
 } from '../engine/sim/systems';
 
 import { GameState, GameStep, Agent, GridTile, BuildingType, SfxType, TechId } from '../types';
@@ -116,6 +116,7 @@ export class AureusWorld extends BaseWorld {
 
         // Dungeon Keeper Systems
         this.sim.addSystem(new ExcavationSystem());
+        this.sim.addSystem(new VoxelDestructionSystem());
 
         this.agentSystem = new AgentSystem(this.jobs, this.constructionSystem);
         this.sim.addSystem(this.agentSystem);
@@ -260,7 +261,8 @@ export class AureusWorld extends BaseWorld {
                 BuildingType.SUPPORT_PILLAR,
                 BuildingType.MINING_DRILL,
                 BuildingType.UNDERGROUND_FANS,
-                BuildingType.ORE_EXTRACTOR
+                BuildingType.ORE_EXTRACTOR,
+                BuildingType.STOCKPILE
             ];
 
             if (subterraneanTypes.includes(buildingType)) {
@@ -270,6 +272,42 @@ export class AureusWorld extends BaseWorld {
             } else {
                 console.warn(`${buildingType} cannot be placed underground.`);
                 state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+                return;
+            }
+        }
+
+        // Special Check for Storage Extension
+        if (buildingType === BuildingType.STORAGE_EXTENSION) {
+            // Must overlap or be adjacent to a Storage Depot? 
+            // The prompt said "adjacent to it".
+            const x = index % GRID_SIZE;
+            const z = Math.floor(index / GRID_SIZE);
+            const neighbors = [
+                (z - 1) * GRID_SIZE + x,
+                (z + 1) * GRID_SIZE + x,
+                z * GRID_SIZE + (x - 1),
+                z * GRID_SIZE + (x + 1)
+            ];
+
+            // Check adjacency
+            const hasDepot = neighbors.some(n => {
+                if (n < 0 || n >= state.grid.length) return false;
+                const nbTile = state.grid[n];
+                // Check if neighbor is a STORAGE_DEPOT or part of one
+                return nbTile.buildingType === BuildingType.STORAGE_DEPOT;
+            });
+
+            if (!hasDepot) {
+                console.warn("Storage Extension must be placed adjacent to a Storage Depot.");
+                state.newsFeed.unshift({
+                    id: `err_place_${Date.now()}`,
+                    headline: "Extension requires adjacent Storage Depot!",
+                    type: 'NEGATIVE',
+                    timestamp: Date.now()
+                });
+                state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+                // Refund
+                state.inventory[buildingType]++;
                 return;
             }
         }
@@ -358,23 +396,53 @@ export class AureusWorld extends BaseWorld {
         this.buildingRenderSystem.setCursorMode(mode);
     }
 
-    sellMinerals(): void {
+    sellResource(resource: 'minerals' | 'gems' | 'wood' | 'stone'): void {
         const state = this.stateManager.getMutableState();
-        if (state.resources.minerals <= 0) return;
+        const amount = state.resources[resource];
+        if (amount <= 0) return;
 
         const ecoMult = getEcoMultiplier(state.resources.eco);
         const trustMult = 1 + (state.resources.trust / 200);
-        const price = state.market.minerals.currentPrice;
+        const price = state.market[resource].currentPrice;
 
-        const value = Math.floor(state.resources.minerals * price * ecoMult * trustMult);
+        const value = Math.floor(amount * price * ecoMult * trustMult);
         state.resources.agt += value;
-        state.resources.minerals = 0;
+        state.resources[resource] = 0;
 
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.SELL });
-        state.newsFeed.push({
-            id: `sell_${Date.now()}`,
-            headline: `Sold minerals for ${value} AGT`,
+        state.newsFeed.unshift({
+            id: `sell_${resource}_${Date.now()}`,
+            headline: `Market Transaction: Sold ${resource} for ${value} AGT`,
             type: 'POSITIVE',
+            timestamp: Date.now()
+        });
+    }
+
+    sellMinerals(): void { this.sellResource('minerals'); }
+    sellGems(): void { this.sellResource('gems'); }
+    sellWood(): void { this.sellResource('wood'); }
+    sellStone(): void { this.sellResource('stone'); }
+
+    buyResource(resource: 'minerals' | 'gems' | 'wood' | 'stone', amount: number): void {
+        const state = this.stateManager.getMutableState();
+
+        // Buyers pay a 25% "Import Fee" over market price
+        const price = state.market[resource].currentPrice * 1.25;
+        const totalCost = Math.floor(price * amount);
+
+        if (state.resources.agt < totalCost) {
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+            return;
+        }
+
+        state.resources.agt -= totalCost;
+        state.resources[resource] += amount;
+
+        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
+        state.newsFeed.unshift({
+            id: `buy_${resource}_${Date.now()}`,
+            headline: `Import Dispatch: Acquired ${amount} ${resource} for ${totalCost} AGT`,
+            type: 'NEUTRAL',
             timestamp: Date.now()
         });
     }
@@ -887,6 +955,11 @@ export class AureusWorld extends BaseWorld {
         }
     }
 
+    /**
+     * CORE SIMULATION TICK
+     * Called by the host at a fixed frequency (e.g. 30Hz).
+     * Handles all non-visual game logic: AI, Economy, Production.
+     */
     simulation(ctx: FixedContext): void {
         if (this.gamePaused) return;
 
@@ -900,6 +973,11 @@ export class AureusWorld extends BaseWorld {
         this.sim.tick(ctx, state);
     }
 
+    /**
+     * CORE RENDERING FRAME
+     * Called as fast as the browser allows (60-144 FPS).
+     * Synchronizes 3D meshes and particles with the simulation state.
+     */
     draw(ctx: FrameContext): void {
         const state = this.stateManager.getState();
 
@@ -1084,6 +1162,11 @@ export class AureusWorld extends BaseWorld {
             config.onTileClick?.(index, isTouch);
         } else if (state.interactionMode === 'BULLDOZE') {
             this.bulldozeTile(index);
+            config.onTileClick?.(index, isTouch);
+        } else if (state.interactionMode === 'TEST_DESTRUCT') {
+            // Trigger explosion 
+            this.stateManager.pushCommand('EXPLODE_TILE', { index, radius: 2.5, damage: 200 }); // Default 2.5 radius, enough damage to kill instantly
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.MINING_HIT });
             config.onTileClick?.(index, isTouch);
         } else {
             this.selectAgent(null);

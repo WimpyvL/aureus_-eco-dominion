@@ -11,6 +11,9 @@ import { BUILDINGS } from '../../data/VoxelConstants';
 // --- CONFIGURATION ---
 export const MAX_AGENTS = 30;
 export const CAPACITY_PER_QUARTERS = 4;
+export const BASE_STORAGE_CAPACITY = 1000;
+export const DEPOT_CAPACITY_BONUS = 500;
+export const STOCKPILE_CAPACITY_BONUS = 2000;
 
 
 const NAMES = ["Cass", "Jax", "Val", "Rya", "Kael", "Nyx", "Zane", "Mira", "Leo", "Sora", "Elara", "Teron", "Muna", "Vael", "Koda", "Orin", "Tali", "Vex"];
@@ -133,6 +136,7 @@ export function createColonist(x: number, z: number, role: AgentRole = 'WORKER')
         mood: 80 + Math.random() * 20, // Start with good mood (80-100)
         skills: generateSkills(role),
         currentJobId: null,
+        layer: 0,
 
         // New intelligence features
         personality: generatePersonality(role),
@@ -164,6 +168,13 @@ export function createColonist(x: number, z: number, role: AgentRole = 'WORKER')
 
         // No active request initially
         activeRequest: undefined,
-        lastAbandonedJobId: null
+        lastAbandonedJobId: null,
+
+        // Inventory
+        inventory: {
+            type: null,
+            amount: 0,
+            capacity: 20 // Small capacity as requested
+        }
     };
 }

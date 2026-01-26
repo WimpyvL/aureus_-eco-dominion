@@ -21,6 +21,8 @@ export enum BuildingType {
   SOCIAL_HUB = 'SOCIAL_HUB',
   MINING_HEADFRAME = 'MINING_HEADFRAME',
   ORE_FOUNDRY = 'ORE_FOUNDRY',
+  SAWMILL = 'SAWMILL',
+  STONE_QUARRY = 'STONE_QUARRY',
   // Infrastructure
   POND = 'POND',
   RESERVOIR = 'RESERVOIR',
@@ -51,6 +53,8 @@ export enum BuildingType {
   MINING_DRILL = 'MINING_DRILL',
   ORE_EXTRACTOR = 'ORE_EXTRACTOR',
   UNDERGROUND_FANS = 'UNDERGROUND_FANS',
+  STOCKPILE = 'STOCKPILE',
+  STORAGE_EXTENSION = 'STORAGE_EXTENSION',
 }
 
 export enum Era {
@@ -79,7 +83,7 @@ export interface EraDef {
 
 export type AgentRole = 'WORKER' | 'MINER' | 'BOTANIST' | 'ENGINEER' | 'SECURITY' | 'ILLEGAL_MINER';
 
-export type JobType = 'BUILD' | 'MINE' | 'DIG' | 'REINFORCE' | 'RESCUE' | 'FARM' | 'REPAIR' | 'RESEARCH' | 'SLEEP' | 'IDLE' | 'MOVE' | 'REHABILITATE' | 'EAT' | 'SOCIALIZE' | 'PATROL';
+export type JobType = 'BUILD' | 'MINE' | 'DIG' | 'REINFORCE' | 'RESCUE' | 'FARM' | 'REPAIR' | 'RESEARCH' | 'SLEEP' | 'IDLE' | 'MOVE' | 'REHABILITATE' | 'EAT' | 'SOCIALIZE' | 'PATROL' | 'DEPOSIT_RESOURCES';
 
 export interface Job {
   id: string;
@@ -154,6 +158,12 @@ export interface PathStep {
   layer: number;
 }
 
+export interface AgentInventory {
+  type: 'minerals' | 'gems' | 'wood' | 'stone' | null;
+  amount: number;
+  capacity: number;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -167,7 +177,7 @@ export interface Agent {
   visualX?: number;
   visualZ?: number;
 
-  state: 'MOVING' | 'WORKING' | 'IDLE' | 'SLEEPING' | 'EATING' | 'RELAXING' | 'SOCIALIZING' | 'PATROLLING' | 'OFF_DUTY' | 'PLANNING';
+  state: 'MOVING' | 'WORKING' | 'IDLE' | 'SLEEPING' | 'EATING' | 'RELAXING' | 'SOCIALIZING' | 'PATROLLING' | 'OFF_DUTY' | 'PLANNING' | 'DEPOSITING';
 
   // Needs (0-100)
   energy: number;
@@ -177,6 +187,8 @@ export interface Agent {
   // Skills & Stats
   skills: ColonistStats;
   currentJobId: string | null;
+
+  inventory: AgentInventory;
 
   // Intelligence features (optional for backward compatibility)
   personality?: AgentPersonality;
@@ -290,6 +302,7 @@ export interface GameResources {
   trust: number;
   income: number;      // New: Pre-calculated income/s
   maintenance: number; // New: Pre-calculated maintenance/s
+  maxCapacity: number;
 }
 
 export interface PowerConfig {
@@ -450,7 +463,7 @@ export interface GameState {
   inventory: Partial<Record<BuildingType, number>>;
   selectedBuilding: BuildingType | null;
   selectedAgentId: string | null;
-  interactionMode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG';
+  interactionMode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG' | 'TEST_DESTRUCT';
   step: GameStep;
   tickCount: number;
   viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON';
@@ -509,7 +522,7 @@ export interface GameState {
 
 export interface GameCommand {
   id: string; // Unique ID to prevent double execution
-  type: 'PLACE_BUILDING' | 'PLACE_SUB_BUILDING' | 'BULLDOZE' | 'BULLDOZE_SUB' | 'SPEED_UP' | 'REHABILITATE' | 'UPGRADE_BUILDING';
+  type: 'PLACE_BUILDING' | 'PLACE_SUB_BUILDING' | 'BULLDOZE' | 'BULLDOZE_SUB' | 'SPEED_UP' | 'REHABILITATE' | 'UPGRADE_BUILDING' | 'EXPLODE_TILE';
   payload: any;
 }
 
@@ -524,6 +537,8 @@ export interface WeatherState {
 export interface MarketState {
   minerals: ResourceMarket;
   gems: ResourceMarket;
+  wood: ResourceMarket;
+  stone: ResourceMarket;
   lastEvent?: string; // e.g. "War in Sector 4"
   eventDuration: number;
 }
@@ -539,7 +554,7 @@ export interface ResourceMarket {
 export interface Contract {
   id: string;
   description: string;
-  resource: 'MINERALS' | 'GEMS';
+  resource: 'MINERALS' | 'GEMS' | 'WOOD' | 'STONE';
   amount: number;
   reward: number; // AGT payout
   timeLeft: number; // Seconds
@@ -549,6 +564,10 @@ export interface Contract {
 export type Action =
   | { type: 'TICK' }
   | { type: 'SELL_MINERALS' }
+  | { type: 'SELL_GEMS' }
+  | { type: 'SELL_WOOD' }
+  | { type: 'SELL_STONE' }
+  | { type: 'BUY_RESOURCE', payload: { resource: 'minerals' | 'gems' | 'wood' | 'stone', amount: number } }
   | { type: 'UPDATE_LOGISTICS', payload: Partial<LogisticsState> }
   | { type: 'BUY_BUILDING', payload: { type: BuildingType, cost: number } }
   | { type: 'SELECT_BUILDING_TO_PLACE', payload: BuildingType | null }
@@ -575,7 +594,8 @@ export type Action =
   | { type: 'MINE_CLICK', payload: { index: number } }
   | { type: 'CLEAR_EFFECTS' }
   | { type: 'ACCEPT_CONTRACT', payload: string }
-  | { type: 'COMPLETE_CONTRACT', payload: string }
-  | { type: 'SET_INTERACTION_MODE', payload: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG' }
+  | { type: 'DELIVER_CONTRACT', payload: string }
+  | { type: 'SET_INTERACTION_MODE', payload: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG' | 'TEST_DESTRUCT' }
   | { type: 'CHANGE_LAYER', payload: { delta: number } }
+  | { type: 'EXPLODE_TILE', payload: { index: number, radius: number, damage: number } }
   | { type: 'LOAD_GAME', payload: GameState };

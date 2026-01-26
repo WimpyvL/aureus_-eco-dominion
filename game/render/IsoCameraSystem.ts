@@ -17,7 +17,8 @@ export class IsoCameraSystem {
 
     // Camera State - Public for read access
     public cameraZoom: number;
-    public zoomLevel = 5; // Max zoom out (5 steps) - reduced from 7 for better gameplay
+    public zoomLevel = 5; // Mid-range
+    public maxZoomLevel = 7; // User requested reduction
     public cameraFocus = new THREE.Vector3(0, 0, 0);
     public cameraAngle = Math.PI / 4;  // 45 degrees - isometric view
     public cameraElevation = Math.PI / 3.5;  // ~51 degrees
@@ -415,15 +416,16 @@ export class IsoCameraSystem {
     }
 
     public zoom(delta: number): void {
-        // Step-based zoom: each tick is roughly 1 step
+        // Step-based zoom
         const direction = delta > 0 ? 1 : -1;
-        this.zoomLevel = Math.max(0, Math.min(5, this.zoomLevel + direction)); // Max 5 steps
+        this.zoomLevel = Math.max(0, Math.min(this.maxZoomLevel, this.zoomLevel + direction));
 
         // Calculate cameraZoom based on steps: 
-        // Surface: 15 (min) to 85 (max)
-        // Underground: 15 (min) to 50 (max) - much closer for DK2 feel
-        const stepSize = this.undergroundMode ? 5 : 10;
-        this.cameraZoom = 15 + (this.zoomLevel * stepSize);
+        // Surface: 10 (min) to (10 + 12*8 = 106) (max)
+        // Underground: Stays closer
+        const base = 10;
+        const stepSize = this.undergroundMode ? 5 : 8;
+        this.cameraZoom = base + (this.zoomLevel * stepSize);
         this.updateCameraTransform();
     }
 

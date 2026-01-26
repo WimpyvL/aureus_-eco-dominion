@@ -349,6 +349,18 @@ const App: React.FC = () => {
             case 'SELL_MINERALS':
                 world.sellMinerals();
                 break;
+            case 'SELL_GEMS':
+                world.sellGems();
+                break;
+            case 'SELL_WOOD':
+                world.sellWood();
+                break;
+            case 'SELL_STONE':
+                world.sellStone();
+                break;
+            case 'BUY_RESOURCE':
+                world.buyResource(action.payload.resource, action.payload.amount);
+                break;
             case 'SET_AUTO_SELL':
                 world.setAutoSell(action.payload.enabled, action.payload.threshold);
                 break;
@@ -374,15 +386,11 @@ const App: React.FC = () => {
                 world.toggleViewMode();
                 break;
             case 'QUEUE_DIG':
-                if (world['queueDig']) {
-                    world['queueDig'](action.payload.index, action.payload.layer);
-                }
+                world.queueDig(action.payload.index, action.payload.layer);
                 playSfx(SfxType.UI_CLICK);
                 break;
             case 'UPGRADE_BUILDING':
-                if (world['upgradeBuilding']) {
-                    world.upgradeBuilding(action.payload.index);
-                }
+                world.upgradeBuilding(action.payload.index);
                 playSfx(SfxType.UI_CLICK);
                 break;
             default:

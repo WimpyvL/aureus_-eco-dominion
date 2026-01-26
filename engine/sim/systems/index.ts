@@ -13,3 +13,4 @@ export * from './PowerGridSystem';
 export * from './WaterNetworkSystem';
 export * from './ExcavationSystem';
 export * from './TutorialDemoSystem';
+export * from './VoxelDestructionSystem';

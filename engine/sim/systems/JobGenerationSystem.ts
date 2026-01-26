@@ -49,7 +49,11 @@ export class JobGenerationSystem extends BaseSimSystem {
             const isGold = tile.foliage === 'GOLD_VEIN';
             const canHarvest = isHarvestable(tile.foliage);
 
-            if (isGold || (canHarvest && tile.markedForHarvest)) {
+            if (canHarvest && tile.markedForHarvest) {
+                // User explicit command - High Priority (85) - beats digging and passive mining
+                this.ensureJob(jobs, `mine_surf_${tile.id}`, 'MINE', tile.id, 85, 0);
+            } else if (isGold) {
+                // Passive Gold Vein - standard Priority (70)
                 this.ensureJob(jobs, `mine_surf_${tile.id}`, 'MINE', tile.id, 70, 0);
             }
 

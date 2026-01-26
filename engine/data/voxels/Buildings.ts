@@ -852,6 +852,54 @@ export const BuildingsFactory = {
         return g;
     },
 
+    // STOCKPILE - Large open-air storage for Wood/Stone (3x3)
+    [BuildingType.STOCKPILE]: () => {
+        const g = new THREE.Group();
+        // Large base
+        g.add(voxel(3.0, 0.25, 3.0, mats.concrete, 0, 0, 0));
+
+        // Perimeter fence posts
+        for (let x = -1.4; x <= 1.4; x += 1.4) {
+            for (let z = -1.4; z <= 1.4; z += 1.4) {
+                if (Math.abs(x) > 0.1 || Math.abs(z) > 0.1) {
+                    g.add(voxel(0.1, 0.8, 0.1, mats.metal, x, 0.25, z));
+                }
+            }
+        }
+        // Fence rails
+        g.add(voxel(2.8, 0.05, 0.05, mats.metal, 0, 0.8, 1.4));
+        g.add(voxel(2.8, 0.05, 0.05, mats.metal, 0, 0.8, -1.4));
+        g.add(voxel(0.05, 0.05, 2.8, mats.metal, 1.4, 0.8, 0));
+        g.add(voxel(0.05, 0.05, 2.8, mats.metal, -1.4, 0.8, 0));
+
+        // Wood pile (stacked logs/planks)
+        const woodColor = mats.wood;
+        for (let i = 0; i < 3; i++) {
+            g.add(voxel(0.8, 0.3, 1.0, woodColor, -0.8, 0.25 + (i * 0.3), -0.5));
+        }
+        g.add(voxel(0.6, 0.3, 0.8, woodColor, -0.8, 1.15, -0.5));
+
+        // Stone pile (blocks)
+        const stoneColor = mats.concrete;
+        for (let x = 0.5; x <= 1.0; x += 0.5) {
+            for (let z = -0.8; z <= 0.2; z += 0.5) {
+                g.add(voxel(0.4, 0.4, 0.4, stoneColor, x, 0.25, z));
+                g.add(voxel(0.35, 0.35, 0.35, stoneColor, x, 0.65, z));
+            }
+        }
+
+        // Heavy Crane (small logistics crane)
+        g.add(voxel(0.4, 1.5, 0.4, mats.metal, 1.0, 0.25, 1.0));
+        g.add(voxel(0.3, 0.15, 1.5, mats.hazard, 0.4, 1.75, 1.0)); // Jib
+        g.add(voxel(0.1, 0.5, 0.1, mats.darkPipe, -0.3, 1.5, 1.0)); // Hook cable
+
+        // Flood lights
+        g.add(voxel(0.1, 0.1, 0.1, mats.emissiveCyan, 1.4, 1.05, 1.4));
+        g.add(voxel(0.1, 0.1, 0.1, mats.emissiveCyan, -1.4, 1.05, -1.4));
+
+        return g;
+    },
+
     // GENERATOR - Fuel power generator
     [BuildingType.GENERATOR]: () => {
         const g = new THREE.Group();

@@ -12,8 +12,8 @@ import { getBiomeAt } from '../worldgen/Core';
 // Playable area: 35x35 in the center (much larger buildable area).
 // Padding: 5 tiles on each side (reduced from 15).
 export const GRID_SIZE = 45;
-const PLAYABLE_SIZE = 35; // Increased from 15
-const PADDING = 5; // Reduced from 15 - (45 - 35) / 2 = 5
+const PLAYABLE_SIZE = 45; // Match GRID_SIZE to unlock full map
+const PADDING = 0; // No padding
 
 // Note: World generation logic (noises, biome distribution) has been isolated 
 // into 'engine/worldgen'. Do not add procedural logic here.

@@ -8,7 +8,7 @@ import {
     Coffee, PartyPopper, Container, Pickaxe, Flame,
     Search, LayoutGrid, Zap, Sprout, Hammer, Archive, Wrench,
     HeartPulse, Dumbbell, Gem, TrainFront, Truck,
-    Trash2, TreeDeciduous, Salad, Thermometer, Trophy, Rocket
+    Trash2, TreeDeciduous, Salad, Thermometer, Trophy, Rocket, Package
 } from 'lucide-react';
 import { GameState, BuildingType, Action } from '../types';
 import { BUILDINGS } from '../engine/data/VoxelConstants';
@@ -68,6 +68,7 @@ export const getBuildingIcon = (type: BuildingType) => {
         case BuildingType.MINING_DRILL: return <Pickaxe size={18} />;
         case BuildingType.UNDERGROUND_FANS: return <Wind size={18} />;
         case BuildingType.ORE_EXTRACTOR: return <Container size={18} />;
+        case BuildingType.STOCKPILE: return <Package size={18} />;
         default: return <X size={18} />;
     }
 };
@@ -113,6 +114,7 @@ const ITEM_CATEGORIES: Record<BuildingType, CategoryType> = {
     [BuildingType.SAFARI_LODGE]: 'ADVANCED',
     [BuildingType.GREEN_TECH_LAB]: 'ADVANCED',
     [BuildingType.STORAGE_DEPOT]: 'UTILITIES',
+    [BuildingType.STOCKPILE]: 'UTILITIES',
     [BuildingType.WORKSHOP]: 'BASICS',
     [BuildingType.GENERATOR]: 'UTILITIES',
     // Era 2: Growth
@@ -150,6 +152,7 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
             BuildingType.ROAD, BuildingType.PIPE, BuildingType.FENCE,
             BuildingType.STAFF_QUARTERS, BuildingType.CANTEEN, BuildingType.WORKSHOP,
             BuildingType.WASH_PLANT, BuildingType.SOLAR_ARRAY, BuildingType.WATER_WELL, BuildingType.STORAGE_DEPOT,
+            BuildingType.STOCKPILE,
             BuildingType.MINING_HEADFRAME,
             // Era 2: Growth
             BuildingType.MEDICAL_BAY, BuildingType.TRAINING_CENTER, BuildingType.GENERATOR,

@@ -43,6 +43,7 @@ export class StateManager {
                 trust: INITIAL_RESOURCES.trust,
                 income: 0,
                 maintenance: 0,
+                maxCapacity: 1000,
             },
 
             selectedBuilding: null,
@@ -69,6 +70,20 @@ export class StateManager {
                     trend: 'STABLE',
                     history: [50],
                     volatility: 0.05
+                },
+                wood: {
+                    basePrice: 5,
+                    currentPrice: 5,
+                    trend: 'STABLE',
+                    history: [5],
+                    volatility: 0.08
+                },
+                stone: {
+                    basePrice: 8,
+                    currentPrice: 8,
+                    trend: 'STABLE',
+                    history: [8],
+                    volatility: 0.06
                 },
                 eventDuration: 0,
             },

@@ -136,6 +136,16 @@ export class ConstructionSystem extends BaseSimSystem {
                             if (grid[idx].digState[layer] === 1) grid[idx].digState[layer] = 2;
                         }
                     }
+
+                    // Auto-Dig Entrance for Mining Headframe
+                    if (headTile.buildingType === BuildingType.MINING_HEADFRAME) {
+                        if (!grid[idx].digState) grid[idx].digState = {};
+                        // Only queue dig if not already excavated
+                        if (!grid[idx].underground?.[-1]?.excavated) {
+                            // Status 4 = Entrance Dig (triggers DIG job directed at layer -1)
+                            grid[idx].digState[-1] = 4;
+                        }
+                    }
                 }
             }
         }

@@ -64,9 +64,9 @@ export function getBiomeAt(x: number, z: number): BiomeData {
     const moisture = fbm(x * 0.003, z * 0.003, 3, 0.5, 2.0, 567.8);
     const detail = fbm(x * 0.1, z * 0.1, 2, 0.5, 2.0, 111.1);
 
-    // Safe zone logic (Playable area is approx -22 to +22)
+    // Safe zone logic (Playable area expanded to full map)
     const dist = Math.sqrt(x * x + z * z);
-    const isSafeZone = dist < 14;
+    const isSafeZone = dist < 25; // Covers the entire 45x45 grid
 
     let biome: BiomeType | 'STONE' = 'GRASS';
     let height = 1; // Default flat land
