@@ -328,7 +328,7 @@ export class IsoCameraSystem {
             // Convert distance change to zoom delta
             // Negative distance change = pinch in = zoom out (increase frustum)
             // Positive distance change = pinch out = zoom in (decrease frustum)
-            const zoomSensitivity = 0.5;
+            const zoomSensitivity = 0.1; // Reduced from 0.5
             const zoomDelta = -distanceChange * zoomSensitivity;
 
             this.zoom(zoomDelta);
@@ -343,7 +343,7 @@ export class IsoCameraSystem {
             while (angleDelta < -Math.PI) angleDelta += 2 * Math.PI;
 
             // Apply rotation (invert for natural feel)
-            const rotateSensitivity = 2.0;
+            const rotateSensitivity = 0.5; // Reduced from 2.0
             this.cameraAngle -= angleDelta * rotateSensitivity;
             this.updateCameraTransform();
         }
