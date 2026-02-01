@@ -82,6 +82,11 @@ export class AureusWorld extends BaseWorld {
     private gamePaused = false;
     private config: AureusWorldConfig | null = null;
 
+    // Auto-save system
+    private autoSaveInterval: ReturnType<typeof setInterval> | null = null;
+    private visibilityHandler: (() => void) | null = null;
+    private readonly AUTO_SAVE_INTERVAL_MS = 60000; // Save every 60 seconds
+
     constructor(render: ThreeRenderAdapter) {
         super();
         this.render = render;
@@ -423,7 +428,23 @@ export class AureusWorld extends BaseWorld {
     }
 
     sellMinerals(): void { this.sellResource('minerals'); }
-    sellGems(): void { this.sellResource('gems'); }
+    sellGems(address?: string): void {
+        const state = this.stateManager.getMutableState();
+        const amount = state.resources.gems;
+        if (amount <= 0) return;
+
+        // "Deposit" gems to external wallet
+        // In a real app, this would trigger a blockchain transaction
+        state.resources.gems = 0;
+
+        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
+        state.newsFeed.unshift({
+            id: `deposit_gems_${Date.now()}`,
+            headline: `Deposited ${Math.floor(amount)} Thundergems to ${address || 'External Wallet'}`,
+            type: 'POSITIVE',
+            timestamp: Date.now()
+        });
+    }
     sellWood(): void { this.sellResource('wood'); }
     sellStone(): void { this.sellResource('stone'); }
 
@@ -624,8 +645,20 @@ export class AureusWorld extends BaseWorld {
         this.cameraSystem.zoomToPosition(worldX, worldZ, 2);
     }
 
+    /**
+     * Dismiss the era unlocked popup
+     */
+    dismissEraPopup(): void {
+        const state = this.stateManager.getMutableState();
+        state.eraUnlockedPopup = null;
+    }
+
     toggleViewMode(): void {
         const state = this.stateManager.getMutableState();
+
+        // Already loading? Prevent double-toggle
+        if (state.isLoading) return;
+
         if (state.viewMode === 'SURFACE') {
             // Check if at least one entrance exists
             const hasEntrance = state.grid.some(t => t.hasEntrance);
@@ -640,28 +673,60 @@ export class AureusWorld extends BaseWorld {
                 return;
             }
 
-            state.viewMode = 'UNDERGROUND';
-            this.cameraSystem.setUndergroundMode(true);
+            // Show loading screen
+            state.isLoading = true;
+            state.loadingMessage = 'Descending to Underground...';
 
-            // Focus on current layer with proper depth scaling
-            // Each layer is 2 units deep for better visibility
-            const layerY = (state.currentUndergroundLayer ?? -1) * 2.0;
-            this.cameraSystem.setTargetHeight(layerY);
-            this.inputSystem?.setRayPlaneHeight(layerY);
+            // Perform transition after brief delay
+            setTimeout(() => {
+                const s = this.stateManager.getMutableState();
+                s.viewMode = 'UNDERGROUND';
+                this.cameraSystem.setUndergroundMode(true);
+
+                // Focus on current layer with proper depth scaling
+                const layerY = (s.currentUndergroundLayer ?? -1) * 2.0;
+                this.cameraSystem.setTargetHeight(layerY);
+                this.inputSystem?.setRayPlaneHeight(layerY);
+
+                this.environmentRenderSystem.setViewMode(s.viewMode);
+                this.terrainRenderSystem.setViewMode(s.viewMode);
+                this.terrainRenderSystem.syncGrid(s.grid);
+
+                // Hide loading after chunks rebuild
+                setTimeout(() => {
+                    const s2 = this.stateManager.getMutableState();
+                    s2.isLoading = false;
+                    s2.loadingMessage = '';
+                }, 600);
+            }, 300);
+
         } else {
-            state.viewMode = 'SURFACE';
-            this.cameraSystem.setUndergroundMode(false);
-            this.cameraSystem.setTargetHeight(0);
-            this.inputSystem?.setRayPlaneHeight(0);
+            // Show loading screen
+            state.isLoading = true;
+            state.loadingMessage = 'Returning to Surface...';
+
+            // Perform transition after brief delay
+            setTimeout(() => {
+                const s = this.stateManager.getMutableState();
+                s.viewMode = 'SURFACE';
+                this.cameraSystem.setUndergroundMode(false);
+                this.cameraSystem.setTargetHeight(0);
+                this.inputSystem?.setRayPlaneHeight(0);
+
+                this.environmentRenderSystem.setViewMode(s.viewMode);
+                this.terrainRenderSystem.setViewMode(s.viewMode);
+                this.terrainRenderSystem.syncGrid(s.grid);
+
+                // Hide loading after chunks rebuild
+                setTimeout(() => {
+                    const s2 = this.stateManager.getMutableState();
+                    s2.isLoading = false;
+                    s2.loadingMessage = '';
+                }, 600);
+            }, 300);
         }
 
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
-
-        this.environmentRenderSystem.setViewMode(state.viewMode);
-        this.terrainRenderSystem.setViewMode(state.viewMode);
-
-        // Sync grid to force re-render with new view mode (will be passed to worker)
-        this.terrainRenderSystem.syncGrid(state.grid);
     }
 
     public changeUndergroundLayer(delta: number): void {
@@ -804,8 +869,8 @@ export class AureusWorld extends BaseWorld {
         }
     }
 
-    loadGame(): void {
-        const loadedState = this.persistenceManager.loadGame();
+    loadGame(data?: string): void {
+        const loadedState = data ? this.persistenceManager.reviveState(data) : this.persistenceManager.loadGame();
         if (loadedState) {
             this.stateManager.loadState(loadedState);
             this.workerPool.broadcast({ type: 'SYNC_GRID', payload: loadedState.grid });
@@ -940,15 +1005,75 @@ export class AureusWorld extends BaseWorld {
         }
 
         console.log('[AureusWorld] Ready');
+
+        // Setup auto-save system
+        this.setupAutoSave();
     }
 
     protected async onTeardown(): Promise<void> {
         console.log('[AureusWorld] Tearing down...');
+
+        // Cleanup auto-save
+        this.cleanupAutoSave();
+
+        // Save game on exit
+        this.saveGameQuiet();
+
         this.undergroundDecorationSystem.dispose();
         this.sim.dispose();
         this.workerPool.dispose();
         this.jobs.clear();
         this.inputSystem?.dispose();
+    }
+
+    /**
+     * Setup automatic game saving
+     */
+    private setupAutoSave(): void {
+        // Periodic auto-save
+        this.autoSaveInterval = setInterval(() => {
+            this.saveGameQuiet();
+        }, this.AUTO_SAVE_INTERVAL_MS);
+
+        // Save when tab becomes hidden or before unload
+        this.visibilityHandler = () => {
+            if (document.visibilityState === 'hidden') {
+                this.saveGameQuiet();
+            }
+        };
+        document.addEventListener('visibilitychange', this.visibilityHandler);
+
+        // Save before page unload
+        window.addEventListener('beforeunload', () => {
+            this.saveGameQuiet();
+        });
+
+        console.log('[AureusWorld] Auto-save enabled (interval: 60s)');
+    }
+
+    /**
+     * Cleanup auto-save handlers
+     */
+    private cleanupAutoSave(): void {
+        if (this.autoSaveInterval) {
+            clearInterval(this.autoSaveInterval);
+            this.autoSaveInterval = null;
+        }
+        if (this.visibilityHandler) {
+            document.removeEventListener('visibilitychange', this.visibilityHandler);
+            this.visibilityHandler = null;
+        }
+    }
+
+    /**
+     * Silent save without UI feedback (for auto-save)
+     */
+    private saveGameQuiet(): void {
+        const state = this.stateManager.getState();
+        const success = this.persistenceManager.saveGame(state);
+        if (success) {
+            console.log('[AureusWorld] Auto-saved.');
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════

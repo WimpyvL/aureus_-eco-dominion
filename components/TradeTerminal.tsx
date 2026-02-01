@@ -41,6 +41,7 @@ const PriceSparkline: React.FC<{ history: number[]; color: string }> = ({ histor
 
 export const TradeTerminal: React.FC<TradeTerminalProps> = ({ isOpen, onClose, state, dispatch, playSfx }) => {
     const { market, resources } = state;
+    const [walletAddress, setWalletAddress] = React.useState('');
 
     if (!market || !state.contracts) return null;
 
@@ -101,14 +102,14 @@ export const TradeTerminal: React.FC<TradeTerminalProps> = ({ isOpen, onClose, s
                         </div>
                     </div>
 
-                    {/* GEMS MARKET */}
+                    {/* THUNDERGEMS MARKET */}
                     <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
                         <div className="flex justify-between items-start mb-4">
                             <div>
-                                <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Precious Gems Index</h3>
+                                <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Thundergems Index</h3>
                                 <div className="flex items-end gap-2">
                                     <span className="text-3xl font-mono text-white">{market.gems.currentPrice.toFixed(1)}</span>
-                                    <span className="text-xs font-bold text-slate-500 mb-1">AGT / ct</span>
+                                    <span className="text-xs font-bold text-slate-500 mb-1">AGT / Gem</span>
                                 </div>
                             </div>
                             <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-bold ${market.gems.trend === 'RISING' ? 'bg-emerald-500/20 text-emerald-400' :
@@ -121,21 +122,38 @@ export const TradeTerminal: React.FC<TradeTerminalProps> = ({ isOpen, onClose, s
                             </div>
                         </div>
                         <PriceSparkline history={market.gems.history} color="#a78bfa" />
-                        <div className="mt-4 flex gap-2">
-                            <button
-                                onClick={() => { dispatch({ type: 'SELL_GEMS' }); playSfx('UI_COIN'); }}
-                                disabled={resources.gems <= 0}
-                                className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold py-2 rounded-lg text-xs"
-                            >
-                                SELL ({Math.floor(resources.gems)})
-                            </button>
-                            <button
-                                onClick={() => { dispatch({ type: 'BUY_RESOURCE', payload: { resource: 'gems', amount: 10 } }); }}
-                                disabled={resources.agt < Math.floor(market.gems.currentPrice * 1.25 * 10)}
-                                className="flex-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-purple-400 font-bold py-2 rounded-lg text-xs border border-purple-500/30"
-                            >
-                                BUY 10 ({(market.gems.currentPrice * 1.25 * 10).toFixed(0)})
-                            </button>
+                        <div className="mt-4 space-y-3">
+                            <div>
+                                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1 block">Recipient Wallet Address</label>
+                                <input
+                                    type="text"
+                                    placeholder="Enter 0x..."
+                                    className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-white font-mono focus:border-purple-500 focus:outline-none placeholder-slate-600"
+                                    value={walletAddress}
+                                    onChange={(e) => setWalletAddress(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => {
+                                        dispatch({ type: 'SELL_GEMS', payload: { address: walletAddress } });
+                                        playSfx('UI_COIN');
+                                        setWalletAddress(''); // Clear after send? Or keep? Clearing for now.
+                                    }}
+                                    disabled={resources.gems <= 0 || !walletAddress.trim()}
+                                    className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 rounded-lg text-xs"
+                                >
+                                    DEPOSIT ({Math.floor(resources.gems)})
+                                </button>
+                                {/* Buying raw gems doesn't make sense if they are tokens, maybe 'Buy Back'? Keeping generic for now */}
+                                <button
+                                    onClick={() => { dispatch({ type: 'BUY_RESOURCE', payload: { resource: 'gems', amount: 10 } }); }}
+                                    disabled={resources.agt < Math.floor(market.gems.currentPrice * 1.25 * 10)}
+                                    className="flex-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-purple-400 font-bold py-2 rounded-lg text-xs border border-purple-500/30"
+                                >
+                                    BUY 10 ({(market.gems.currentPrice * 1.25 * 10).toFixed(0)})
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -268,6 +286,6 @@ export const TradeTerminal: React.FC<TradeTerminalProps> = ({ isOpen, onClose, s
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };

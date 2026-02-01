@@ -373,12 +373,57 @@ export class ConstructionSystem extends BaseSimSystem {
         const headTile = grid[headIdx];
         if (!headTile) return;
 
-        // Increment level
-        headTile.level = (headTile.level || 1) + 1;
+        const def = BUILDINGS[headTile.buildingType];
+        if (!def || !def.upgrades) {
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
+            return;
+        }
+
+        const currentLevel = headTile.level || 1;
+        const nextLevel = currentLevel + 1;
+        const upgrade = def.upgrades.find(u => u.level === nextLevel);
+
+        if (!upgrade) {
+            // Max level reached
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
+            return;
+        }
+
+        // Check Era Requirement
+        if (upgrade.era && state.currentEra < upgrade.era && !state.unlockedEras?.includes(upgrade.era)) {
+            // Allow if cheat mode? Or just strict.
+            if (!state.cheatsEnabled) {
+                state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
+                return;
+            }
+        }
+
+        // Check Costs
+        const costs = upgrade.costs || {};
+        if (!state.cheatsEnabled) {
+            if ((state.resources.agt || 0) < (costs.agt || 0) ||
+                (state.resources.minerals || 0) < (costs.minerals || 0) ||
+                (state.resources.wood || 0) < (costs.wood || 0) ||
+                (state.resources.stone || 0) < (costs.stone || 0) ||
+                (state.resources.gems || 0) < (costs.gems || 0)) {
+
+                state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
+                return;
+            }
+
+            // Deduct Costs
+            state.resources.agt = (state.resources.agt || 0) - (costs.agt || 0);
+            state.resources.minerals = (state.resources.minerals || 0) - (costs.minerals || 0);
+            state.resources.wood = (state.resources.wood || 0) - (costs.wood || 0);
+            state.resources.stone = (state.resources.stone || 0) - (costs.stone || 0);
+            state.resources.gems = (state.resources.gems || 0) - (costs.gems || 0);
+        }
+
+        // Apply Upgrade
+        headTile.level = nextLevel;
 
         // Sync to parts if multi-tile
-        const def = BUILDINGS[headTile.buildingType];
-        if (def && (def.width || 1) > 1 || (def.depth || 1) > 1) {
+        if ((def.width || 1) > 1 || (def.depth || 1) > 1) {
             const w = def.width || 1;
             const d = def.depth || 1;
             for (let dz = 0; dz < d; dz++) {
@@ -394,5 +439,13 @@ export class ConstructionSystem extends BaseSimSystem {
         // Trigger Effect
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.COMPLETE }); // Upgrade sound
         state.pendingEffects.push({ type: 'GRID_UPDATE', updates: [headTile] });
+
+        // Notify
+        state.newsFeed.unshift({
+            id: `upgrade_${Date.now()}`,
+            headline: `${def.name} upgraded to Level ${nextLevel}`,
+            type: 'POSITIVE',
+            timestamp: Date.now()
+        });
     }
 }

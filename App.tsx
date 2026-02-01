@@ -38,6 +38,8 @@ import { WeatherOverlay } from './components/WeatherOverlay';
 import { MobileBuildingConfirmation } from './components/MobileBuildingConfirmation';
 import { DigConfirmPopup } from './components/DigConfirmPopup';
 import { LayerNavigator } from './components/LayerNavigator';
+import { LoadingOverlay } from './components/LoadingOverlay';
+import { EraUnlockedModal } from './components/EraUnlockedModal';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 // Colonist Inspector Component
@@ -222,11 +224,23 @@ const App: React.FC = () => {
         audioRef.current.play(type);
     }, []);
 
-    // Check for existing save
+    // Check for existing save and auto-skip home page
     useEffect(() => {
         const saved = localStorage.getItem('aureus_save_v2');
         if (saved) setHasSave(true);
     }, []);
+
+    /* 
+    // Auto-continue game if save was auto-loaded
+    useEffect(() => {
+        if (ready && hasSave && showHomePage) {
+            // Save exists and was auto-loaded - skip home page
+            setShowHomePage(false);
+            audioRef.current.init();
+            console.log('[App] Auto-continuing from saved game');
+        }
+    }, [ready, hasSave, showHomePage]);
+    */
 
     // Clear pinned tile when selected building or interaction mode changes
     useEffect(() => {
@@ -350,7 +364,7 @@ const App: React.FC = () => {
                 world.sellMinerals();
                 break;
             case 'SELL_GEMS':
-                world.sellGems();
+                world.sellGems(action.payload.address);
                 break;
             case 'SELL_WOOD':
                 world.sellWood();
@@ -469,6 +483,14 @@ const App: React.FC = () => {
                 </div>
             )}
 
+            {/* View Transition Loading Overlay */}
+            {state?.isLoading && (
+                <LoadingOverlay
+                    message={state.loadingMessage || 'Transitioning...'}
+                    isVisible={true}
+                />
+            )}
+
             {/* Home Page Overlay */}
             {state && showHomePage && (
                 <div className="absolute inset-0 z-50 bg-gradient-to-b from-black/30 via-transparent to-black/50">
@@ -479,6 +501,15 @@ const App: React.FC = () => {
                         hasSave={hasSave}
                     />
                 </div>
+            )}
+
+            {/* Era Unlocked Popup */}
+            {state?.eraUnlockedPopup && (
+                <EraUnlockedModal
+                    era={state.eraUnlockedPopup}
+                    onClose={() => world?.dismissEraPopup()}
+                    playSfx={playSfx}
+                />
             )}
 
             {/* Game UI */}

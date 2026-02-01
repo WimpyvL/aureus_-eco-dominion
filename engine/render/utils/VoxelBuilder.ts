@@ -350,6 +350,7 @@ export interface FactoryOptions {
     seed?: number;
     width?: number;
     depth?: number;
+    level?: number; // Building upgrade level (1-4)
     waterStatus?: 'CONNECTED' | 'DISCONNECTED';
     powerStatus?: 'CONNECTED' | 'DISCONNECTED';
     isUnderConstruction?: boolean;

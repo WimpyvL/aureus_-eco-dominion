@@ -68,6 +68,9 @@ export class EraSystem extends BaseSimSystem {
 
         const def = ERAS[era];
 
+        // Trigger era popup
+        state.eraUnlockedPopup = era;
+
         // Notification
         state.newsFeed.push({
             id: `era_${era}_${Date.now()}`,

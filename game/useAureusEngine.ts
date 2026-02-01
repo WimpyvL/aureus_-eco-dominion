@@ -264,6 +264,16 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                 // NOW set state - this triggers the loading screen to hide
                 setState(worldInstance.getState());
 
+                /* 
+                // AUTO-LOAD: If a save exists, load it automatically
+                const savedGame = localStorage.getItem('aureus_save_v2');
+                if (savedGame) {
+                    console.log('[useAureusEngine] Found saved game, auto-loading...');
+                    worldInstance.loadGame(savedGame);
+                    setState(worldInstance.getState());
+                }
+                */
+
                 // Store cleanup function
                 (window as any).__aureusCleanup = () => {
                     unsubscribe();

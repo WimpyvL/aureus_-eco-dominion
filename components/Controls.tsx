@@ -16,7 +16,7 @@ interface ControlsProps {
     playSfx: (type: any) => void;
     step: GameStep;
     debugMode: boolean;
-    interactionMode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG';
+    interactionMode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG' | 'TEST_DESTRUCT';
 }
 
 export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding, dispatch, setSidebarOpen, viewMode, playSfx, step, debugMode, interactionMode }) => {
@@ -122,19 +122,16 @@ export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding,
                 </button>
                 <button
                     onClick={() => {
-                        dispatch({ type: 'SET_INTERACTION_MODE', payload: interactionMode === 'DIG' ? 'INSPECT' : 'DIG' });
+                        dispatch({ type: 'SET_INTERACTION_MODE', payload: 'DIG' });
                         playSfx('UI_CLICK');
                     }}
                     className={`
                     w-12 h-12 rounded-[4px] flex items-center justify-center transition-all
                     border-2 border-b-[4px] 
-                    ${interactionMode === 'DIG'
-                            ? 'bg-amber-600 border-amber-900 border-b-2 translate-y-[2px]'
-                            : 'bg-slate-800 border-slate-950 hover:-translate-y-0.5'
-                        }
+                    bg-slate-800 border-slate-950 hover:-translate-y-0.5
                     `}
                 >
-                    <Pickaxe size={20} className={interactionMode === 'DIG' ? 'text-white' : 'text-slate-400'} />
+                    <Pickaxe size={20} className="text-slate-400" />
                 </button>
             </div>
 

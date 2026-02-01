@@ -379,7 +379,7 @@ export const HUD: React.FC<HUDProps> = React.memo(({ resources, financials, popu
       <ResourceBlock
         icon={Gem}
         val={resources.gems}
-        label="Gems"
+        label="Thundergems"
         borderClass="border-purple-600/80"
         iconBgClass="bg-purple-500"
         textColor="text-purple-300"

@@ -8,7 +8,7 @@ import { GameState, Agent, GridTile } from '../../types';
 import { GRID_SIZE } from '../utils/GameUtils';
 
 export class PersistenceManager {
-    private readonly STORAGE_KEY = 'AUREUS_SAVE_V1';
+    private readonly STORAGE_KEY = 'aureus_save_v2';
 
     /**
      * Serializes and saves the current game state
@@ -71,6 +71,32 @@ export class PersistenceManager {
             return state;
         } catch (e) {
             console.error('[PersistenceManager] Failed to load game:', e);
+            return null;
+        }
+    }
+
+    /**
+     * Revives state from a provided string
+     */
+    public reviveState(serialized: string): GameState | null {
+        try {
+            const state = JSON.parse(serialized, (key, value) => {
+                // Revive Maps
+                if (typeof value === 'object' && value !== null && value.dataType === 'Map') {
+                    return new Map(value.value);
+                }
+                return value;
+            }) as GameState;
+
+            // Post-load validation / migration
+            if (!state.agents) state.agents = [];
+            if (!state.jobs) state.jobs = [];
+            if (!state.pendingEffects) state.pendingEffects = [];
+            if (!state.commandQueue) state.commandQueue = [];
+
+            return state;
+        } catch (e) {
+            console.error('[PersistenceManager] Failed to revive state:', e);
             return null;
         }
     }

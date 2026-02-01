@@ -19,6 +19,7 @@ export class IsoCameraSystem {
     public cameraZoom: number;
     public zoomLevel = 5; // Mid-range
     public maxZoomLevel = 7; // User requested reduction
+    private targetZoomLevel = 5; // Target for smooth zooming
     public cameraFocus = new THREE.Vector3(0, 0, 0);
     public cameraAngle = Math.PI / 4;  // 45 degrees - isometric view
     public cameraElevation = Math.PI / 3.5;  // ~51 degrees
@@ -174,7 +175,7 @@ export class IsoCameraSystem {
 
         // Scroll up (negative deltaY) = zoom in (smaller frustum)
         // Scroll down (positive deltaY) = zoom out (larger frustum)
-        const delta = e.deltaY * 0.1;
+        const delta = e.deltaY * 0.005; // Reduced sensitivity
         this.zoom(delta);
     }
 
@@ -328,7 +329,7 @@ export class IsoCameraSystem {
             // Convert distance change to zoom delta
             // Negative distance change = pinch in = zoom out (increase frustum)
             // Positive distance change = pinch out = zoom in (decrease frustum)
-            const zoomSensitivity = 0.1; // Reduced from 0.5
+            const zoomSensitivity = 0.01; // Significantly reduced from 0.1 for smoother control
             const zoomDelta = -distanceChange * zoomSensitivity;
 
             this.zoom(zoomDelta);
@@ -385,6 +386,19 @@ export class IsoCameraSystem {
             this.updateCameraTransform();
         }
 
+        // Smooth Zoom Lerp
+        const zoomDiff = this.targetZoomLevel - this.zoomLevel;
+        if (Math.abs(zoomDiff) > 0.001) {
+            const zoomLerpSpeed = 8.0;
+            this.zoomLevel += zoomDiff * Math.min(1, dt * zoomLerpSpeed);
+
+            // Continuous zoom calculation
+            const base = 10;
+            const stepSize = this.undergroundMode ? 5 : 8;
+            this.cameraZoom = base + (this.zoomLevel * stepSize);
+            this.updateCameraTransform();
+        }
+
 
     }
 
@@ -416,17 +430,8 @@ export class IsoCameraSystem {
     }
 
     public zoom(delta: number): void {
-        // Step-based zoom
-        const direction = delta > 0 ? 1 : -1;
-        this.zoomLevel = Math.max(0, Math.min(this.maxZoomLevel, this.zoomLevel + direction));
-
-        // Calculate cameraZoom based on steps: 
-        // Surface: 10 (min) to (10 + 12*8 = 106) (max)
-        // Underground: Stays closer
-        const base = 10;
-        const stepSize = this.undergroundMode ? 5 : 8;
-        this.cameraZoom = base + (this.zoomLevel * stepSize);
-        this.updateCameraTransform();
+        // Continuous target update
+        this.targetZoomLevel = Math.max(0, Math.min(this.maxZoomLevel, this.targetZoomLevel + delta));
     }
 
     public updateCameraTransform(): void {
@@ -496,6 +501,7 @@ export class IsoCameraSystem {
     public zoomToPosition(worldX: number, worldZ: number, zoomLevel: number = 2): void {
         this.cameraFocus.set(worldX, this.cameraFocus.y, worldZ);
         this.zoomLevel = Math.max(0, Math.min(5, zoomLevel));
+        this.targetZoomLevel = this.zoomLevel;
 
         // Calculate cameraZoom based on steps
         const stepSize = this.undergroundMode ? 5 : 10;

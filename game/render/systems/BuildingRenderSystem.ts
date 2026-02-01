@@ -199,6 +199,7 @@ export class BuildingRenderSystem {
                 integrity: tile.integrity,
                 waterStatus: tile.waterStatus,
                 powerStatus: tile.powerStatus,
+                level: tile.level || 1,
                 seed
             };
 

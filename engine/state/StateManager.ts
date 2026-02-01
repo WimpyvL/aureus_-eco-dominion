@@ -131,6 +131,7 @@ export class StateManager {
 
             currentEra: Era.SETTLEMENT,
             unlockedEras: [Era.SETTLEMENT],
+            eraUnlockedPopup: null,
 
             powerGrid: {
                 totalProduced: 0,
@@ -143,6 +144,10 @@ export class StateManager {
                 totalConsumed: 0,
                 deficit: 0,
             },
+
+            // View Transition Loading
+            isLoading: false,
+            loadingMessage: '',
 
             ...overrides,
         } as GameState;
@@ -174,6 +179,7 @@ export class StateManager {
             targetTileId: null,
             path: null,
             layer: 0,
+            inventory: { type: null, amount: 0, capacity: 10 }
         }));
     }
 

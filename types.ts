@@ -493,6 +493,7 @@ export interface GameState {
   // Era System
   currentEra: Era;
   unlockedEras: Era[];
+  eraUnlockedPopup: Era | null; // Set when a new era is unlocked to show popup
 
   // Power Grid System
   powerGrid: {
@@ -518,6 +519,10 @@ export interface GameState {
     SHARED_BUFFER_TRANSFER: boolean;
   };
   commandQueue: GameCommand[];
+
+  // View Transition Loading Screen
+  isLoading: boolean;
+  loadingMessage: string;
 }
 
 export interface GameCommand {
@@ -564,7 +569,7 @@ export interface Contract {
 export type Action =
   | { type: 'TICK' }
   | { type: 'SELL_MINERALS' }
-  | { type: 'SELL_GEMS' }
+  | { type: 'SELL_GEMS'; payload: { address: string } }
   | { type: 'SELL_WOOD' }
   | { type: 'SELL_STONE' }
   | { type: 'BUY_RESOURCE', payload: { resource: 'minerals' | 'gems' | 'wood' | 'stone', amount: number } }
