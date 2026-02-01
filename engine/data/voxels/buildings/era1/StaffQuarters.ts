@@ -249,7 +249,7 @@ function buildLevel4(opts?: FactoryOptions) {
 
     // --- MAIN BUILDING (3 Floors + Penthouse) ---
     // Recessed core (Concrete)
-    g.add(voxel(1.6, 2.6, 1.6, mats.concreteLight, 0, 0.25, 0));
+    g.add(voxel(1.6, 2.6, 1.6, mats.concrete, 0, 0.25, 0));
 
     // Architectural Facade Fins (Vertical)
     for (let x = -0.85; x <= 0.85; x += 0.85) {
@@ -306,7 +306,7 @@ function buildLevel4(opts?: FactoryOptions) {
 
     // --- ROOFTOP MECHANICAL ---
     // Mechanical Room (Penthouse)
-    g.add(voxel(0.8, 0.6, 0.8, mats.concreteLight, 0, 2.85, -0.2));
+    g.add(voxel(0.8, 0.6, 0.8, mats.concrete, 0, 2.85, -0.2));
     g.add(voxel(0.85, 0.05, 0.85, mats.blueMetal, 0, 3.45, -0.2)); // Penthouse roof
 
     // HVAC Units (Detailed)

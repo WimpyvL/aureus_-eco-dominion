@@ -72,9 +72,9 @@ function buildLevel2(opts?: FactoryOptions) {
     for (let i = 0; i < 3; i++) {
         const blade = new THREE.Group();
         blade.rotation.z = i * (Math.PI * 2 / 3);
-        blade.add(voxel(0.25, 1.5, 0.06, mats.concreteLight, 0, 0.9, 0));
-        blade.add(voxel(0.2, 1.5, 0.05, mats.concreteLight, 0, 2.4, 0));
-        blade.add(voxel(0.15, 1.0, 0.04, mats.concreteLight, 0, 3.6, 0));
+        blade.add(voxel(0.25, 1.5, 0.06, mats.concrete, 0, 0.9, 0));
+        blade.add(voxel(0.2, 1.5, 0.05, mats.concrete, 0, 2.4, 0));
+        blade.add(voxel(0.15, 1.0, 0.04, mats.concrete, 0, 3.6, 0));
         rotor.add(blade);
     }
     g.add(rotor);
@@ -100,7 +100,7 @@ function buildLevel3(opts?: FactoryOptions) {
         for (let i = 0; i < 3; i++) {
             const blade = new THREE.Group();
             blade.rotation.z = i * (Math.PI * 2 / 3);
-            blade.add(voxel(0.3, 4.5, 0.08, mats.concreteLight, 0, 2.25, 0));
+            blade.add(voxel(0.3, 4.5, 0.08, mats.concrete, 0, 2.25, 0));
             rotor.add(blade);
         }
         g.add(rotor);
@@ -117,7 +117,7 @@ function buildLevel4(opts?: FactoryOptions) {
     g.add(voxel(1.6, 0.4, 1.6, mats.concrete, 0, 0, 0));
 
     // Sleek central tower
-    g.add(voxel(0.8, 8.0, 0.8, mats.concreteLight, 0, 0.4, 0));
+    g.add(voxel(0.8, 8.0, 0.8, mats.concrete, 0, 0.4, 0));
     g.add(voxel(0.85, 0.2, 0.85, mats.emissiveCyan, 0, 4.0, 0));
 
     // Vertical spiral blades
