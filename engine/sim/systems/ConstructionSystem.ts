@@ -91,6 +91,31 @@ export class ConstructionSystem extends BaseSimSystem {
 
         if (!headTile) return false;
 
+        // CHECK FOLIAGE OBSTRUCTION
+        // If any tile in this building has foliage, we cannot build.
+        // We scan the grid to find parts of this building.
+        // Optimization: We could use building def to look specifically, but scanning linearly is safe if slow.
+        // Actually, let's use the definition if possible, but we don't have X/Z easily on the tile without calc.
+        // Let's deduce size from definition to be faster than O(N).
+        const def = BUILDINGS[headTile.buildingType];
+        if (def) {
+            const w = def.width || 1;
+            const d = def.depth || 1;
+            const startX = headIdx % GRID_SIZE;
+            const startZ = Math.floor(headIdx / GRID_SIZE);
+
+            for (let dz = 0; dz < d; dz++) {
+                for (let dx = 0; dx < w; dx++) {
+                    const idx = (startZ + dz) * GRID_SIZE + (startX + dx);
+                    if (grid[idx] && grid[idx].structureHeadIndex === headIdx) {
+                        if (grid[idx].foliage && grid[idx].foliage !== 'NONE') {
+                            return false; // Obstruction!
+                        }
+                    }
+                }
+            }
+        }
+
         headTile.constructionTimeLeft = Math.max(0, (headTile.constructionTimeLeft || 0) - amount);
 
         if (headTile.constructionTimeLeft <= 0) {
@@ -419,8 +444,11 @@ export class ConstructionSystem extends BaseSimSystem {
             state.resources.gems = (state.resources.gems || 0) - (costs.gems || 0);
         }
 
-        // Apply Upgrade
+        // Apply Upgrade (Start Construction)
         headTile.level = nextLevel;
+        headTile.isUnderConstruction = true;
+        // Use base build time for upgrade, or default to 10s if missing
+        headTile.constructionTimeLeft = def.buildTime || 10;
 
         // Sync to parts if multi-tile
         if ((def.width || 1) > 1 || (def.depth || 1) > 1) {
@@ -431,19 +459,23 @@ export class ConstructionSystem extends BaseSimSystem {
                     const idx = (Math.floor(headIdx / GRID_SIZE) + dz) * GRID_SIZE + ((headIdx % GRID_SIZE) + dx);
                     if (grid[idx] && grid[idx].structureHeadIndex === headIdx) {
                         grid[idx].level = headTile.level;
+                        grid[idx].isUnderConstruction = true;
+                        // constructionTimeLeft only needed on head for progress logic, 
+                        // but setting on all for safety/consistency doesn't hurt.
+                        grid[idx].constructionTimeLeft = headTile.constructionTimeLeft;
                     }
                 }
             }
         }
 
         // Trigger Effect
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.COMPLETE }); // Upgrade sound
+        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BUILD_START });
         state.pendingEffects.push({ type: 'GRID_UPDATE', updates: [headTile] });
 
         // Notify
         state.newsFeed.unshift({
             id: `upgrade_${Date.now()}`,
-            headline: `${def.name} upgraded to Level ${nextLevel}`,
+            headline: `${def.name} upgrading to Level ${nextLevel}...`,
             type: 'POSITIVE',
             timestamp: Date.now()
         });

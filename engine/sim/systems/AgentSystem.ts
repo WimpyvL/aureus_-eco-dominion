@@ -194,10 +194,35 @@ export class AgentSystem extends BaseSimSystem {
         // Unless it's a MOVING state to a job that was stolen or cancelled
         if (['SLEEPING', 'EATING', 'WORKING', 'DEPOSITING'].includes(agent.state)) return;
 
-        // --- PRIORITY 0: Deposit Resources (Inventory Full or Holding Resources while Idle) ---
+        const isNight = !state.dayNightCycle.isDaytime;
+
+        // --- PRIORITY 0: Night Time Sleep (Mandatory) ---
+        if (isNight) {
+            // If already sleeping, we handled above. If idle/wandering, go to bed.
+            const bed = this.findNearest(agent, BuildingType.STAFF_QUARTERS, state.grid);
+            if (bed !== null) {
+                this.goTo(agent, bed, 0, 'sys_sleep', state.grid);
+                return;
+            } else {
+                // No bed? Just sleep on the floor where you are?
+                // Or wander near a fire? For now, let's just STAND STILL or wander nearby if no bed.
+                // But better to try to sleep.
+                // If we can't find a bed, we might just sleep on the spot if we are tired enough?
+                // For "All agents must go to bed", we assume beds exist. If not, they might complain.
+                if (agent.state === 'IDLE') {
+                    // Try to find ANY shelter? Or just sleep on ground.
+                    // Let's make them sleep on the ground if no bed found at night.
+                    agent.state = 'SLEEPING'; // Forced sleep on ground
+                    return;
+                }
+            }
+        }
+
+        // --- PRIORITY 1: Deposit Resources (Inventory Full or Holding Resources while Idle) ---
         if (agent.inventory && agent.inventory.amount > 0) {
             // If full OR if we are idle and holding stuff (finish up logic)
-            if (agent.inventory.amount >= agent.inventory.capacity || agent.state === 'IDLE') {
+            // But NOT if it's night (already handled above, but for safety)
+            if (!isNight && (agent.inventory.amount >= agent.inventory.capacity || agent.state === 'IDLE')) {
                 const storage = this.findNearestStorage(agent, state.grid);
                 if (storage !== null) {
                     this.goTo(agent, storage, 0, 'sys_deposit', state.grid);
@@ -206,47 +231,48 @@ export class AgentSystem extends BaseSimSystem {
             }
         }
 
-        // --- PRIORITY 1: Manual Commands ---
+        // --- PRIORITY 2: Manual Commands ---
         if (agent.currentJobId?.startsWith('manual_')) {
             if (agent.state === 'MOVING') return;
         }
 
-        // --- PRIORITY 2: Critical Needs ---
-        if (agent.energy < CONFIG.NEED_CRITICAL) {
-            const bed = this.findNearest(agent, BuildingType.STAFF_QUARTERS, state.grid);
-            if (bed !== null) {
-                this.goTo(agent, bed, 0, 'sys_sleep', state.grid);
+        // --- PRIORITY 3: Critical Needs (Daytime) ---
+        // At night, we sleep regardless of energy level
+        if (!isNight) {
+            if (agent.energy < CONFIG.NEED_CRITICAL) {
+                const bed = this.findNearest(agent, BuildingType.STAFF_QUARTERS, state.grid);
+                if (bed !== null) {
+                    this.goTo(agent, bed, 0, 'sys_sleep', state.grid);
+                    return;
+                }
+            }
+            if (agent.hunger < CONFIG.NEED_CRITICAL) {
+                const food = this.findNearest(agent, BuildingType.CANTEEN, state.grid);
+                if (food !== null) {
+                    this.goTo(agent, food, 0, 'sys_eat', state.grid);
+                    return;
+                }
+            }
+        }
+
+        // --- PRIORITY 4: Work (Construction, Digging, Mining) ---
+        // Only work during the day
+        if (!isNight) {
+            // Find highest priority available job
+            const availableJob = state.jobs
+                .filter(j => !j.assignedAgentId || j.assignedAgentId === agent.id)
+                .sort((a, b) => b.priority - a.priority)[0];
+
+            if (availableJob) {
+                // CLAIM JOB
+                availableJob.assignedAgentId = agent.id;
+                // console.log(`[Agent ${agent.name}] Taking job: ${availableJob.id} (${availableJob.type}) at ${availableJob.targetTileId}`);
+                this.goTo(agent, availableJob.targetTileId, availableJob.layer || 0, availableJob.id, state.grid);
                 return;
             }
         }
-        if (agent.hunger < CONFIG.NEED_CRITICAL) {
-            const food = this.findNearest(agent, BuildingType.CANTEEN, state.grid);
-            if (food !== null) {
-                this.goTo(agent, food, 0, 'sys_eat', state.grid);
-                return;
-            }
-        }
 
-        // --- PRIORITY 3: Work (Construction, Digging, Mining) ---
-        // Find highest priority available job
-        const availableJob = state.jobs
-            .filter(j => !j.assignedAgentId || j.assignedAgentId === agent.id)
-            .sort((a, b) => b.priority - a.priority)[0];
-
-        if (availableJob) {
-            // CLAIM JOB
-            availableJob.assignedAgentId = agent.id;
-            console.log(`[Agent ${agent.name}] Taking job: ${availableJob.id} (${availableJob.type}) at ${availableJob.targetTileId}`);
-            this.goTo(agent, availableJob.targetTileId, availableJob.layer || 0, availableJob.id, state.grid);
-            return;
-        } else {
-            // Debug: Why no job?
-            if (state.jobs.length > 0 && Math.random() < 0.01) {
-                console.log(`[Agent ${agent.name}] No valid job found. Total jobs: ${state.jobs.length}. Top job priority: ${state.jobs[0]?.priority}`);
-            }
-        }
-
-        // --- PRIORITY 4: Idleness / Wander ---
+        // --- PRIORITY 5: Idleness / Wander ---
         if (agent.state === 'IDLE' && Math.random() < 0.2) {
             const wanderTarget = this.getRandomNearby(agent);
             this.goTo(agent, wanderTarget, agent.layer || 0, 'sys_wander', state.grid);

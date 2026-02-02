@@ -15,10 +15,10 @@ const ROLE_COLOR = '#ef4444'; // Red
 const BACKPACK_COLOR = '#451a03'; // Dark brown
 
 function addBackpack(torso: VoxelDef[]): VoxelDef[] {
-    // Add backpack on the back
-    for (let y = 7; y < 12; y++) {
-        for (let x = -2; x <= 2; x++) {
-            for (let z = -1; z < 0; z++) {
+    // Add backpack on the back (High Res)
+    for (let y = 16; y < 24; y++) {
+        for (let x = -4; x <= 4; x++) {
+            for (let z = -2; z < 0; z++) {
                 torso.push({ x, y, z, c: BACKPACK_COLOR });
             }
         }

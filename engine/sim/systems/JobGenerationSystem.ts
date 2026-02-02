@@ -24,13 +24,81 @@ export class JobGenerationSystem extends BaseSimSystem {
         // Clean up completed or invalid jobs first
         this.cleanupJobs(jobs, grid);
 
+        // Optimize: Pre-calculate which structures are being cleared to avoid O(N*M) lookups
+        const structuresWithClearingJobs = new Set<number>();
+        for (const j of jobs) {
+            if (j.type === 'MINE' && j.id.startsWith('clear_site_')) {
+                const t = grid[j.targetTileId];
+                // If the job targets a tile, map it to the structure HEAD
+                if (t) {
+                    const head = t.structureHeadIndex !== undefined ? t.structureHeadIndex : t.id;
+                    structuresWithClearingJobs.add(head);
+                }
+            }
+        }
+
         for (let i = 0; i < grid.length; i++) {
             const tile = grid[i];
 
-            // 1. GENERATE CONSTRUCTION JOBS (Allow swarming with up to 3 jobs per building)
-            if (tile.isUnderConstruction && (tile.structureHeadIndex === undefined || tile.id === tile.structureHeadIndex)) {
-                for (let j = 0; j < 3; j++) {
-                    this.ensureJob(jobs, `build_${tile.id}_${j}`, 'BUILD', tile.id, 90, 0);
+            // 1. GENERATE JOBS FOR CONSTRUCTION SITES (Build or Clear)
+            if (tile.isUnderConstruction) {
+                // If this tile specifically has foliage, it needs clearing first
+                if (tile.foliage && tile.foliage !== 'NONE') {
+                    this.ensureJob(jobs, `clear_site_${tile.id}`, 'MINE', tile.id, 95, 0); // Priority 95 (Very High)
+                } else {
+                    // It's clear, BUT if it's a building head, we must check if the WHOLE site is cleared before building
+                    if (tile.structureHeadIndex === undefined || tile.id === tile.structureHeadIndex) {
+                        // We are the head. Check neighbors if we are multi-tile?
+                        // JobGeneration doesn't easily know width/depth without importing BUILDINGS.
+                        // Assuming simplest logic: "If I am the head, I spawn build jobs for myself."
+                        // But what if my neighbor (part of me) has a tree?
+                        // We need to ensure NO part of this building spawns a build job if ANY part has a tree.
+
+                        // However, since we iterate EVERY tile, the neighbor tile with a tree will spawn a 'MINE' job above.
+                        // So we just need to prevent the 'BUILD' job if the neighbor has a tree.
+
+                        // Heuristic: If ANY tile sharing this structureHeadIndex has foliage, block build.
+                        // Scanning whole grid is slow. 
+                        // Better: Just check SELF for now. Construction logic usually handles per-tile.
+                        // Wait, ConstructionSystem progresses the HEAD.
+                        // So if the HEAD has a BUILD job, agents come to the HEAD.
+                        // Does the agent fix the neighbor's tree? No.
+
+                        // Critical Fix: We need to know if the site is clear.
+                        // Let's implement a simple check:
+                        // Only generate BUILD job if *I* am clear.
+                        // AND later we trust ConstructionSystem not to finish if obstructed.
+                        // BUT user wants "first clear".
+
+                        // Let's rely on the fact that if a neighbor has a tree, it gets a MINE job.
+                        // AND we effectively "pause" building until that job is done.
+                        // BUT the Build job exists on the head. Agents might do it.
+                        // We need to block the Build job.
+
+                        // Since we can't easily check all neighbors here efficiently without spatial lookup or slow grid scan:
+                        // We will allow Build job generation ONLY if this specific tile is clear is not enough.
+
+                        // Let's try to look up the building def to check neighbors.
+                        // We need access to BUILDINGS.
+                        // (Assuming simple 1-tile check for now to avoid compilation errors if imports missing)
+                        // Actually, I'll stick to: Generate Build job if *this* tile is clear.
+                        // Wait, if I am head, and neighbor has tree.
+                        // Neighbor gets MINE job.
+                        // I (Head) get BUILD job.
+                        // Agent 1 comes to mine tree. Agent 2 comes to build head.
+                        // This seems okay? "Clearing while building".
+                        // User said "Must first clear".
+
+                        // Okay, let's block BUILD if ANY "clear_site" job exists for this structure.
+                        // Scan existing jobs?
+                        const isBlocked = structuresWithClearingJobs.has(tile.id);
+
+                        if (!isBlocked) {
+                            for (let j = 0; j < 3; j++) {
+                                this.ensureJob(jobs, `build_${tile.id}_${j}`, 'BUILD', tile.id, 90, 0);
+                            }
+                        }
+                    }
                 }
             }
 

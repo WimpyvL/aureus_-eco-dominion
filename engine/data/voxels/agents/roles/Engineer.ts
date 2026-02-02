@@ -15,13 +15,13 @@ const ROLE_COLOR = '#3b82f6'; // Blue
 const TOOL_BELT_COLOR = '#78350f'; // Brown leather
 
 function addToolBelt(torso: VoxelDef[]): VoxelDef[] {
-    // Add tool belt around waist
-    for (let x = -3; x <= 3; x++) {
-        torso.push({ x, y: 6, z: 1.2, c: TOOL_BELT_COLOR });
+    // Add tool belt around waist (High Res)
+    for (let x = -4; x <= 4; x++) {
+        torso.push({ x, y: 14, z: 3.2, c: TOOL_BELT_COLOR });
     }
     // Add tools on belt
-    torso.push({ x: -2.5, y: 6, z: 1.4, c: '#94a3b8' }); // Wrench
-    torso.push({ x: 2.5, y: 6, z: 1.4, c: '#94a3b8' }); // Screwdriver
+    torso.push({ x: -3.5, y: 13, z: 3.5, c: '#94a3b8' }); // Wrench
+    torso.push({ x: 3.5, y: 13, z: 3.5, c: '#94a3b8' }); // Screwdriver
     return torso;
 }
 
