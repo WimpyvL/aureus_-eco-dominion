@@ -12,8 +12,6 @@ import { getBiomeAt } from './Core';
 
 // Map Constants - DO NOT EDIT
 export const GRID_SIZE = 45;
-const PLAYABLE_SIZE = 45; // Match GRID_SIZE
-const PADDING = 0;
 
 export function generateInitialGrid(): GridTile[] {
     const offset = (GRID_SIZE - 1) / 2;
@@ -24,12 +22,6 @@ export function generateInitialGrid(): GridTile[] {
 
         const worldX = x - offset;
         const worldY = y - offset;
-
-        const isPlayable =
-            x >= PADDING &&
-            x < PADDING + PLAYABLE_SIZE &&
-            y >= PADDING &&
-            y < PADDING + PLAYABLE_SIZE;
 
         const { biome, height } = getBiomeAt(worldX, worldY);
 
@@ -95,8 +87,8 @@ export function generateInitialGrid(): GridTile[] {
             terrainHeight: height,
             biome: biome as BiomeType,
             foliage,
-            locked: !isPlayable,
-            explored: isPlayable,
+            locked: false,
+            explored: true,
             underground: {},
             markedForHarvest: false
         };

@@ -64,6 +64,15 @@ export class PersistenceManager {
             if (!state.pendingEffects) state.pendingEffects = [];
             if (!state.commandQueue) state.commandQueue = [];
 
+            // MIGRATION: Unlock all tiles and set explored (removes old area restrictions)
+            if (state.grid) {
+                for (const tile of state.grid) {
+                    tile.locked = false;
+                    tile.explored = true;
+                }
+                console.log('[PersistenceManager] Migrated grid: unlocked all tiles.');
+            }
+
             // Revive Grid: JSON.parse makes generic objects, but GridTile is an interface so it's fine.
             // If we had class instances, we'd need to re-instantiate them.
 
@@ -93,6 +102,14 @@ export class PersistenceManager {
             if (!state.jobs) state.jobs = [];
             if (!state.pendingEffects) state.pendingEffects = [];
             if (!state.commandQueue) state.commandQueue = [];
+
+            // MIGRATION: Unlock all tiles and set explored (removes old area restrictions)
+            if (state.grid) {
+                for (const tile of state.grid) {
+                    tile.locked = false;
+                    tile.explored = true;
+                }
+            }
 
             return state;
         } catch (e) {

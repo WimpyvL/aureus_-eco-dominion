@@ -64,67 +64,57 @@ export function getBiomeAt(x: number, z: number): BiomeData {
     const moisture = fbm(x * 0.003, z * 0.003, 3, 0.5, 2.0, 567.8);
     const detail = fbm(x * 0.1, z * 0.1, 2, 0.5, 2.0, 111.1);
 
-    // Safe zone logic (Playable area expanded to full map)
-    const dist = Math.sqrt(x * x + z * z);
-    const isSafeZone = dist < 25; // Covers the entire 45x45 grid
-
     let biome: BiomeType | 'STONE' = 'GRASS';
     let height = 1; // Default flat land
 
-    if (isSafeZone) {
-        // Guaranteed flat land at start
-        biome = 'GRASS';
-        height = 1;
+    // --- HEIGHT & WATER MAP ---
+    if (elevation < 0.33) {
+        height = 0; // Water level (Larger Oceans/Lakes)
+    } else if (elevation < 0.40) {
+        height = 1; // Beach/Low
+    } else if (elevation < 0.65) {
+        // Hills: Scale 2 to 10
+        height = 2 + Math.floor((elevation - 0.40) * 32);
     } else {
-        // --- HEIGHT & WATER MAP ---
-        if (elevation < 0.33) {
-            height = 0; // Water level (Larger Oceans/Lakes)
-        } else if (elevation < 0.40) {
-            height = 1; // Beach/Low
-        } else if (elevation < 0.65) {
-            // Hills: Scale 2 to 10
-            height = 2 + Math.floor((elevation - 0.40) * 32);
+        // Mountains: Scale 10 to ~50
+        // Exponential growth for jagged peaks
+        const n = (elevation - 0.65) / 0.35;
+        height = 10 + Math.floor(n * n * 100);
+    }
+
+    // Limit world height to 32 max
+    height = Math.min(32, height);
+
+    // --- BIOME MAP ---
+    // Altitude affects biome (cooling effect)
+    const adjTemp = temp - (height * 0.02);
+
+    if (height >= 12) {
+        biome = 'STONE';
+        if (height > 20) biome = 'SNOW'; // High Peaks
+    } else if (height === 0) {
+        biome = 'GRASS'; // Riverbed/Lakebed base
+    } else {
+        // Land Biomes
+        if (adjTemp < 0.35) {
+            biome = 'SNOW';
+        } else if (adjTemp > 0.60) {
+            if (moisture < 0.25) {
+                biome = 'SAND'; // Desert
+            } else {
+                biome = 'GRASS'; // Jungle/Savanna
+            }
         } else {
-            // Mountains: Scale 10 to ~50
-            // Exponential growth for jagged peaks
-            const n = (elevation - 0.65) / 0.35;
-            height = 10 + Math.floor(n * n * 100);
+            if (moisture < 0.3) {
+                biome = 'DIRT'; // Badlands
+            } else {
+                biome = 'GRASS'; // Forest
+            }
         }
 
-        // Limit world height to 32 max
-        height = Math.min(32, height);
-
-        // --- BIOME MAP ---
-        // Altitude affects biome (cooling effect)
-        const adjTemp = temp - (height * 0.02);
-
-        if (height >= 12) {
+        // Rocky Cliffs blend with detail noise
+        if (detail > 0.7 && height > 4) {
             biome = 'STONE';
-            if (height > 20) biome = 'SNOW'; // High Peaks
-        } else if (height === 0) {
-            biome = 'GRASS'; // Riverbed/Lakebed base
-        } else {
-            // Land Biomes
-            if (adjTemp < 0.35) {
-                biome = 'SNOW';
-            } else if (adjTemp > 0.60) {
-                if (moisture < 0.25) {
-                    biome = 'SAND'; // Desert
-                } else {
-                    biome = 'GRASS'; // Jungle/Savanna
-                }
-            } else {
-                if (moisture < 0.3) {
-                    biome = 'DIRT'; // Badlands
-                } else {
-                    biome = 'GRASS'; // Forest
-                }
-            }
-
-            // Rocky Cliffs blend with detail noise
-            if (detail > 0.7 && height > 4) {
-                biome = 'STONE';
-            }
         }
     }
 
