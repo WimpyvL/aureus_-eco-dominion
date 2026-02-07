@@ -184,9 +184,7 @@ export class InputSystem {
             const gridX = Math.round(hit.x + offset);
             const gridZ = Math.round(hit.z + offset);
 
-            if (gridX < 0 || gridX >= GRID_SIZE || gridZ < 0 || gridZ >= GRID_SIZE) {
-                return null;
-            }
+
 
             // Query actual terrain height at this XZ
             const terrainHeight = this.getTerrainHeight(hit.x, hit.z);
@@ -212,7 +210,9 @@ export class InputSystem {
             return { index, point: target };
         }
 
-        return null;
+        // Return a result even if outside grid, using index -1
+        target.y = this.getTerrainHeight(target.x, target.z);
+        return { index: -1, point: target };
     }
 
     private handleClick(x: number, y: number, isRight: boolean, isTouch: boolean) {

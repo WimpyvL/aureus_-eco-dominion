@@ -370,9 +370,7 @@ export class IsoCameraSystem {
     public setUndergroundMode(enabled: boolean): void {
         this.undergroundMode = enabled;
         // Re-calculate zoom immediately when mode changes
-        const stepSize = this.undergroundMode ? 5 : 10;
-        this.cameraZoom = 15 + (this.zoomLevel * stepSize);
-        this.updateCameraTransform();
+        this.calculateAndSetZoom();
     }
 
     public update(dt: number): void {
@@ -392,14 +390,21 @@ export class IsoCameraSystem {
             const zoomLerpSpeed = 8.0;
             this.zoomLevel += zoomDiff * Math.min(1, dt * zoomLerpSpeed);
 
-            // Continuous zoom calculation
-            const base = 10;
-            const stepSize = this.undergroundMode ? 5 : 8;
-            this.cameraZoom = base + (this.zoomLevel * stepSize);
-            this.updateCameraTransform();
+            // COMPATIBILITY: Use centralized zoom calculation
+            this.calculateAndSetZoom();
         }
+    }
 
+    /**
+     * Centralized zoom calculation based on mode and current zoomLevel
+     */
+    private calculateAndSetZoom(): void {
+        // "Zoomed in more and zoom out alot less" - Requested by User
+        const base = this.undergroundMode ? 5 : 10;
+        const stepSize = this.undergroundMode ? 3 : 8;
 
+        this.cameraZoom = base + (this.zoomLevel * stepSize);
+        this.updateCameraTransform();
     }
 
     // --- Camera Actions (Based on legacy SceneManager) ---
@@ -500,12 +505,9 @@ export class IsoCameraSystem {
      */
     public zoomToPosition(worldX: number, worldZ: number, zoomLevel: number = 2): void {
         this.cameraFocus.set(worldX, this.cameraFocus.y, worldZ);
-        this.zoomLevel = Math.max(0, Math.min(5, zoomLevel));
+        this.zoomLevel = Math.max(0, Math.min(this.maxZoomLevel, zoomLevel));
         this.targetZoomLevel = this.zoomLevel;
 
-        // Calculate cameraZoom based on steps
-        const stepSize = this.undergroundMode ? 5 : 10;
-        this.cameraZoom = 15 + (this.zoomLevel * stepSize);
-        this.updateCameraTransform();
+        this.calculateAndSetZoom();
     }
 }

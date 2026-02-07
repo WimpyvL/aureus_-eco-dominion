@@ -8,11 +8,10 @@ import { BuildingType, BiomeType, GridTile, FoliageType } from '../../types';
 import { BUILDINGS } from '../data/VoxelConstants';
 import { getBiomeAt } from '../worldgen/Core';
 
-// Map Size: 45x45 total.
-// Playable area: 35x35 in the center (much larger buildable area).
-// Padding: 5 tiles on each side (reduced from 15).
-export const GRID_SIZE = 45;
-const PLAYABLE_SIZE = 45; // Match GRID_SIZE to unlock full map
+// Map Size: 64x64 total.
+// Playable area: 64x64 (unlocked full map).
+export const GRID_SIZE = 64;
+const PLAYABLE_SIZE = 64; // Match GRID_SIZE to unlock full map
 const PADDING = 0; // No padding
 
 // Note: World generation logic (noises, biome distribution) has been isolated 
