@@ -35,9 +35,13 @@ import { BuildingRenderSystem } from './render/systems/BuildingRenderSystem';
 import { AgentRenderSystem } from './render/systems/AgentRenderSystem';
 import { EnvironmentRenderSystem } from './render/systems/EnvironmentRenderSystem';
 import { IsoCameraSystem } from './render/IsoCameraSystem';
+import { UndergroundDecorationSystem } from './render/systems/UndergroundDecorationSystem';
 import { InputSystem } from '../engine/input/InputSystem';
 import { StateManager, StateListener } from '../engine/state/StateManager';
-import { UndergroundDecorationSystem } from './render/systems/UndergroundDecorationSystem';
+import {
+    EconomyManager, BuildingManager, ResearchManager,
+    UndergroundManager, AgentManager
+} from './world';
 
 export interface AureusWorldConfig {
     container: HTMLElement;
@@ -75,6 +79,13 @@ export class AureusWorld extends BaseWorld {
 
     private persistenceManager: PersistenceManager;
 
+    // World Management Systems
+    private economyManager: EconomyManager;
+    private buildingManager: BuildingManager;
+    private researchManager: ResearchManager;
+    private undergroundManager: UndergroundManager;
+    private agentManager: AgentManager;
+
     // Terrain height callback (used by agents and input)
     private getTerrainHeight: (worldX: number, worldZ: number) => number;
 
@@ -94,6 +105,18 @@ export class AureusWorld extends BaseWorld {
         // Initialize State Manager (Engine owns state)
         this.stateManager = new StateManager();
         this.persistenceManager = new PersistenceManager();
+
+        // Initialize World Managers
+        this.economyManager = new EconomyManager(this.stateManager);
+        this.buildingManager = new BuildingManager(this.stateManager, this.buildingRenderSystem);
+        this.researchManager = new ResearchManager(this.stateManager);
+        this.undergroundManager = new UndergroundManager(
+            this.stateManager,
+            this.cameraSystem,
+            this.terrainRenderSystem,
+            this.environmentRenderSystem
+        );
+        this.agentManager = new AgentManager(this.stateManager, this.cameraSystem);
 
         // Initialize engine subsystems
         this.streamMgr = new StreamingManager({
@@ -219,38 +242,15 @@ export class AureusWorld extends BaseWorld {
             return;
         }
 
-        // NEW: Era validation
-        if (!state.cheatsEnabled && !state.unlockedEras.includes(def.era)) {
-            console.warn(`Cannot place ${buildingType}: Era ${def.era} not unlocked`);
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
-            return;
-        }
-
         // Validate placement
         const tile = state.grid[index];
-        if (!tile || tile.locked) {
-            console.warn('[placeBuilding] Tile is null or locked');
+        if (!tile) {
+            console.warn('[placeBuilding] Tile is null');
             return;
         }
         if (tile.buildingType !== BuildingType.EMPTY && tile.buildingType !== BuildingType.POND) {
             console.warn('[placeBuilding] Tile is not empty or pond, current type:', tile.buildingType);
             return;
-        }
-
-        // Check if building is in inventory
-        if (!state.inventory[buildingType] || state.inventory[buildingType] <= 0) {
-            console.warn(`Cannot place ${buildingType}: not in inventory`);
-            return;
-        }
-
-        // Consume from inventory
-        state.inventory[buildingType]--;
-
-        // Clear selection if inventory is empty
-        if (state.inventory[buildingType] === 0) {
-            state.selectedBuilding = null;
-            // Clear ghost building projection
-            this.buildingRenderSystem.setGhostBuilding(null);
         }
 
         // Context-aware placement
@@ -285,41 +285,6 @@ export class AureusWorld extends BaseWorld {
             }
         }
 
-        // Special Check for Storage Extension
-        if (buildingType === BuildingType.STORAGE_EXTENSION) {
-            // Must overlap or be adjacent to a Storage Depot? 
-            // The prompt said "adjacent to it".
-            const x = index % GRID_SIZE;
-            const z = Math.floor(index / GRID_SIZE);
-            const neighbors = [
-                (z - 1) * GRID_SIZE + x,
-                (z + 1) * GRID_SIZE + x,
-                z * GRID_SIZE + (x - 1),
-                z * GRID_SIZE + (x + 1)
-            ];
-
-            // Check adjacency
-            const hasDepot = neighbors.some(n => {
-                if (n < 0 || n >= state.grid.length) return false;
-                const nbTile = state.grid[n];
-                // Check if neighbor is a STORAGE_DEPOT or part of one
-                return nbTile.buildingType === BuildingType.STORAGE_DEPOT;
-            });
-
-            if (!hasDepot) {
-                console.warn("Storage Extension must be placed adjacent to a Storage Depot.");
-                state.newsFeed.unshift({
-                    id: `err_place_${Date.now()}`,
-                    headline: "Extension requires adjacent Storage Depot!",
-                    type: 'NEGATIVE',
-                    timestamp: Date.now()
-                });
-                state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
-                // Refund
-                state.inventory[buildingType]++;
-                return;
-            }
-        }
 
         // Place via ConstructionSystem
         this.stateManager.pushCommand('PLACE_BUILDING', { index, buildingType });
@@ -331,7 +296,7 @@ export class AureusWorld extends BaseWorld {
     bulldozeTile(index: number): void {
         const state = this.stateManager.getMutableState();
         const tile = state.grid[index];
-        if (!tile || tile.locked) return;
+        if (!tile) return;
 
         if (state.viewMode === 'UNDERGROUND') {
             const layer = state.currentUndergroundLayer;
@@ -406,228 +371,48 @@ export class AureusWorld extends BaseWorld {
     }
 
     sellResource(resource: 'minerals' | 'gems' | 'wood' | 'stone'): void {
-        const state = this.stateManager.getMutableState();
-        const amount = state.resources[resource];
-        if (amount <= 0) return;
-
-        const ecoMult = getEcoMultiplier(state.resources.eco);
-        const trustMult = 1 + (state.resources.trust / 200);
-        const price = state.market[resource].currentPrice;
-
-        const value = Math.floor(amount * price * ecoMult * trustMult);
-        state.resources.agt += value;
-        state.resources[resource] = 0;
-
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.SELL });
-        state.newsFeed.unshift({
-            id: `sell_${resource}_${Date.now()}`,
-            headline: `Market Transaction: Sold ${resource} for ${value} AGT`,
-            type: 'POSITIVE',
-            timestamp: Date.now()
-        });
+        this.economyManager.sellResource(resource);
     }
 
-    sellMinerals(): void { this.sellResource('minerals'); }
-    sellGems(address?: string): void {
-        const state = this.stateManager.getMutableState();
-        const amount = state.resources.gems;
-        if (amount <= 0) return;
-
-        // "Deposit" gems to external wallet
-        // In a real app, this would trigger a blockchain transaction
-        state.resources.gems = 0;
-
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
-        state.newsFeed.unshift({
-            id: `deposit_gems_${Date.now()}`,
-            headline: `Deposited ${Math.floor(amount)} Thundergems to ${address || 'External Wallet'}`,
-            type: 'POSITIVE',
-            timestamp: Date.now()
-        });
-    }
-    sellWood(): void { this.sellResource('wood'); }
-    sellStone(): void { this.sellResource('stone'); }
+    sellMinerals(): void { this.economyManager.sellMinerals(); }
+    sellGems(address?: string): void { this.economyManager.sellGems(address); }
+    sellWood(): void { this.economyManager.sellWood(); }
+    sellStone(): void { this.economyManager.sellStone(); }
 
     buyResource(resource: 'minerals' | 'gems' | 'wood' | 'stone', amount: number): void {
-        const state = this.stateManager.getMutableState();
-
-        // Buyers pay a 25% "Import Fee" over market price
-        const price = state.market[resource].currentPrice * 1.25;
-        const totalCost = Math.floor(price * amount);
-
-        if (state.resources.agt < totalCost) {
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
-            return;
-        }
-
-        state.resources.agt -= totalCost;
-        state.resources[resource] += amount;
-
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
-        state.newsFeed.unshift({
-            id: `buy_${resource}_${Date.now()}`,
-            headline: `Import Dispatch: Acquired ${amount} ${resource} for ${totalCost} AGT`,
-            type: 'NEUTRAL',
-            timestamp: Date.now()
-        });
+        this.economyManager.buyResource(resource, amount);
     }
 
     buyBuilding(buildingType: string, cost: number): void {
-        const state = this.stateManager.getMutableState();
-        const def = BUILDINGS[buildingType as BuildingType];
-
-        // Deduct multi-resource costs if defined
-        if (def && def.costs) {
-            Object.entries(def.costs).forEach(([res, amt]) => {
-                const resourceKey = res as keyof typeof state.resources;
-                if (amt && typeof state.resources[resourceKey] === 'number') {
-                    (state.resources[resourceKey] as number) -= amt;
-                }
-            });
-        } else {
-            // Legacy fall-back (usually AGT)
-            state.resources.agt -= cost;
-        }
-
-        // Add to inventory
-        const bType = buildingType as BuildingType;
-        if (!state.inventory[bType]) {
-            state.inventory[bType] = 0;
-        }
-        state.inventory[bType]!++;
-
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
+        this.economyManager.buyBuilding(buildingType, cost);
     }
 
     setAutoSell(enabled: boolean, threshold: number): void {
-        const state = this.stateManager.getMutableState();
-        state.logistics.autoSell = enabled;
-        state.logistics.sellThreshold = threshold;
+        this.economyManager.setAutoSell(enabled, threshold);
     }
 
     upgradeBuilding(index: number): void {
-        const state = this.stateManager.getMutableState();
-        const tile = state.grid[index];
-        if (!tile || tile.buildingType === BuildingType.EMPTY) return;
-
-        const def = BUILDINGS[tile.buildingType];
-        if (!def || !def.upgrades) return;
-
-        const nextLevel = (tile.level || 1) + 1;
-        const upgrade = def.upgrades.find(u => u.level === nextLevel);
-
-        if (!upgrade) {
-            console.warn(`[upgradeBuilding] No upgrade found for level ${nextLevel}`);
-            return;
-        }
-
-        // Validate Era
-        if (!state.cheatsEnabled && !state.unlockedEras.includes(upgrade.era)) {
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
-            return;
-        }
-
-        // Validate Costs
-        let canAfford = true;
-        if (!state.cheatsEnabled) {
-            if (upgrade.costs) {
-                Object.entries(upgrade.costs).forEach(([res, amt]) => {
-                    const resourceKey = res as keyof typeof state.resources;
-                    if (amt && (state.resources[resourceKey] as number) < amt) {
-                        canAfford = false;
-                    }
-                });
-            } else {
-                // No cost defined? Assume free? Or error? Let's assume free if no cost defined in upgrade.
-            }
-        }
-
-        if (!canAfford) {
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
-            return;
-        }
-
-        // Deduct Resources
-        if (!state.cheatsEnabled && upgrade.costs) {
-            Object.entries(upgrade.costs).forEach(([res, amt]) => {
-                const resourceKey = res as keyof typeof state.resources;
-                if (amt && typeof state.resources[resourceKey] === 'number') {
-                    (state.resources[resourceKey] as number) -= amt;
-                }
-            });
-        }
-
-        // Push Command
-        this.stateManager.pushCommand('UPGRADE_BUILDING', { index });
+        this.buildingManager.upgradeBuilding(index);
     }
 
     researchTech(techId: string): void {
-        const state = this.stateManager.getMutableState();
-
-        // 1. Validate Tech
-        const tech = TECHNOLOGIES[techId as TechId];
-        if (!tech) {
-            console.warn(`[AureusWorld] Unknown tech: ${techId}`);
-            return;
-        }
-
-        const id = techId as TechId;
-
-        // 2. Check if already unlocked
-        if (state.research.unlocked.includes(id)) return;
-
-        // 3. Check Prereqs
-        if (tech.prereq && !state.research.unlocked.includes(tech.prereq)) {
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
-            return;
-        }
-
-        // 4. Check Resources
-        if (state.resources.agt < tech.cost) {
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
-            return;
-        }
-
-        // 5. Deduct Cost
-        state.resources.agt -= tech.cost;
-
-        // 6. Unlock (Instant)
-        state.research.unlocked.push(id);
-
-        // 7. Notification & Sound
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.COMPLETE });
-        state.newsFeed.push({
-            id: `tech_${id}_${Date.now()}`,
-            headline: `RESEARCH COMPLETE: ${tech.name}`,
-            type: 'POSITIVE',
-            timestamp: Date.now()
-        });
-
-        console.log(`[AureusWorld] Unlocked tech: ${id}`);
+        this.researchManager.researchTech(techId);
     }
 
     toggleDebug(): void {
-        const state = this.stateManager.getMutableState();
-        state.debugMode = !state.debugMode;
+        const state = this.stateManager.getState();
+        this.stateManager.mutate('debugMode', !state.debugMode);
+        this.stateManager.notifyIfDirty();
     }
 
     toggleCheats(): void {
-        const state = this.stateManager.getMutableState();
-        state.cheatsEnabled = !state.cheatsEnabled;
+        const state = this.stateManager.getState();
+        this.stateManager.mutate('cheatsEnabled', !state.cheatsEnabled);
+        this.stateManager.notifyIfDirty();
     }
 
     speedUpConstruction(index: number): void {
-        const state = this.stateManager.getMutableState();
-        const tile = state.grid[index];
-        if (!tile || !tile.isUnderConstruction) return;
-
-        const rushCost = 1; // 1 gem per rush
-        if (state.resources.gems >= rushCost) {
-            this.stateManager.pushCommand('SPEED_UP', { index });
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.CONSTRUCT_SPEEDUP });
-        } else {
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
-        }
+        this.buildingManager.speedUpConstruction(index);
     }
 
     /**
@@ -654,120 +439,15 @@ export class AureusWorld extends BaseWorld {
     }
 
     toggleViewMode(): void {
-        const state = this.stateManager.getMutableState();
-
-        // Already loading? Prevent double-toggle
-        if (state.isLoading) return;
-
-        if (state.viewMode === 'SURFACE') {
-            // Check if at least one entrance exists
-            const hasEntrance = state.grid.some(t => t.hasEntrance);
-            if (!hasEntrance) {
-                state.newsFeed.push({
-                    id: `no_underground_${Date.now()}`,
-                    headline: "Underground access locked. You must build a Mine Entrance first!",
-                    type: 'NEUTRAL',
-                    timestamp: Date.now()
-                });
-                state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
-                return;
-            }
-
-            // Show loading screen
-            state.isLoading = true;
-            state.loadingMessage = 'Descending to Underground...';
-
-            // Perform transition after brief delay
-            setTimeout(() => {
-                const s = this.stateManager.getMutableState();
-                s.viewMode = 'UNDERGROUND';
-                this.cameraSystem.setUndergroundMode(true);
-
-                // Focus on current layer with proper depth scaling
-                const layerY = (s.currentUndergroundLayer ?? -1) * 2.0;
-                this.cameraSystem.setTargetHeight(layerY);
-                this.inputSystem?.setRayPlaneHeight(layerY);
-
-                this.environmentRenderSystem.setViewMode(s.viewMode);
-                this.terrainRenderSystem.setViewMode(s.viewMode);
-                this.terrainRenderSystem.syncGrid(s.grid);
-
-                // Hide loading after chunks rebuild
-                setTimeout(() => {
-                    const s2 = this.stateManager.getMutableState();
-                    s2.isLoading = false;
-                    s2.loadingMessage = '';
-                }, 600);
-            }, 300);
-
-        } else {
-            // Show loading screen
-            state.isLoading = true;
-            state.loadingMessage = 'Returning to Surface...';
-
-            // Perform transition after brief delay
-            setTimeout(() => {
-                const s = this.stateManager.getMutableState();
-                s.viewMode = 'SURFACE';
-                this.cameraSystem.setUndergroundMode(false);
-                this.cameraSystem.setTargetHeight(0);
-                this.inputSystem?.setRayPlaneHeight(0);
-
-                this.environmentRenderSystem.setViewMode(s.viewMode);
-                this.terrainRenderSystem.setViewMode(s.viewMode);
-                this.terrainRenderSystem.syncGrid(s.grid);
-
-                // Hide loading after chunks rebuild
-                setTimeout(() => {
-                    const s2 = this.stateManager.getMutableState();
-                    s2.isLoading = false;
-                    s2.loadingMessage = '';
-                }, 600);
-            }, 300);
-        }
-
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
+        this.undergroundManager.toggleViewMode();
     }
 
     public changeUndergroundLayer(delta: number): void {
-        const state = this.stateManager.getMutableState();
-        if (state.viewMode !== 'UNDERGROUND') return;
-
-        const nextLayer = Math.max(-10, Math.min(-1, state.currentUndergroundLayer + delta));
-        if (nextLayer === state.currentUndergroundLayer) return;
-
-        state.currentUndergroundLayer = nextLayer;
-
-        // Update Camera & Interaction with proper depth scaling
-        this.cameraSystem.setTargetHeight(state.currentUndergroundLayer * 2.0);
-        this.inputSystem?.setRayPlaneHeight(state.currentUndergroundLayer * 2.0);
-
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
-
-        // No need to sync grid fully, but might need to notify systems
-        state.pendingEffects.push({ type: 'GRID_UPDATE', updates: [] });
+        this.undergroundManager.changeUndergroundLayer(delta);
     }
 
     queueDig(index: number, layer: number): void {
-        const state = this.stateManager.getMutableState();
-        const tile = state.grid[index];
-        if (!tile) return;
-
-        // DK2-Style: If in underground view, default to the current viewed layer
-        // We only use the passed 'layer' if it's different from the current viewed layer (e.g. forced dig down)
-        const targetLayer = state.viewMode === 'UNDERGROUND' ? (state.currentUndergroundLayer || -1) : layer;
-
-        // Accessibility Check: Can we reach this layer to dig it?
-        if (!this.isLayerAccessible(index, targetLayer, state.grid)) {
-            console.warn(`Layer ${targetLayer} at ${index} is not reachable.`);
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
-            return;
-        }
-
-        if (!tile.digState) tile.digState = {};
-        // Use status 4 for 'ENTRANCE DIG' and 1 for 'TUNNEL DIG'
-        tile.digState[targetLayer] = (targetLayer === -1 && state.viewMode === 'SURFACE') ? 4 : 1;
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
+        this.undergroundManager.queueDig(index, layer);
     }
 
     private isLayerAccessible(index: number, layer: number, grid: GridTile[]): boolean {
@@ -920,6 +600,7 @@ export class AureusWorld extends BaseWorld {
         };
 
         this.inputSystem.init();
+        this.undergroundManager.setInputSystem(this.inputSystem);
     }
 
     protected async onInit(): Promise<void> {
@@ -1097,14 +778,19 @@ export class AureusWorld extends BaseWorld {
     jobsFlush(_ctx: FrameContext): void {
         this.workerPool.dispatch(this.jobs);
         const results = this.jobs.drainResults();
-        const state = this.stateManager.getMutableState();
 
-        for (const result of results) {
-            if (result.kind === 'MESH_CHUNK' && result.success) {
-                this.terrainRenderSystem.processResults([result as MeshChunkResult]);
-            } else if (result.kind === 'PATHFIND') {
-                this.agentSystem.receiveJobResult(result as PathfindResult, state);
+        if (results.length > 0) {
+            this.stateManager.setMutableContext("simTick");
+            const state = this.stateManager.getMutableState();
+
+            for (const result of results) {
+                if (result.kind === 'MESH_CHUNK' && result.success) {
+                    this.terrainRenderSystem.processResults([result as MeshChunkResult]);
+                } else if (result.kind === 'PATHFIND') {
+                    this.agentSystem.receiveJobResult(result as PathfindResult, state);
+                }
             }
+            this.stateManager.setMutableContext("none");
         }
     }
 
@@ -1116,14 +802,20 @@ export class AureusWorld extends BaseWorld {
     simulation(ctx: FixedContext): void {
         if (this.gamePaused) return;
 
+        this.stateManager.setMutableContext("simTick");
         const state = this.stateManager.getMutableState();
-        if (state.step === GameStep.GAME_OVER) return;
+        if (state.step === GameStep.GAME_OVER) {
+            this.stateManager.setMutableContext("none");
+            return;
+        }
 
         // Increment tick counter
         state.tickCount++;
 
         // Run simulation systems
         this.sim.tick(ctx, state);
+
+        this.stateManager.setMutableContext("none");
     }
 
     /**

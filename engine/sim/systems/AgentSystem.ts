@@ -15,8 +15,8 @@ import { GRID_SIZE, HARVESTABLE_ROCKS, HARVESTABLE_TREES } from '../../utils/Gam
 
 // Configuration
 const CONFIG = {
-    SPEED: 3.5,            // Tiles per second
-    THINK_INTERVAL: 60,    // Ticks between AI decisions (1 second at 60Hz)
+    SPEED: 4.8,            // Increased from 3.5 for better efficiency
+    THINK_INTERVAL: 15,    // Much faster AI decisions (0.25s at 60Hz)
     NEED_CRITICAL: 30,     // Threshold to seek help
     NEED_SATISFIED: 95,    // Threshold to stop seeking help
 };

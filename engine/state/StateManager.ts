@@ -19,6 +19,7 @@ export class StateManager {
     private listeners: Set<StateListener> = new Set();
     private dirtyFlag = false;
     private dirtyKeys = new Set<keyof GameState>();
+    private mutableContext: "simTick" | "none" = "none";
 
     constructor(initialState?: Partial<GameState>) {
         this.state = this.createInitialState(initialState);
@@ -208,7 +209,18 @@ export class StateManager {
         }
     }
 
+    setMutableContext(context: "simTick" | "none"): void {
+        this.mutableContext = context;
+    }
+
+    private assertMutableContext(target: "simTick"): void {
+        if (this.mutableContext !== target && !this.state.debugMode) {
+            throw new Error(`CRITICAL: Mutable state accessed outside of ${target} context. Current context: ${this.mutableContext}`);
+        }
+    }
+
     getMutableState(): GameState {
+        this.assertMutableContext("simTick");
         this.dirtyFlag = true;
         // Mark grid as dirty since most mutations affect the grid
         this.dirtyKeys.add('grid');

@@ -216,77 +216,77 @@ export function getFoliageAt(x: number, z: number, biome: string, height: number
     if (rand < goldChance) return 'GOLD_VEIN';
 
     // 3. Biome-Specific Clustering Logic
+    // Drastic reduction for better visibility and building space
 
     if (biome === 'GRASS') {
-        // Forests (Dense clusters)
-        if (clusterNoise > 0.55) {
-            if (rand < 0.50) return 'TREE_OAK';
-            if (rand < 0.70) return 'TREE_BIRCH';
-            if (rand < 0.75) return 'TREE_APPLE';
-            if (rand < 0.85) return 'BUSH_OAK';
-            if (rand < 0.90) return 'FLOWER_YELLOW';
+        // Forests (Cover 30% of area when clusterNoise > 0.70)
+        if (clusterNoise > 0.70) {
+            if (rand < 0.25) return 'TREE_OAK';
+            if (rand < 0.35) return 'TREE_BIRCH';
+            if (rand < 0.40) return 'TREE_APPLE';
+            if (rand < 0.50) return 'BUSH_OAK';
+            if (rand < 0.55) return 'FLOWER_YELLOW';
         }
-        // Meadows (Scattered patches)
-        else if (clusterNoise > 0.35) {
-            if (rand < 0.08) return 'TREE_OAK';
-            if (rand < 0.15) return 'FLOWER_YELLOW';
-            if (rand < 0.18 && height < 3) return 'TREE_WILLOW';
-        }
-        // Open Plains (Very sparse)
+        // Open Plains (Scattered - 1%)
         else if (rand < 0.01) {
-            return 'TREE_OAK';
+            if (rand < 0.002) return 'TREE_OAK';
+            if (rand < 0.005) return 'FLOWER_YELLOW';
+            return 'BUSH_OAK';
         }
     }
 
     else if (biome === 'SNOW') {
-        // Boreal Forest patches
-        if (clusterNoise > 0.45) {
-            if (rand < 0.40) return 'TREE_PINE';
-            if (rand < 0.65) return 'TREE_FROSTED_PINE';
-            if (rand < 0.75) return 'TREE_TALL_PINE';
-            if (rand < 0.85) return 'SHRUB_WINTER';
-        } else if (rand < 0.03) {
+        // Boreal Forest patches (30%)
+        if (clusterNoise > 0.70) {
+            if (rand < 0.20) return 'TREE_PINE';
+            if (rand < 0.35) return 'TREE_FROSTED_PINE';
+            if (rand < 0.45) return 'TREE_TALL_PINE';
+            if (rand < 0.55) return 'SHRUB_WINTER';
+        } else if (rand < 0.015) {
+            // Scattered Tundra (1.5%)
+            if (rand < 0.002) return 'TREE_PINE';
             return 'ROCK_ICY';
         }
     }
 
     else if (biome === 'SAND') {
-        // Desert patches / Oases
-        if (clusterNoise > 0.80) {
-            if (rand < 0.7) return 'TREE_PALM';
-        } else if (rand < 0.02) {
-            return 'CACTUS_SAGUARO';
-        } else if (rand < 0.05) {
-            return 'CACTUS_BARREL';
-        } else if (rand < 0.08) {
-            return 'SHRUB_DRY';
-        } else if (rand < 0.10) {
+        // Desert patches / Oases (30%)
+        if (clusterNoise > 0.70) {
+            if (rand < 0.15) return 'TREE_PALM';
+        } else if (rand < 0.01) {
+            // Scattered Desert (1%)
+            if (rand < 0.002) return 'CACTUS_SAGUARO';
+            if (rand < 0.004) return 'CACTUS_BARREL';
+            if (rand < 0.006) return 'SHRUB_DRY';
             return 'ROCK_SANDSTONE';
         }
     }
 
     else if (biome === 'DIRT') {
-        // Badlands / Dead zones
-        if (clusterNoise > 0.60) {
-            if (rand < 0.35) return 'TREE_DEAD';
-            if (rand < 0.55) return 'BUSH_THORN';
-            if (rand < 0.65) return 'MUSHROOM_GIANT';
-            if (rand < 0.70) return 'TREE_STUMP';
-        } else if (rand < 0.03) {
-            return 'BONE_RIB';
-        } else if (rand < 0.05) {
+        // Badlands / Dead zones (30%)
+        if (clusterNoise > 0.70) {
+            if (rand < 0.15) return 'TREE_DEAD';
+            if (rand < 0.25) return 'BUSH_THORN';
+            if (rand < 0.35) return 'MUSHROOM_GIANT';
+            if (rand < 0.40) return 'TREE_STUMP';
+        } else if (rand < 0.02) {
+            // Scattered Badlands (2%)
+            if (rand < 0.005) return 'BONE_RIB';
             return 'ROCK_PEBBLE';
         }
     }
 
     else if (biome === 'STONE') {
-        // Rocky outcroppings
-        if (clusterNoise > 0.40) {
-            if (rand < 0.40) return 'ROCK_BOULDER';
-            if (rand < 0.60) return 'ROCK_PEBBLE';
-            if (rand < 0.70) return 'ROCK_MOSSY';
-            if (rand < 0.75) return 'CRYSTAL_SPIKE';
-            if (rand < 0.77) return 'FLOWER_ALPINE';
+        // Rocky outcroppings (Cover 30%)
+        if (clusterNoise > 0.70) {
+            if (rand < 0.20) return 'ROCK_BOULDER';
+            if (rand < 0.35) return 'ROCK_PEBBLE';
+            if (rand < 0.45) return 'ROCK_MOSSY';
+            if (rand < 0.50) return 'CRYSTAL_SPIKE';
+            if (rand < 0.52) return 'FLOWER_ALPINE';
+        } else if (rand < 0.02) {
+            // Background pebbles (2%)
+            return 'ROCK_PEBBLE';
         }
     }
 

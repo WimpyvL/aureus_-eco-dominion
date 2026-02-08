@@ -9,9 +9,7 @@
 
 import { GridTile, BuildingType, BiomeType, FoliageType } from '../../types';
 import { getBiomeAt, getFoliageAt } from './Core';
-
-// Map Constants - DO NOT EDIT
-export const GRID_SIZE = 64;
+import { GRID_SIZE } from '../utils/GameUtils';
 
 export function generateInitialGrid(): GridTile[] {
     const offset = (GRID_SIZE - 1) / 2;

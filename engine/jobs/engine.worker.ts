@@ -7,7 +7,7 @@
 
 import { GridTile } from '../../types';
 import { getBiomeAt as getBiomeAtImpl, getFoliageAt as getFoliageAtImpl } from '../worldgen/Core';
-import { Job, PathfindJob, PathfindResult, MeshChunkJob, MeshChunkResult } from './jobs.types';
+import { Job, PathfindJob, PathfindResult, MeshChunkJob, MeshChunkResult, ENGINE_SCHEMA_VERSION } from './jobs.types';
 import { findPath } from '../sim/algorithms/Pathfinding';
 import { GRID_SIZE } from '../utils/GameUtils';
 
@@ -60,6 +60,12 @@ self.onmessage = (e: MessageEvent) => {
     const job = msg as Job;
     if (!job.id || !job.kind) return;
 
+    // Protocol validation
+    if (job.schemaVersion !== ENGINE_SCHEMA_VERSION) {
+        console.error(`[EngineWorker] CRITICAL: Schema version mismatch. Expected ${ENGINE_SCHEMA_VERSION}, got ${job.schemaVersion}. Ignoring job.`);
+        return;
+    }
+
     try {
         let result: any = null;
 
@@ -86,7 +92,8 @@ self.onmessage = (e: MessageEvent) => {
             success: false,
             error: String(err),
             completedAt: Date.now(),
-            queuedAt: job.queuedAt
+            queuedAt: job.queuedAt,
+            schemaVersion: ENGINE_SCHEMA_VERSION
         });
     }
 };
@@ -142,16 +149,25 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
         dest.u.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
     };
 
-    const getData = (wx: number, wz: number) => {
-        const key = `${wx},${wz}`;
+    const getData = (gx: number, gz: number) => {
+        const key = `${gx},${gz}`;
         if (tileMap.has(key)) {
             const t = tileMap.get(key)!;
-            return { h: t.terrainHeight, b: t.biome, bt: t.buildingType, f: t.foliage, in: true, marked: t.markedForHarvest };
+            return { h: t.terrainHeight, b: t.biome, bt: t.buildingType, f: t.foliage || 'NONE', in: true, marked: t.markedForHarvest };
         }
-        const nx = wx - offsetX;
-        const nz = wz - offsetZ;
+
+        if (localGrid && localGrid.length > 0 && gx >= 0 && gx < GRID_SIZE && gz >= 0 && gz < GRID_SIZE) {
+            const idx = gz * GRID_SIZE + gx;
+            const t = localGrid[idx];
+            if (t) {
+                return { h: t.terrainHeight, b: t.biome, bt: t.buildingType, f: t.foliage || 'NONE', in: true, marked: t.markedForHarvest };
+            }
+        }
+
+        const nx = gx - offsetX;
+        const nz = gz - offsetZ;
         const data = getBiomeAtImpl(nx, nz);
-        return { h: data.height, b: data.biome, bt: 'EMPTY', f: null, in: false, marked: false };
+        return { h: data.height, b: data.biome, bt: 'EMPTY', f: 'NONE', in: false, marked: false };
     };
 
     for (let z = 0; z < CHUNK_SIZE; z++) {
@@ -255,7 +271,7 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
                 const nz = worldZ - offsetZ;
                 const bd = getBiomeAtImpl(nx, nz);
                 const dist = Math.sqrt(nx * nx + nz * nz);
-                const gen = getFoliageAtImpl(data.b, data.h, bd.detail, dist, pRand(worldX, worldZ));
+                const gen = getFoliageAtImpl(nx, nz, data.b, data.h, bd.detail);
 
                 // Do not spawn gold outside playable area (can't mine it)
                 if (gen !== 'NONE' && gen !== 'GOLD_VEIN') {
@@ -330,7 +346,8 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
         ghost: serialize(ghost),
         foliage: foliageItems,
         cx, cz, lod,
-        queuedAt: job.queuedAt
+        queuedAt: job.queuedAt,
+        schemaVersion: ENGINE_SCHEMA_VERSION
     };
 }
 
@@ -346,6 +363,7 @@ function processPathfind(job: PathfindJob): PathfindResult {
         completedAt: Date.now(),
         queuedAt: job.queuedAt,
         agentId: job.agentId,
-        path: path
+        path: path,
+        schemaVersion: ENGINE_SCHEMA_VERSION
     };
 }

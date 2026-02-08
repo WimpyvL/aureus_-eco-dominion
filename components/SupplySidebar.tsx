@@ -137,7 +137,10 @@ const ITEM_CATEGORIES: Record<BuildingType, CategoryType> = {
     [BuildingType.UNDERGROUND_FANS]: 'UTILITIES',
     [BuildingType.ORE_EXTRACTOR]: 'PRODUCTION',
     [BuildingType.POWER_LINE]: 'BASICS',
-    [BuildingType.EMPTY]: 'ALL'
+    [BuildingType.EMPTY]: 'ALL',
+    [BuildingType.SAWMILL]: 'PRODUCTION',
+    [BuildingType.STONE_QUARRY]: 'PRODUCTION',
+    [BuildingType.STORAGE_EXTENSION]: 'UTILITIES'
 };
 
 export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dispatch, onClose, playSfx }) => {

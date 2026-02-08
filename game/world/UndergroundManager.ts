@@ -36,10 +36,13 @@ export class UndergroundManager {
     }
 
     /**
-     * Toggle between surface and underground view modes
+     * Toggle between surface and underground view modes with loading transitions
      */
     toggleViewMode(): void {
         const state = this.stateManager.getMutableState();
+
+        // Already loading? Prevent double-toggle
+        if (state.isLoading) return;
 
         if (state.viewMode === 'SURFACE') {
             // Check if at least one entrance exists
@@ -55,28 +58,60 @@ export class UndergroundManager {
                 return;
             }
 
-            state.viewMode = 'UNDERGROUND';
-            this.cameraSystem.setUndergroundMode(true);
+            // Show loading screen
+            state.isLoading = true;
+            state.loadingMessage = 'Descending to Underground...';
 
-            // Focus on current layer with proper depth scaling
-            // Each layer is 2 units deep for better visibility
-            const layerY = (state.currentUndergroundLayer ?? -1) * 2.0;
-            this.cameraSystem.setTargetHeight(layerY);
-            this.inputSystem?.setRayPlaneHeight(layerY);
+            // Perform transition after brief delay
+            setTimeout(() => {
+                const s = this.stateManager.getMutableState();
+                s.viewMode = 'UNDERGROUND';
+                this.cameraSystem.setUndergroundMode(true);
+
+                // Focus on current layer with proper depth scaling
+                const layerY = (s.currentUndergroundLayer ?? -1) * 2.0;
+                this.cameraSystem.setTargetHeight(layerY);
+                this.inputSystem?.setRayPlaneHeight(layerY);
+
+                this.environmentRenderSystem.setViewMode(s.viewMode);
+                this.terrainRenderSystem.setViewMode(s.viewMode);
+                this.terrainRenderSystem.syncGrid(s.grid);
+
+                // Hide loading after chunks rebuild
+                setTimeout(() => {
+                    const s2 = this.stateManager.getMutableState();
+                    s2.isLoading = false;
+                    s2.loadingMessage = '';
+                }, 600);
+            }, 300);
+
         } else {
-            state.viewMode = 'SURFACE';
-            this.cameraSystem.setUndergroundMode(false);
-            this.cameraSystem.setTargetHeight(0);
-            this.inputSystem?.setRayPlaneHeight(0);
+            // Show loading screen
+            state.isLoading = true;
+            state.loadingMessage = 'Returning to Surface...';
+
+            // Perform transition after brief delay
+            setTimeout(() => {
+                const s = this.stateManager.getMutableState();
+                s.viewMode = 'SURFACE';
+                this.cameraSystem.setUndergroundMode(false);
+                this.cameraSystem.setTargetHeight(0);
+                this.inputSystem?.setRayPlaneHeight(0);
+
+                this.environmentRenderSystem.setViewMode(s.viewMode);
+                this.terrainRenderSystem.setViewMode(s.viewMode);
+                this.terrainRenderSystem.syncGrid(s.grid);
+
+                // Hide loading after chunks rebuild
+                setTimeout(() => {
+                    const s2 = this.stateManager.getMutableState();
+                    s2.isLoading = false;
+                    s2.loadingMessage = '';
+                }, 600);
+            }, 300);
         }
 
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
-
-        this.environmentRenderSystem.setViewMode(state.viewMode);
-        this.terrainRenderSystem.setViewMode(state.viewMode);
-
-        // Sync grid to force re-render with new view mode
-        this.terrainRenderSystem.syncGrid(state.grid);
     }
 
     /**

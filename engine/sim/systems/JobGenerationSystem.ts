@@ -1,8 +1,8 @@
 
 import { BaseSimSystem } from '../Simulation';
 import { FixedContext } from '../../kernel';
-import { GameState, Job, GridTile } from '../../../types';
-import { isHarvestable } from '../../utils/GameUtils';
+import { GameState, Job, GridTile, BuildingType } from '../../../types';
+import { isHarvestable, HARVESTABLE_TREES, HARVESTABLE_ROCKS, GRID_SIZE } from '../../utils/GameUtils';
 
 export class JobGenerationSystem extends BaseSimSystem {
     readonly id = 'job_generation';
@@ -23,6 +23,9 @@ export class JobGenerationSystem extends BaseSimSystem {
 
         // Clean up completed or invalid jobs first
         this.cleanupJobs(jobs, grid);
+
+        // Auto-mark resources near specialized buildings
+        this.autoMarkResources(state);
 
         // Optimize: Pre-calculate which structures are being cleared to avoid O(N*M) lookups
         const structuresWithClearingJobs = new Set<number>();
@@ -178,6 +181,47 @@ export class JobGenerationSystem extends BaseSimSystem {
 
             if (!valid) {
                 jobs.splice(i, 1);
+            }
+        }
+    }
+
+    private autoMarkResources(state: GameState): void {
+        const grid = state.grid;
+        const radius = 12; // Scanning distance
+
+        for (let i = 0; i < grid.length; i++) {
+            const tile = grid[i];
+            const type = tile.buildingType;
+            if (tile.isUnderConstruction) continue;
+
+            let targetType: 'WOOD' | 'STONE' | null = null;
+            if (type === BuildingType.SAWMILL) targetType = 'WOOD';
+            else if (type === BuildingType.STONE_QUARRY) targetType = 'STONE';
+
+            if (!targetType) continue;
+
+            // Scan area
+            const tx = i % GRID_SIZE;
+            const tz = Math.floor(i / GRID_SIZE);
+
+            for (let dz = -radius; dz <= radius; dz++) {
+                for (let dx = -radius; dx <= radius; dx++) {
+                    const nx = tx + dx;
+                    const nz = tz + dz;
+                    if (nx < 0 || nx >= GRID_SIZE || nz < 0 || nz >= GRID_SIZE) continue;
+
+                    const nIdx = nz * GRID_SIZE + nx;
+                    const nTile = grid[nIdx];
+
+                    if (nTile.foliage && nTile.foliage !== 'NONE' && !nTile.markedForHarvest) {
+                        const f = nTile.foliage as any;
+                        if (targetType === 'WOOD' && HARVESTABLE_TREES.includes(f)) {
+                            nTile.markedForHarvest = true;
+                        } else if (targetType === 'STONE' && HARVESTABLE_ROCKS.includes(f)) {
+                            nTile.markedForHarvest = true;
+                        }
+                    }
+                }
             }
         }
     }

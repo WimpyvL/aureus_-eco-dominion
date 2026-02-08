@@ -41,6 +41,7 @@ import { LayerNavigator } from './components/LayerNavigator';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { EraUnlockedModal } from './components/EraUnlockedModal';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 
 // Colonist Inspector Component
 const ColonistInspector: React.FC<{ agent: Agent; onClose: () => void; playSfx: (t: any) => void }> = ({ agent, onClose, playSfx }) => {
@@ -163,7 +164,9 @@ const App: React.FC = () => {
     const [pendingPlacementIndex, setPendingPlacementIndex] = useState<number | null>(null);
     const [pinnedTileIndex, setPinnedTileIndex] = useState<number | null>(null); // Track pinned tile for two-tap system
     const [showWorldMap, setShowWorldMap] = useState(false);
-    const [showHomePage, setShowHomePage] = useState(true);
+    const navigate = useNavigate();
+    const location = useLocation();
+    const showHomePage = location.pathname === '/';
     const [hasSave, setHasSave] = useState(false);
     const [hoverTile, setHoverTile] = useState<number | null>(null);
     const [digPromptIndex, setDigPromptIndex] = useState<number | null>(null);
@@ -266,13 +269,13 @@ const App: React.FC = () => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (showHomePage && e.code === 'Space') {
                 e.preventDefault();
-                setShowHomePage(false);
+                navigate('/game');
                 audioRef.current.init();
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [showHomePage]);
+    }, [showHomePage, navigate]);
 
     // Sidebar handler
     const handleSidebarOpen = useCallback((mode: 'NONE' | 'OPS' | 'SHOP' | 'TRADE' | 'CREW' | 'TECH') => {
@@ -292,26 +295,26 @@ const App: React.FC = () => {
 
     // Start game handlers
     const handleStartGame = useCallback(() => {
-        setShowHomePage(false);
+        navigate('/game');
         audioRef.current.init();
-    }, []);
+    }, [navigate]);
 
     const handleContinueGame = useCallback(() => {
         const saved = localStorage.getItem('aureus_save_v2');
         if (saved && world) {
             world.loadGame(saved);
-            setShowHomePage(false);
+            navigate('/game');
             audioRef.current.init();
         }
-    }, [world]);
+    }, [world, navigate]);
 
     const handleStartDemo = useCallback(() => {
         if (world) {
             world.startDemo();
-            setShowHomePage(false);
+            navigate('/game');
             audioRef.current.init();
         }
-    }, [world]);
+    }, [world, navigate]);
 
     // Calculate financials from state (Optimized: engine provides target sums)
     const calculateFinancials = (gameState: GameState) => {
@@ -413,299 +416,303 @@ const App: React.FC = () => {
     };
 
     return (
-        <div className="relative w-full h-screen overflow-hidden bg-slate-900 select-none">
-            {/* Engine Canvas Container - PERSISTENT */}
-            <div
-                ref={containerRef}
-                className={`absolute inset-0 z-0 transition-opacity duration-1000 ${(showHomePage || !state) ? 'brightness-[0.9]' : 'brightness-100'} ${(!state) ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-            />
+        <Routes>
+            <Route path="*" element={
+                <div className="relative w-full h-screen overflow-hidden bg-slate-900 select-none">
+                    {/* Engine Canvas Container - PERSISTENT */}
+                    <div
+                        ref={containerRef}
+                        className={`absolute inset-0 z-0 transition-opacity duration-1000 ${(showHomePage || !state) ? 'brightness-[0.9]' : 'brightness-100'} ${(!state) ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+                    />
 
-            {/* Loading Screen Overlay */}
-            {!state && (
-                <div className="fixed inset-0 z-10 flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
-                    {/* Logo/Title */}
-                    <div className="text-center mb-12">
-                        <h1 className="text-4xl font-bold bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 bg-clip-text text-transparent mb-2">AUREUS</h1>
-                        <p className="text-slate-500 text-sm tracking-widest uppercase">Eco Dominion</p>
-                    </div>
+                    {/* Loading Screen Overlay */}
+                    {!state && (
+                        <div className="fixed inset-0 z-10 flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
+                            {/* Logo/Title */}
+                            <div className="text-center mb-12">
+                                <h1 className="text-4xl font-bold bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 bg-clip-text text-transparent mb-2">AUREUS</h1>
+                                <p className="text-slate-500 text-sm tracking-widest uppercase">Eco Dominion</p>
+                            </div>
 
-                    {/* Loading Container */}
-                    <div className="w-80 bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 shadow-lg shadow-black/20">
-                        <div className="text-center mb-4">
-                            <p className="text-white text-lg font-medium">{loading.stage}</p>
-                            {loading.error && (
-                                <p className="text-red-400 text-sm mt-2 break-words">{loading.error}</p>
-                            )}
+                            {/* Loading Container */}
+                            <div className="w-80 bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 shadow-lg shadow-black/20">
+                                <div className="text-center mb-4">
+                                    <p className="text-white text-lg font-medium">{loading.stage}</p>
+                                    {loading.error && (
+                                        <p className="text-red-400 text-sm mt-2 break-words">{loading.error}</p>
+                                    )}
+                                </div>
+
+                                <div className="relative h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-700">
+                                    <div
+                                        className="absolute inset-y-0 left-0 bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-500 ease-out rounded-full"
+                                        style={{ width: `${loading.percent}%` }}
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse" />
+                                </div>
+
+                                <div className="text-center mt-3">
+                                    <span className="text-2xl font-bold text-amber-400">{loading.percent}%</span>
+                                </div>
+
+                                <div className="mt-6 space-y-2 text-xs text-slate-500">
+                                    <div className={`flex items-center gap-2 ${loading.percent >= 10 ? 'text-emerald-400' : ''}`}>
+                                        <span>●</span> Renderer
+                                    </div>
+                                    <div className={`flex items-center gap-2 ${loading.percent >= 30 ? 'text-emerald-400' : ''}`}>
+                                        <span>●</span> World & Input
+                                    </div>
+                                    <div className={`flex items-center gap-2 ${loading.percent >= 50 ? 'text-emerald-400' : ''}`}>
+                                        <span>●</span> Runtime & Tools
+                                    </div>
+                                    <div className={`flex items-center gap-2 ${loading.percent >= 80 ? 'text-emerald-400' : ''}`}>
+                                        <span>●</span> Simulation
+                                    </div>
+                                    <div className={`flex items-center gap-2 ${loading.percent >= 100 ? 'text-emerald-400' : ''}`}>
+                                        <span>●</span> Game Engine Running
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="mt-12 flex gap-1">
+                                {loading.percent < 100 ? (
+                                    <>
+                                        <div className="w-2 h-2 bg-amber-500/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                        <div className="w-2 h-2 bg-amber-500/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                        <div className="w-2 h-2 bg-amber-500/50 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                    </>
+                                ) : (
+                                    <div className="text-emerald-400 text-2xl animate-pulse">✓</div>
+                                )}
+                            </div>
                         </div>
+                    )}
 
-                        <div className="relative h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-700">
-                            <div
-                                className="absolute inset-y-0 left-0 bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-500 ease-out rounded-full"
-                                style={{ width: `${loading.percent}%` }}
+                    {/* View Transition Loading Overlay */}
+                    {state?.isLoading && (
+                        <LoadingOverlay
+                            message={state.loadingMessage || 'Transitioning...'}
+                            isVisible={true}
+                        />
+                    )}
+
+                    {/* Home Page Overlay */}
+                    {state && showHomePage && (
+                        <div className="absolute inset-0 z-50 bg-gradient-to-b from-black/30 via-transparent to-black/50">
+                            <HomePage
+                                onStartGame={handleStartGame}
+                                onStartDemo={handleStartDemo}
+                                onContinueGame={handleContinueGame}
+                                hasSave={hasSave}
                             />
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse" />
                         </div>
+                    )}
 
-                        <div className="text-center mt-3">
-                            <span className="text-2xl font-bold text-amber-400">{loading.percent}%</span>
-                        </div>
-
-                        <div className="mt-6 space-y-2 text-xs text-slate-500">
-                            <div className={`flex items-center gap-2 ${loading.percent >= 10 ? 'text-emerald-400' : ''}`}>
-                                <span>●</span> Renderer
-                            </div>
-                            <div className={`flex items-center gap-2 ${loading.percent >= 30 ? 'text-emerald-400' : ''}`}>
-                                <span>●</span> World & Input
-                            </div>
-                            <div className={`flex items-center gap-2 ${loading.percent >= 50 ? 'text-emerald-400' : ''}`}>
-                                <span>●</span> Runtime & Tools
-                            </div>
-                            <div className={`flex items-center gap-2 ${loading.percent >= 80 ? 'text-emerald-400' : ''}`}>
-                                <span>●</span> Simulation
-                            </div>
-                            <div className={`flex items-center gap-2 ${loading.percent >= 100 ? 'text-emerald-400' : ''}`}>
-                                <span>●</span> Game Engine Running
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="mt-12 flex gap-1">
-                        {loading.percent < 100 ? (
-                            <>
-                                <div className="w-2 h-2 bg-amber-500/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                <div className="w-2 h-2 bg-amber-500/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                <div className="w-2 h-2 bg-amber-500/50 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                            </>
-                        ) : (
-                            <div className="text-emerald-400 text-2xl animate-pulse">✓</div>
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {/* View Transition Loading Overlay */}
-            {state?.isLoading && (
-                <LoadingOverlay
-                    message={state.loadingMessage || 'Transitioning...'}
-                    isVisible={true}
-                />
-            )}
-
-            {/* Home Page Overlay */}
-            {state && showHomePage && (
-                <div className="absolute inset-0 z-50 bg-gradient-to-b from-black/30 via-transparent to-black/50">
-                    <HomePage
-                        onStartGame={handleStartGame}
-                        onStartDemo={handleStartDemo}
-                        onContinueGame={handleContinueGame}
-                        hasSave={hasSave}
-                    />
-                </div>
-            )}
-
-            {/* Era Unlocked Popup */}
-            {state?.eraUnlockedPopup && (
-                <EraUnlockedModal
-                    era={state.eraUnlockedPopup}
-                    onClose={() => world?.dismissEraPopup()}
-                    playSfx={playSfx}
-                />
-            )}
-
-            {/* Game UI */}
-            {state && !showHomePage && !isIntroAnim && (
-                <>
-                    <WeatherOverlay weather={state.weather} />
-                    <HUD
-                        resources={state.resources}
-                        financials={{ net: financials.net }}
-                        population={state.agents.filter(a => a.type !== 'ILLEGAL_MINER').length}
-                        currentEra={state.currentEra}
-                        state={state}
-                        activeBlock={activeHUDBlock}
-                        onToggleBlock={handleHUDToggle}
-                    />
-                    <Minimap
-                        grid={state.grid}
-                        agents={state.agents}
-                        viewMode={state.viewMode}
-                        onOpenMap={() => { setShowWorldMap(true); playSfx(SfxType.UI_OPEN); }}
-                    />
-
-                    <WorldMap
-                        isOpen={showWorldMap}
-                        onClose={() => setShowWorldMap(false)}
-                        grid={state.grid}
-                        agents={state.agents}
-                        playSfx={playSfx}
-                    />
-
-                    <div className="absolute top-14 left-2 sm:left-4 z-40 flex flex-col gap-2 items-start pointer-events-none">
-                        <TutorialOverlay
-                            step={state.step}
-                            dispatch={dispatch}
-                            setSidebarOpen={handleSidebarOpen}
+                    {/* Era Unlocked Popup */}
+                    {state?.eraUnlockedPopup && (
+                        <EraUnlockedModal
+                            era={state.eraUnlockedPopup}
+                            onClose={() => world?.dismissEraPopup()}
                             playSfx={playSfx}
                         />
+                    )}
 
-                        {selectedAgent && (
-                            <ColonistInspector
-                                agent={selectedAgent}
-                                onClose={() => dispatch({ type: 'SELECT_AGENT', payload: null })}
+                    {/* Game UI */}
+                    {state && !showHomePage && !isIntroAnim && (
+                        <>
+                            <WeatherOverlay weather={state.weather} />
+                            <HUD
+                                resources={state.resources}
+                                financials={{ net: financials.net }}
+                                population={state.agents.filter(a => a.type !== 'ILLEGAL_MINER').length}
+                                currentEra={state.currentEra}
+                                state={state}
+                                activeBlock={activeHUDBlock}
+                                onToggleBlock={handleHUDToggle}
+                            />
+                            <Minimap
+                                grid={state.grid}
+                                agents={state.agents}
+                                viewMode={state.viewMode}
+                                onOpenMap={() => { setShowWorldMap(true); playSfx(SfxType.UI_OPEN); }}
+                            />
+
+                            <WorldMap
+                                isOpen={showWorldMap}
+                                onClose={() => setShowWorldMap(false)}
+                                grid={state.grid}
+                                agents={state.agents}
                                 playSfx={playSfx}
                             />
-                        )}
 
-                        <GoalWidget
-                            goal={state.activeGoal}
-                            dispatch={dispatch}
-                            playSfx={playSfx}
-                        />
+                            <div className="absolute top-14 left-2 sm:left-4 z-40 flex flex-col gap-2 items-start pointer-events-none">
+                                <TutorialOverlay
+                                    step={state.step}
+                                    dispatch={dispatch}
+                                    setSidebarOpen={handleSidebarOpen}
+                                    playSfx={playSfx}
+                                />
 
-                        <NewsTicker
-                            news={state.newsFeed}
-                            onDismiss={(id) => dispatch({ type: 'DISMISS_NEWS', payload: id })}
-                            playSfx={playSfx}
-                        />
-                    </div>
+                                {selectedAgent && (
+                                    <ColonistInspector
+                                        agent={selectedAgent}
+                                        onClose={() => dispatch({ type: 'SELECT_AGENT', payload: null })}
+                                        playSfx={playSfx}
+                                    />
+                                )}
 
-                    <InventoryHUD
-                        inventory={state.inventory}
-                        selectedBuilding={state.selectedBuilding}
-                        dispatch={dispatch}
-                        playSfx={playSfx}
-                        step={state.step}
-                    />
+                                <GoalWidget
+                                    goal={state.activeGoal}
+                                    dispatch={dispatch}
+                                    playSfx={playSfx}
+                                />
 
-                    <Controls
-                        selectedBuilding={state.selectedBuilding}
-                        dispatch={dispatch}
-                        setSidebarOpen={handleSidebarOpen}
-                        viewMode={state.viewMode}
-                        playSfx={playSfx}
-                        step={state.step}
-                        debugMode={state.debugMode}
-                        interactionMode={state.interactionMode}
-                    />
+                                <NewsTicker
+                                    news={state.newsFeed}
+                                    onDismiss={(id) => dispatch({ type: 'DISMISS_NEWS', payload: id })}
+                                    playSfx={playSfx}
+                                />
+                            </div>
 
-                    {state.viewMode === 'UNDERGROUND' && (
-                        <LayerNavigator
-                            currentLayer={state.currentUndergroundLayer}
-                            dispatch={dispatch}
-                            playSfx={playSfx}
-                        />
-                    )}
-
-                    <OpsDrawer
-                        isOpen={sidebarOpen === 'OPS'}
-                        onClose={() => setSidebarOpen('NONE')}
-                        state={state}
-                        dispatch={dispatch}
-                        financials={{ income: financials.income, cost: financials.cost, net: financials.net }}
-                        ecoMult={financials.ecoMult}
-                        trustMult={financials.trustMult}
-                        playSfx={playSfx}
-                    />
-
-                    <SupplySidebar
-                        isOpen={sidebarOpen === 'SHOP'}
-                        onClose={() => setSidebarOpen('NONE')}
-                        state={state}
-                        dispatch={dispatch}
-                        playSfx={playSfx}
-                    />
-
-                    <TradeTerminal
-                        isOpen={sidebarOpen === 'TRADE'}
-                        onClose={() => setSidebarOpen('NONE')}
-                        state={state}
-                        dispatch={dispatch}
-                        playSfx={playSfx}
-                    />
-
-                    <UndergroundOverlay
-                        viewMode={state.viewMode}
-                        trust={state.resources.trust}
-                        cheatsEnabled={state.cheatsEnabled}
-                        dispatch={dispatch}
-                        playSfx={playSfx}
-                    />
-
-                    <ConstructionModal
-                        selectedTile={selectedTileForAction}
-                        grid={state.grid}
-                        gems={state.resources.gems}
-                        dispatch={dispatch}
-                        onClose={() => setSelectedTileForAction(null)}
-                        playSfx={playSfx}
-                    />
-
-                    <BuildingInspectorModal
-                        selectedTile={selectedTileForAction}
-                        grid={state.grid}
-                        unlockedEras={state.unlockedEras}
-                        resources={state.resources}
-                        cheatsEnabled={state.cheatsEnabled}
-                        dispatch={dispatch}
-                        onClose={() => setSelectedTileForAction(null)}
-                        playSfx={playSfx}
-                    />
-
-                    <MobileBuildingConfirmation
-                        buildingType={state.selectedBuilding}
-                        tileIndex={pendingPlacementIndex}
-                        onConfirm={() => {
-                            if (world && pendingPlacementIndex !== null) {
-                                world.placeBuilding(pendingPlacementIndex);
-                                world.clearPinnedBuilding();
-                                setPendingPlacementIndex(null);
-                                setPinnedTileIndex(null); // Reset two-tap flow
-                            }
-                        }}
-                        onCancel={() => {
-                            if (world) {
-                                world.clearPinnedBuilding();
-                            }
-                            setPendingPlacementIndex(null);
-                            setPinnedTileIndex(null); // Reset two-tap flow
-                        }}
-                        playSfx={playSfx}
-                    />
-
-                    {digPromptIndex !== null && (
-                        <DigConfirmPopup
-                            tileIndex={digPromptIndex}
-                            grid={state.grid}
-                            viewMode={state.viewMode}
-                            currentUndergroundLayer={state.currentUndergroundLayer}
-                            onConfirm={(layer) => {
-                                dispatch({ type: 'QUEUE_DIG', payload: { index: digPromptIndex, layer } });
-                                setDigPromptIndex(null);
-                            }}
-                            onCancel={() => setDigPromptIndex(null)}
-                        />
-                    )}
-
-                    {state.debugMode && (
-                        <>
-                            <DebugMenu
-                                getDebugStats={getDebugStats}
-                                state={state}
-                                onClose={() => dispatch({ type: 'TOGGLE_DEBUG' })}
+                            <InventoryHUD
+                                inventory={state.inventory}
+                                selectedBuilding={state.selectedBuilding}
                                 dispatch={dispatch}
+                                playSfx={playSfx}
+                                step={state.step}
                             />
-                            <AgentDebugOverlay
-                                agents={state.agents}
-                                jobs={state.jobs}
-                                tickCount={state.tickCount}
+
+                            <Controls
+                                selectedBuilding={state.selectedBuilding}
+                                dispatch={dispatch}
+                                setSidebarOpen={handleSidebarOpen}
+                                viewMode={state.viewMode}
+                                playSfx={playSfx}
+                                step={state.step}
+                                debugMode={state.debugMode}
+                                interactionMode={state.interactionMode}
                             />
+
+                            {state.viewMode === 'UNDERGROUND' && (
+                                <LayerNavigator
+                                    currentLayer={state.currentUndergroundLayer}
+                                    dispatch={dispatch}
+                                    playSfx={playSfx}
+                                />
+                            )}
+
+                            <OpsDrawer
+                                isOpen={sidebarOpen === 'OPS'}
+                                onClose={() => setSidebarOpen('NONE')}
+                                state={state}
+                                dispatch={dispatch}
+                                financials={{ income: financials.income, cost: financials.cost, net: financials.net }}
+                                ecoMult={financials.ecoMult}
+                                trustMult={financials.trustMult}
+                                playSfx={playSfx}
+                            />
+
+                            <SupplySidebar
+                                isOpen={sidebarOpen === 'SHOP'}
+                                onClose={() => setSidebarOpen('NONE')}
+                                state={state}
+                                dispatch={dispatch}
+                                playSfx={playSfx}
+                            />
+
+                            <TradeTerminal
+                                isOpen={sidebarOpen === 'TRADE'}
+                                onClose={() => setSidebarOpen('NONE')}
+                                state={state}
+                                dispatch={dispatch}
+                                playSfx={playSfx}
+                            />
+
+                            <UndergroundOverlay
+                                viewMode={state.viewMode}
+                                trust={state.resources.trust}
+                                cheatsEnabled={state.cheatsEnabled}
+                                dispatch={dispatch}
+                                playSfx={playSfx}
+                            />
+
+                            <ConstructionModal
+                                selectedTile={selectedTileForAction}
+                                grid={state.grid}
+                                gems={state.resources.gems}
+                                dispatch={dispatch}
+                                onClose={() => setSelectedTileForAction(null)}
+                                playSfx={playSfx}
+                            />
+
+                            <BuildingInspectorModal
+                                selectedTile={selectedTileForAction}
+                                grid={state.grid}
+                                unlockedEras={state.unlockedEras}
+                                resources={state.resources}
+                                cheatsEnabled={state.cheatsEnabled}
+                                dispatch={dispatch}
+                                onClose={() => setSelectedTileForAction(null)}
+                                playSfx={playSfx}
+                            />
+
+                            <MobileBuildingConfirmation
+                                buildingType={state.selectedBuilding}
+                                tileIndex={pendingPlacementIndex}
+                                onConfirm={() => {
+                                    if (world && pendingPlacementIndex !== null) {
+                                        world.placeBuilding(pendingPlacementIndex);
+                                        world.clearPinnedBuilding();
+                                        setPendingPlacementIndex(null);
+                                        setPinnedTileIndex(null); // Reset two-tap flow
+                                    }
+                                }}
+                                onCancel={() => {
+                                    if (world) {
+                                        world.clearPinnedBuilding();
+                                    }
+                                    setPendingPlacementIndex(null);
+                                    setPinnedTileIndex(null); // Reset two-tap flow
+                                }}
+                                playSfx={playSfx}
+                            />
+
+                            {digPromptIndex !== null && (
+                                <DigConfirmPopup
+                                    tileIndex={digPromptIndex}
+                                    grid={state.grid}
+                                    viewMode={state.viewMode}
+                                    currentUndergroundLayer={state.currentUndergroundLayer}
+                                    onConfirm={(layer) => {
+                                        dispatch({ type: 'QUEUE_DIG', payload: { index: digPromptIndex, layer } });
+                                        setDigPromptIndex(null);
+                                    }}
+                                    onCancel={() => setDigPromptIndex(null)}
+                                />
+                            )}
+
+                            {state.debugMode && (
+                                <>
+                                    <DebugMenu
+                                        getDebugStats={getDebugStats}
+                                        state={state}
+                                        onClose={() => dispatch({ type: 'TOGGLE_DEBUG' })}
+                                        dispatch={dispatch}
+                                    />
+                                    <AgentDebugOverlay
+                                        agents={state.agents}
+                                        jobs={state.jobs}
+                                        tickCount={state.tickCount}
+                                    />
+                                </>
+                            )}
                         </>
                     )}
-                </>
-            )}
 
-            {state && <GameOverScreen step={state.step} resources={state.resources} dispatch={dispatch} />}
-        </div>
+                    {state && <GameOverScreen step={state.step} resources={state.resources} dispatch={dispatch} />}
+                </div>
+            } />
+        </Routes>
     );
 };
 

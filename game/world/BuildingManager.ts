@@ -37,37 +37,15 @@ export class BuildingManager {
             return;
         }
 
-        // Era validation
-        if (!state.cheatsEnabled && !state.unlockedEras.includes(def.era)) {
-            console.warn(`Cannot place ${buildingType}: Era ${def.era} not unlocked`);
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
-            return;
-        }
-
         // Validate placement
         const tile = state.grid[index];
-        if (!tile || tile.locked) {
-            console.warn('[BuildingManager] Tile is null or locked');
+        if (!tile) {
+            console.warn('[BuildingManager] Tile is null');
             return;
         }
         if (tile.buildingType !== BuildingType.EMPTY && tile.buildingType !== BuildingType.POND) {
             console.warn('[BuildingManager] Tile is not empty, current:', tile.buildingType);
             return;
-        }
-
-        // Check inventory
-        if (!state.inventory[buildingType] || state.inventory[buildingType] <= 0) {
-            console.warn(`Cannot place ${buildingType}: not in inventory`);
-            return;
-        }
-
-        // Consume from inventory
-        state.inventory[buildingType]--;
-
-        // Clear selection if inventory is empty
-        if (state.inventory[buildingType] === 0) {
-            state.selectedBuilding = null;
-            this.buildingRenderSystem.setGhostBuilding(null);
         }
 
         // Context-aware placement (surface vs underground)
@@ -118,13 +96,10 @@ export class BuildingManager {
         }
     }
 
-    /**
-     * Bulldoze/remove a building at the specified tile
-     */
     bulldozeTile(index: number): void {
         const state = this.stateManager.getMutableState();
         const tile = state.grid[index];
-        if (!tile || tile.locked) return;
+        if (!tile) return;
 
         if (state.viewMode === 'UNDERGROUND') {
             const layer = state.currentUndergroundLayer;
@@ -177,6 +152,29 @@ export class BuildingManager {
      */
     clearPinnedBuilding(): void {
         this.buildingRenderSystem.setPinnedGhost(null);
+    }
+
+    /**
+     * Upgrade an existing building to the next level
+     */
+    upgradeBuilding(index: number): void {
+        const state = this.stateManager.getMutableState();
+        const tile = state.grid[index];
+        if (!tile || tile.buildingType === BuildingType.EMPTY) return;
+
+        const def = BUILDINGS[tile.buildingType];
+        if (!def || !def.upgrades) return;
+
+        const nextLevel = (tile.level || 1) + 1;
+        const upgrade = def.upgrades.find(u => u.level === nextLevel);
+
+        if (!upgrade) {
+            console.warn(`[BuildingManager] No upgrade found for level ${nextLevel}`);
+            return;
+        }
+
+        // Push Command
+        this.stateManager.pushCommand('UPGRADE_BUILDING', { index });
     }
 
     /**

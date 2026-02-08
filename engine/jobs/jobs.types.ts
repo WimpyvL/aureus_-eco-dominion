@@ -3,6 +3,8 @@
  * Define all job types and their payloads here
  */
 
+export const ENGINE_SCHEMA_VERSION = 101;
+
 /** Available job types */
 export type JobKind =
     | 'MESH_CHUNK'
@@ -23,6 +25,8 @@ export interface BaseJob {
     queuedAt: number;
     /** Cancellation flag for deduplication */
     cancelled?: boolean;
+    /** Schema version for protocol validation */
+    schemaVersion: number;
 }
 
 export const JOB_PRIORITY = {
@@ -96,6 +100,8 @@ export interface BaseJobResult {
     error?: string;
     completedAt: number;
     queuedAt: number;
+    /** Schema version for protocol validation */
+    schemaVersion: number;
 }
 export interface MeshChunkResult extends BaseJobResult {
     kind: 'MESH_CHUNK';
@@ -148,13 +154,14 @@ export function generateJobId(): string {
  */
 export function createJob<T extends Job>(
     kind: T['kind'],
-    data: Omit<T, 'id' | 'kind' | 'queuedAt' | 'priority'> & { priority?: number }
+    data: Omit<T, 'id' | 'kind' | 'queuedAt' | 'priority' | 'schemaVersion'> & { priority?: number }
 ): T {
     return {
         id: generateJobId(),
         kind,
         priority: data.priority ?? 0,
         queuedAt: Date.now(),
+        schemaVersion: ENGINE_SCHEMA_VERSION,
         ...data,
     } as T;
 }

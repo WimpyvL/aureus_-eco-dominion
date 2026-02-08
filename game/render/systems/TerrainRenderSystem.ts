@@ -5,7 +5,7 @@
  */
 
 import * as THREE from 'three';
-import { JobSystem, MeshChunkResult, MeshChunkJob } from '../../../engine/jobs';
+import { JobSystem, MeshChunkResult, MeshChunkJob, ENGINE_SCHEMA_VERSION, createJob } from '../../../engine/jobs';
 import { GridTile } from '../../../types';
 import { matMaster, mats } from '../../../engine/render/materials/VoxelMaterials';
 import { CHUNK_SIZE, getChunkId, getChunkKey } from '../../../engine/utils/ChunkUtils';
@@ -163,21 +163,22 @@ export class TerrainRenderSystem {
      * Sync grid state from game state
      */
     public syncGrid(grid: GridTile[]): void {
-        const newCache = new Map<string, GridTile[]>();
+        this.tileCache.clear(); // Clear existing cache to prevent duplicates
+        const affected = new Set<string>();
 
         for (const tile of grid) {
             const { x: cx, z: cz } = getChunkId(tile.id);
             const key = getChunkKey(cx, cz);
 
-            if (!newCache.has(key)) {
-                newCache.set(key, []);
+            if (!this.tileCache.has(key)) {
+                this.tileCache.set(key, []);
             }
-            newCache.get(key)!.push(tile);
+            this.tileCache.get(key)!.push(tile);
+            affected.add(key);
         }
 
-        // Update tile cache and mark affected chunks dirty
-        for (const [key, tiles] of newCache) {
-            this.tileCache.set(key, tiles);
+        // Mark affected chunks dirty
+        for (const key of affected) {
             const chunk = this.chunks.get(key);
             if (chunk) {
                 chunk.dirty = true;
@@ -228,11 +229,8 @@ export class TerrainRenderSystem {
         const key = getChunkKey(cx, cz);
         const tiles = this.tileCache.get(key) || [];
 
-        const job: MeshChunkJob = {
-            id: `mesh_${key}_${Date.now()}`,
-            kind: 'MESH_CHUNK',
+        const job = createJob<MeshChunkJob>('MESH_CHUNK', {
             priority: 10,
-            queuedAt: Date.now(),
             payload: {
                 chunkId: key,
                 cx,
@@ -242,7 +240,7 @@ export class TerrainRenderSystem {
                 viewMode: this.viewMode === 'UNDERGROUND' ? 'UNDERGROUND' : 'SURFACE',
                 lod
             }
-        };
+        });
 
         console.log(`[TerrainRenderSystem] Requesting build for ${key} (View: ${this.viewMode})`);
 

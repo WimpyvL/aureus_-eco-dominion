@@ -5,7 +5,8 @@
  */
 
 import { GridTile, BuildingType } from '../../../types';
-import { GRID_SIZE, COST, findPath } from './Pathfinding';
+import { GRID_SIZE } from '../../utils/GameUtils';
+import { COST, findPath } from './Pathfinding';
 import { BinaryHeap } from '../../utils/BinaryHeap';
 
 const CHUNK_SIZE = 15;

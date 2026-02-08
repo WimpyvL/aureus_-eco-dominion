@@ -4,8 +4,9 @@
  */
 
 import { StateManager } from '../../engine/state/StateManager';
-import { SfxType } from '../../types';
+import { SfxType, BuildingType } from '../../types';
 import { getEcoMultiplier } from '../../engine/utils/GameUtils';
+import { BUILDINGS } from '../../engine/data/VoxelConstants';
 
 export class EconomyManager {
     private stateManager: StateManager;
@@ -15,25 +16,90 @@ export class EconomyManager {
     }
 
     /**
-     * Sell all minerals for AGT currency
+     * Sell a specific resource for AGT currency
      */
-    sellMinerals(): void {
+    sellResource(resource: 'minerals' | 'gems' | 'wood' | 'stone'): void {
         const state = this.stateManager.getMutableState();
-        if (state.resources.minerals <= 0) return;
+        const amount = state.resources[resource];
+        if (amount <= 0) return;
 
         const ecoMult = getEcoMultiplier(state.resources.eco);
         const trustMult = 1 + (state.resources.trust / 200);
-        const price = state.market.minerals.currentPrice;
+        const price = state.market[resource].currentPrice;
 
-        const value = Math.floor(state.resources.minerals * price * ecoMult * trustMult);
+        const value = Math.floor(amount * price * ecoMult * trustMult);
         state.resources.agt += value;
-        state.resources.minerals = 0;
+        state.resources[resource] = 0;
 
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.SELL });
-        state.newsFeed.push({
-            id: `sell_${Date.now()}`,
-            headline: `Sold minerals for ${value} AGT`,
+        state.newsFeed.unshift({
+            id: `sell_${resource}_${Date.now()}`,
+            headline: `Market Transaction: Sold ${resource} for ${value} AGT`,
             type: 'POSITIVE',
+            timestamp: Date.now()
+        });
+    }
+
+    /**
+     * Sell minerals (Legacy/Convenience)
+     */
+    sellMinerals(): void {
+        this.sellResource('minerals');
+    }
+
+    /**
+     * Sell gems (special handling)
+     */
+    sellGems(address?: string): void {
+        const state = this.stateManager.getMutableState();
+        const amount = state.resources.gems;
+        if (amount <= 0) return;
+
+        // "Deposit" gems to external wallet
+        state.resources.gems = 0;
+
+        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
+        state.newsFeed.unshift({
+            id: `deposit_gems_${Date.now()}`,
+            headline: `Deposited ${Math.floor(amount)} Thundergems to ${address || 'External Wallet'}`,
+            type: 'POSITIVE',
+            timestamp: Date.now()
+        });
+    }
+
+    /**
+     * Sell wood
+     */
+    sellWood(): void { this.sellResource('wood'); }
+
+    /**
+     * Sell stone
+     */
+    sellStone(): void { this.sellResource('stone'); }
+
+    /**
+     * Buy a specific resource using AGT currency
+     */
+    buyResource(resource: 'minerals' | 'gems' | 'wood' | 'stone', amount: number): void {
+        const state = this.stateManager.getMutableState();
+
+        // Buyers pay a 25% "Import Fee" over market price
+        const price = state.market[resource].currentPrice * 1.25;
+        const totalCost = Math.floor(price * amount);
+
+        if (state.resources.agt < totalCost) {
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+            return;
+        }
+
+        state.resources.agt -= totalCost;
+        state.resources[resource] += amount;
+
+        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
+        state.newsFeed.unshift({
+            id: `buy_${resource}_${Date.now()}`,
+            headline: `Import Dispatch: Acquired ${amount} ${resource} for ${totalCost} AGT`,
+            type: 'NEUTRAL',
             timestamp: Date.now()
         });
     }
@@ -43,15 +109,28 @@ export class EconomyManager {
      */
     buyBuilding(buildingType: string, cost: number): void {
         const state = this.stateManager.getMutableState();
+        const def = BUILDINGS[buildingType as BuildingType];
 
-        // Deduct cost
-        state.resources.agt -= cost;
+        // Deduct multi-resource costs if defined
+        if (def && def.costs) {
+            Object.entries(def.costs).forEach(([res, amt]) => {
+                const resourceKey = res as keyof typeof state.resources;
+                const costAmt = amt as number;
+                if (costAmt && typeof state.resources[resourceKey] === 'number') {
+                    (state.resources[resourceKey] as number) -= costAmt;
+                }
+            });
+        } else {
+            // Legacy fall-back (usually AGT)
+            state.resources.agt -= cost;
+        }
 
         // Add to inventory
-        if (!state.inventory[buildingType]) {
-            state.inventory[buildingType] = 0;
+        const bType = buildingType as BuildingType;
+        if (!state.inventory[bType]) {
+            state.inventory[bType] = 0;
         }
-        state.inventory[buildingType]++;
+        state.inventory[bType]!++;
 
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
     }
