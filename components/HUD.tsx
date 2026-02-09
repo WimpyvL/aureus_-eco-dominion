@@ -148,7 +148,7 @@ const EraBlock = ({ currentEra, state, isExpanded, onToggle }: { currentEra: Era
     }
     if (c.minBuildings) {
       totalReqs++;
-      const count = state.grid.filter(t => t.buildingType !== 'EMPTY' && !t.isUnderConstruction).length;
+      const count = Object.values(state.chunks).flatMap(c => c.tiles).filter(t => t.buildingType !== 'EMPTY' && !t.isUnderConstruction).length;
       if (count >= c.minBuildings) metReqs++;
       progress += Math.min(1, count / c.minBuildings);
     }

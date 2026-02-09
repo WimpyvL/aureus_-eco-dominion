@@ -5,13 +5,12 @@
  * - Terrain Meshing (Surface Shell Optimized)
  */
 
-import { GridTile } from '../../types';
+import { GridTile, Chunk } from '../../types';
 import { getBiomeAt as getBiomeAtImpl, getFoliageAt as getFoliageAtImpl } from '../worldgen/Core';
 import { Job, PathfindJob, PathfindResult, MeshChunkJob, MeshChunkResult, ENGINE_SCHEMA_VERSION } from './jobs.types';
-import { findPath } from '../sim/algorithms/Pathfinding';
-import { GRID_SIZE } from '../utils/GameUtils';
+import { findPath3D } from '../sim/algorithms/Pathfinding';
 
-let localGrid: GridTile[] | null = null;
+let localChunks: Record<string, Chunk> = {};
 
 const PALETTE: Record<string, number[]> = {
     'grass': [0.36, 0.62, 0.27],
@@ -52,8 +51,8 @@ const LAYER_PALETTE: number[][] = [
 self.onmessage = (e: MessageEvent) => {
     const msg = e.data;
 
-    if (msg.type === 'SYNC_GRID') {
-        localGrid = msg.payload;
+    if (msg.type === 'SYNC_CHUNKS') {
+        localChunks = msg.payload; // Record<string, Chunk>
         return;
     }
 
@@ -62,8 +61,7 @@ self.onmessage = (e: MessageEvent) => {
 
     // Protocol validation
     if (job.schemaVersion !== ENGINE_SCHEMA_VERSION) {
-        console.error(`[EngineWorker] CRITICAL: Schema version mismatch. Expected ${ENGINE_SCHEMA_VERSION}, got ${job.schemaVersion}. Ignoring job.`);
-        return;
+        console.warn(`[EngineWorker] Schema version mismatch. Job: ${job.schemaVersion}, Internal: ${ENGINE_SCHEMA_VERSION}. This is normal during hmr/build.`);
     }
 
     try {
@@ -76,7 +74,7 @@ self.onmessage = (e: MessageEvent) => {
         }
 
         if (result) {
-            if (job.kind === 'MESH_CHUNK' && result.solid) {
+            if (job.kind === 'MESH_CHUNK' && result.success) {
                 const transfer: Transferable[] = [];
                 if (result.solid) transfer.push(result.solid.p.buffer, result.solid.n.buffer, result.solid.c.buffer, result.solid.u.buffer);
                 if (result.water) transfer.push(result.water.p.buffer, result.water.n.buffer, result.water.c.buffer, result.water.u.buffer);
@@ -99,14 +97,10 @@ self.onmessage = (e: MessageEvent) => {
 };
 
 function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
-    const { cx, cz, tiles, gridSize, viewMode = 'SURFACE', lod = 1 } = job.payload;
+    const { cx, cz, tiles, viewMode = 'SURFACE', lod = 1 } = job.payload;
     const CHUNK_SIZE = 16;
     const isUnderground = viewMode === 'UNDERGROUND';
-    const cavernFloorY = -30; // Fixed cavern floor height
-    const cavernCeilingOffset = 20; // Ceiling is 20 units above floor (at -10)
 
-    const offsetX = (gridSize - 1) / 2;
-    const offsetZ = (gridSize - 1) / 2;
     const startX = cx * CHUNK_SIZE;
     const startZ = cz * CHUNK_SIZE;
 
@@ -149,24 +143,28 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
         dest.u.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
     };
 
-    const getData = (gx: number, gz: number) => {
+    const getTile = (gx: number, gz: number): GridTile | null => {
         const key = `${gx},${gz}`;
-        if (tileMap.has(key)) {
-            const t = tileMap.get(key)!;
+        if (tileMap.has(key)) return tileMap.get(key)!;
+
+        // Fallback to localChunks
+        const chunkX = Math.floor(gx / CHUNK_SIZE);
+        const chunkZ = Math.floor(gz / CHUNK_SIZE);
+        const chunkKey = `${chunkX},0,${chunkZ}`;
+        const chunk = localChunks[chunkKey];
+        if (chunk) {
+            return chunk.tiles.find(t => t.x === gx && t.z === gz) || null;
+        }
+        return null;
+    };
+
+    const getData = (gx: number, gz: number) => {
+        const t = getTile(gx, gz);
+        if (t) {
             return { h: t.terrainHeight, b: t.biome, bt: t.buildingType, f: t.foliage || 'NONE', in: true, marked: t.markedForHarvest };
         }
 
-        if (localGrid && localGrid.length > 0 && gx >= 0 && gx < GRID_SIZE && gz >= 0 && gz < GRID_SIZE) {
-            const idx = gz * GRID_SIZE + gx;
-            const t = localGrid[idx];
-            if (t) {
-                return { h: t.terrainHeight, b: t.biome, bt: t.buildingType, f: t.foliage || 'NONE', in: true, marked: t.markedForHarvest };
-            }
-        }
-
-        const nx = gx - offsetX;
-        const nz = gz - offsetZ;
-        const data = getBiomeAtImpl(nx, nz);
+        const data = getBiomeAtImpl(gx, gz);
         return { h: data.height, b: data.biome, bt: 'EMPTY', f: 'NONE', in: false, marked: false };
     };
 
@@ -175,9 +173,7 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
             const worldX = startX + x;
             const worldZ = startZ + z;
             const data = getData(worldX, worldZ);
-
-            const key = `${worldX},${worldZ}`;
-            const tile = tileMap.get(key);
+            const tile = getTile(worldX, worldZ);
 
             // Underground meshing: 10 levels deep + ghost surface
             if (isUnderground) {
@@ -218,15 +214,13 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
 
                                 // Surface transition (Layer 0)
                                 if (nLayer === 0) {
-                                    const nKey = `${nx},${nz}`;
-                                    const nTile = tileMap.get(nKey);
+                                    const nTile = getTile(nx, nz);
                                     // If the tile has an entrance (hole), it's open (not solid)
                                     // Otherwise it's the solid surface of the world
                                     return !nTile?.hasEntrance;
                                 }
 
-                                const nKey = `${nx},${nz}`;
-                                const nTile = tileMap.get(nKey);
+                                const nTile = getTile(nx, nz);
                                 if (nTile && nTile.underground && nTile.underground[nLayer]) {
                                     return !nTile.underground[nLayer].excavated;
                                 }
@@ -267,15 +261,12 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
             // Try procedural generation if no explicit foliage
             // This runs for both existing tiles (that are empty) and procedural chunks
             if ((!fType || fType === 'NONE') && data.bt === 'EMPTY' && data.h > 0) {
-                const nx = worldX - offsetX;
-                const nz = worldZ - offsetZ;
-                const bd = getBiomeAtImpl(nx, nz);
-                const dist = Math.sqrt(nx * nx + nz * nz);
-                const gen = getFoliageAtImpl(nx, nz, data.b, data.h, bd.detail);
+                const bd = getBiomeAtImpl(worldX, worldZ);
+                fType = getFoliageAtImpl(worldX, worldZ, data.b, data.h, bd.detail);
 
                 // Do not spawn gold outside playable area (can't mine it)
-                if (gen !== 'NONE' && gen !== 'GOLD_VEIN') {
-                    fType = gen;
+                if (fType === 'GOLD_VEIN') {
+                    fType = 'NONE';
                 }
             }
 
@@ -352,10 +343,7 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
 }
 
 function processPathfind(job: PathfindJob): PathfindResult {
-    if (!localGrid || localGrid.length === 0) throw new Error("Worker has no grid data");
-    const startIdx = job.startZ * GRID_SIZE + job.startX;
-    const endIdx = job.endZ * GRID_SIZE + job.endX;
-    const path = findPath(startIdx, endIdx, localGrid);
+    const path = findPath3D(job.startX, job.startZ, 0, job.endX, job.endZ, 0, localChunks);
     return {
         jobId: job.id,
         kind: 'PATHFIND',

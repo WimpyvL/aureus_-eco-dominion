@@ -5,8 +5,9 @@
 
 import { StateManager } from '../../engine/state/StateManager';
 import { BuildingRenderSystem } from '../render/systems/BuildingRenderSystem';
-import { BuildingType, SfxType } from '../../types';
+import { BuildingType, SfxType, Chunk } from '../../types';
 import { BUILDINGS } from '../../engine/data/VoxelConstants';
+import { ChunkStore } from '../../engine/space/ChunkStore';
 
 export class BuildingManager {
     private stateManager: StateManager;
@@ -18,13 +19,13 @@ export class BuildingManager {
     }
 
     /**
-     * Place a building at the specified tile index
+     * Place a building at the specified coordinates
      */
-    placeBuilding(index: number, type?: string): void {
-        const state = this.stateManager.getMutableState();
+    placeBuilding(x: number, z: number, type?: string): void {
+        const state = this.stateManager.getState();
         const buildingType = (type || state.selectedBuilding) as BuildingType;
 
-        console.log('[BuildingManager] placeBuilding:', index, buildingType, state.viewMode);
+        console.log('[BuildingManager] placeBuilding:', x, z, buildingType, state.viewMode);
 
         if (!buildingType) {
             console.warn('[BuildingManager] No buildingType');
@@ -38,7 +39,7 @@ export class BuildingManager {
         }
 
         // Validate placement
-        const tile = state.grid[index];
+        const tile = ChunkStore.getTile(state.chunks, x, z);
         if (!tile) {
             console.warn('[BuildingManager] Tile is null');
             return;
@@ -50,32 +51,32 @@ export class BuildingManager {
 
         // Context-aware placement (surface vs underground)
         if (state.viewMode === 'UNDERGROUND') {
-            this.placeUndergroundBuilding(index, buildingType, state);
+            this.placeUndergroundBuilding(x, z, buildingType, state);
         } else {
-            this.placeSurfaceBuilding(index, buildingType, state);
+            this.placeSurfaceBuilding(x, z, buildingType, state);
         }
     }
 
     /**
      * Place a building on the surface
      */
-    private placeSurfaceBuilding(index: number, buildingType: BuildingType, state: any): void {
-        this.stateManager.pushCommand('PLACE_BUILDING', { index, buildingType });
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BUILD });
+    private placeSurfaceBuilding(x: number, z: number, buildingType: BuildingType, state: any): void {
+        this.stateManager.pushCommand('PLACE_BUILDING', { x, z, buildingType });
+        this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.BUILD });
     }
 
     /**
      * Place a building underground
      */
-    private placeUndergroundBuilding(index: number, buildingType: BuildingType, state: any): void {
+    private placeUndergroundBuilding(x: number, z: number, buildingType: BuildingType, state: any): void {
         const layer = state.currentUndergroundLayer;
-        const tile = state.grid[index];
-        const strata = tile.underground ? tile.underground[layer] : null;
+        const tile = ChunkStore.getTile(state.chunks, x, z);
+        const strata = tile?.underground ? tile.underground[layer] : null;
 
         // Only allow subterranean construction on excavated tiles
         if (!strata || !strata.excavated) {
             console.warn('[BuildingManager] Cannot build on unexcavated bedrock');
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+            this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.ERROR });
             return;
         }
 
@@ -88,29 +89,29 @@ export class BuildingManager {
         ];
 
         if (subterraneanTypes.includes(buildingType)) {
-            this.stateManager.pushCommand('PLACE_SUB_BUILDING', { index, buildingType, layer });
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BUILD });
+            this.stateManager.pushCommand('PLACE_SUB_BUILDING', { x, z, buildingType, layer });
+            this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.BUILD });
         } else {
             console.warn(`${buildingType} cannot be placed underground`);
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+            this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.ERROR });
         }
     }
 
-    bulldozeTile(index: number): void {
-        const state = this.stateManager.getMutableState();
-        const tile = state.grid[index];
+    bulldozeTile(x: number, z: number): void {
+        const state = this.stateManager.getState();
+        const tile = ChunkStore.getTile(state.chunks, x, z);
         if (!tile) return;
 
         if (state.viewMode === 'UNDERGROUND') {
             const layer = state.currentUndergroundLayer;
             const hasSub = tile.subBuildings && tile.subBuildings[layer];
             if (hasSub) {
-                this.stateManager.pushCommand('BULLDOZE_SUB', { index, layer });
-                state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BULLDOZE });
+                this.stateManager.pushCommand('BULLDOZE_SUB', { x, z, layer });
+                this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.BULLDOZE });
             }
         } else {
-            this.stateManager.pushCommand('BULLDOZE', { index });
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BUILD });
+            this.stateManager.pushCommand('BULLDOZE', { x, z });
+            this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.BUILD });
         }
     }
 
@@ -118,24 +119,27 @@ export class BuildingManager {
      * Select a building type for placement
      */
     selectBuilding(type: string | null): void {
-        const state = this.stateManager.getMutableState();
-        state.selectedBuilding = type as BuildingType | null;
         this.buildingRenderSystem.setGhostBuilding(type as BuildingType | null);
 
-        // CRITICAL: Set interaction mode to BUILD when selecting a building
         if (type) {
-            state.interactionMode = 'BUILD';
+            this.stateManager.update({
+                selectedBuilding: type as BuildingType,
+                interactionMode: 'BUILD'
+            });
         } else {
-            state.interactionMode = 'INSPECT';
+            this.stateManager.update({
+                selectedBuilding: null,
+                interactionMode: 'INSPECT'
+            });
         }
     }
 
     /**
      * Pin a ghost building at a location for mobile confirmation
      */
-    pinBuildingForConfirmation(index: number): void {
+    pinBuildingForConfirmation(x: number, z: number): void {
         const state = this.stateManager.getState();
-        const tile = state.grid[index];
+        const tile = ChunkStore.getTile(state.chunks, x, z);
         const surfaceY = tile ? tile.terrainHeight * 0.5 : 0;
 
         let y = surfaceY;
@@ -144,7 +148,7 @@ export class BuildingManager {
             y = surfaceY + (state.currentUndergroundLayer * 2.0);
         }
 
-        this.buildingRenderSystem.setPinnedGhost(index, y);
+        this.buildingRenderSystem.setPinnedGhost({ x, z }, y);
     }
 
     /**
@@ -157,9 +161,9 @@ export class BuildingManager {
     /**
      * Upgrade an existing building to the next level
      */
-    upgradeBuilding(index: number): void {
-        const state = this.stateManager.getMutableState();
-        const tile = state.grid[index];
+    upgradeBuilding(x: number, z: number): void {
+        const state = this.stateManager.getState();
+        const tile = ChunkStore.getTile(state.chunks, x, z);
         if (!tile || tile.buildingType === BuildingType.EMPTY) return;
 
         const def = BUILDINGS[tile.buildingType];
@@ -174,15 +178,15 @@ export class BuildingManager {
         }
 
         // Push Command
-        this.stateManager.pushCommand('UPGRADE_BUILDING', { index });
+        this.stateManager.pushCommand('UPGRADE_BUILDING', { x, z });
     }
 
     /**
      * Speed up construction at a tile using gems
      */
-    speedUpConstruction(index: number): void {
-        const state = this.stateManager.getMutableState();
-        const tile = state.grid[index];
+    speedUpConstruction(x: number, z: number): void {
+        const state = this.stateManager.getState();
+        const tile = ChunkStore.getTile(state.chunks, x, z);
         if (!tile || !tile.isUnderConstruction) return;
 
         const rushCost = 1; // 1 gem per rush
@@ -190,12 +194,12 @@ export class BuildingManager {
             // Deduct gems in orchestrator (or let engine handle it, but better to deduct here for immediate UI feedback if possible)
             // Actually, ConstructionSystem also deducts gems, so we should be careful about double-deduction.
             // Let's let the engine handle the resource deduction for consistency.
-            this.stateManager.pushCommand('SPEED_UP', { index });
+            this.stateManager.pushCommand('SPEED_UP', { x, z });
 
             // We can add the effect here for immediate feedback
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.CONSTRUCT_SPEEDUP });
+            this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.CONSTRUCT_SPEEDUP });
         } else {
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+            this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.ERROR });
         }
     }
 }

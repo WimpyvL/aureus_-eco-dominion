@@ -5,7 +5,8 @@
 
 import { BaseSimSystem } from '../Simulation';
 import { FixedContext } from '../../kernel';
-import { GameState, BuildingType, GridTile, SfxType } from '../../../types';
+import { GameState, BuildingType, GridTile, SfxType, Chunk } from '../../../types';
+
 import { checkAndGenerateEvent } from '../logic/AiLogic';
 
 export class EventSystem extends BaseSimSystem {
@@ -17,7 +18,7 @@ export class EventSystem extends BaseSimSystem {
 
     tick(ctx: FixedContext, state: GameState): void {
         // 1. Process Active Events (Durations)
-        this.processActiveEvents(ctx.fixedDt, state);
+        this.processActiveEvents(ctx, state);
 
         // 2. Roll for New Events
         if (ctx.time - this.lastEventCheck > this.EVENT_CHECK_INTERVAL) {
@@ -26,16 +27,21 @@ export class EventSystem extends BaseSimSystem {
             // Limit to one major event at a time
             if (state.activeEvents.length > 0) return;
 
-            const { event, news, newGrid, newAgents } = checkAndGenerateEvent(state);
+            const { event, news, newChunks, newAgents } = checkAndGenerateEvent(ctx, state);
 
             if (event) state.activeEvents.push(event);
             if (news) state.newsFeed.push(news);
-            if (newGrid) {
+            if (newChunks) {
                 // Bridge to React effects for visual sync
-                state.pendingEffects.push({ type: 'GRID_UPDATE', updates: this.getGridDiff(state.grid, newGrid) });
-                state.grid = newGrid;
+                for (const [key, chunk] of Object.entries(newChunks)) {
+                    state.chunks[key] = chunk;
+                    const [cx, cz] = key.split(',').map(Number);
+                    state.pendingEffects.push({ type: 'CHUNK_UPDATE', cx, cz, updates: chunk.tiles });
+                }
             }
+
             if (newAgents) state.agents = newAgents;
+
 
             if (event) {
                 state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ALARM });
@@ -43,7 +49,8 @@ export class EventSystem extends BaseSimSystem {
         }
     }
 
-    private processActiveEvents(dt: number, state: GameState) {
+    private processActiveEvents(ctx: FixedContext, state: GameState) {
+        const dt = ctx.fixedDt;
         if (state.activeEvents.length === 0) return;
 
         for (let i = 0; i < state.activeEvents.length; i++) {
@@ -54,20 +61,14 @@ export class EventSystem extends BaseSimSystem {
                 state.activeEvents.splice(i, 1);
                 i--;
                 state.newsFeed.push({
-                    id: `end_${Date.now()}`,
+                    id: ctx.getNextId?.('evt_end') || `end_${Date.now()}`,
                     headline: `Event Over: ${event.name} has concluded.`,
                     type: 'NEUTRAL',
-                    timestamp: Date.now()
+                    timestamp: state.tickCount
                 });
             }
         }
     }
 
-    private getGridDiff(oldGrid: GridTile[], newGrid: GridTile[]): GridTile[] {
-        const diff: GridTile[] = [];
-        for (let i = 0; i < oldGrid.length; i++) {
-            if (oldGrid[i] !== newGrid[i]) diff.push(newGrid[i]);
-        }
-        return diff;
-    }
+
 }

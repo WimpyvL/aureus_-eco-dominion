@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Gem, AlertTriangle, RefreshCw, Lock, ArrowRight, Radio, XCircle, CheckCircle2, ArrowUp, ChevronDown, ChevronUp, Leaf, Hammer, X, Zap, Droplets, Trash2, Info } from 'lucide-react';
-import { GameStep, Action, GameState, BuildingType } from '../types';
+import { GameStep, Action, GameState, BuildingType, Chunk, Agent } from '../types';
 import { BUILDINGS } from '../engine/data/VoxelConstants';
 
 interface TutorialOverlayProps {
@@ -256,16 +256,19 @@ export const GameOverScreen: React.FC<{ step: GameStep; resources: GameState['re
     );
 };
 
+import { ChunkStore } from '../engine/space/ChunkStore';
+
 export const ConstructionModal: React.FC<{
-    selectedTile: number | null;
-    grid: GameState['grid'];
+    selectedTile: { x: number, z: number } | null;
+    chunks: Record<string, Chunk>;
     gems: number;
     dispatch: React.Dispatch<Action>;
     onClose: () => void;
     playSfx: (type: any) => void;
-}> = ({ selectedTile, grid, gems, dispatch, onClose, playSfx }) => {
-    if (selectedTile === null || !grid[selectedTile]) return null;
-    const tile = grid[selectedTile];
+}> = ({ selectedTile, chunks, gems, dispatch, onClose, playSfx }) => {
+    if (selectedTile === null) return null;
+    const tile = ChunkStore.getTile(chunks, selectedTile.x, selectedTile.z);
+    if (!tile) return null;
 
     // Position helper
     const containerClass = "absolute bottom-32 sm:bottom-24 left-1/2 -translate-x-1/2 z-50 animate-in zoom-in-95 duration-200 w-56";
@@ -294,7 +297,7 @@ export const ConstructionModal: React.FC<{
                         ) : (
                             <button
                                 onClick={() => {
-                                    dispatch({ type: 'REHABILITATE_TILE', payload: { index: selectedTile } });
+                                    dispatch({ type: 'REHABILITATE_TILE', payload: { x: selectedTile.x, z: selectedTile.z } });
                                     playSfx('UI_CLICK');
                                     onClose();
                                 }}
@@ -311,7 +314,7 @@ export const ConstructionModal: React.FC<{
     }
 
     if (tile.isUnderConstruction) {
-        const bDef = BUILDINGS[tile.buildingType];
+        const bDef = BUILDINGS[tile.buildingType as BuildingType];
         return (
             <div className={containerClass}>
                 <div className={`${cardClass} border-amber-500 rounded-[4px]`}>
@@ -321,13 +324,13 @@ export const ConstructionModal: React.FC<{
                     </div>
 
                     <div className="p-3 text-center">
-                        <p className="text-xs font-bold mb-2 text-slate-300 uppercase">{bDef.name}</p>
+                        <p className="text-xs font-bold mb-2 text-slate-300 uppercase">{bDef?.name || 'Building'}</p>
 
                         <div className="relative h-3 bg-slate-950 w-full border border-slate-700 mb-2">
                             {/* Dynamic Progress Bar */}
                             <div
                                 className="absolute inset-y-0 left-0 bg-amber-500 h-full transition-all duration-300 overflow-hidden"
-                                style={{ width: `${Math.max(0, 100 - ((tile.constructionTimeLeft || 0) / (bDef.buildTime || 1) * 100))}%` }}
+                                style={{ width: `${Math.max(0, 100 - ((tile.constructionTimeLeft || 0) / (bDef?.buildTime || 1) * 100))}%` }}
                             >
                                 <div className="w-full h-full opacity-50 bg-[repeating-linear-gradient(45deg,transparent,transparent_5px,#000_5px,#000_10px)]" />
                             </div>
@@ -338,7 +341,7 @@ export const ConstructionModal: React.FC<{
                         <button
                             onClick={() => {
                                 if (gems >= 1) {
-                                    dispatch({ type: 'SPEED_UP_BUILDING', payload: { index: selectedTile } });
+                                    dispatch({ type: 'SPEED_UP_BUILDING', payload: { x: selectedTile.x, z: selectedTile.z } });
                                     playSfx('CONSTRUCT_SPEEDUP');
                                     onClose();
                                 } else {
@@ -415,22 +418,23 @@ export const UndergroundOverlay: React.FC<{
 }
 
 export const BuildingInspectorModal: React.FC<{
-    selectedTile: number | null;
-    grid: GameState['grid'];
+    selectedTile: { x: number, z: number } | null;
+    chunks: Record<string, Chunk>;
     unlockedEras: GameState['unlockedEras'];
     resources: GameState['resources'];
     cheatsEnabled: boolean;
     dispatch: React.Dispatch<Action>;
     onClose: () => void;
     playSfx: (type: any) => void;
-}> = ({ selectedTile, grid, unlockedEras, resources, cheatsEnabled, dispatch, onClose, playSfx }) => {
-    if (selectedTile === null || !grid[selectedTile]) return null;
-    const tile = grid[selectedTile];
+}> = ({ selectedTile, chunks, unlockedEras, resources, cheatsEnabled, dispatch, onClose, playSfx }) => {
+    if (selectedTile === null) return null;
+    const tile = ChunkStore.getTile(chunks, selectedTile.x, selectedTile.z);
+    if (!tile) return null;
 
     // Only show if it's a building and NOT under construction (ConstructionModal handles that)
     if (tile.buildingType === BuildingType.EMPTY || tile.isUnderConstruction) return null;
 
-    const def = BUILDINGS[tile.buildingType];
+    const def = BUILDINGS[tile.buildingType as BuildingType];
     if (!def) return null;
 
     // Resolve current stats based on level
@@ -546,9 +550,7 @@ export const BuildingInspectorModal: React.FC<{
                         <button
                             onClick={() => {
                                 if (canUpgrade) {
-                                    dispatch({ type: 'UPGRADE_BUILDING', payload: { index: selectedTile } });
-                                    // Keep modal open or close? Maybe close to see effect?
-                                    // onClose(); 
+                                    dispatch({ type: 'UPGRADE_BUILDING', payload: { x: selectedTile.x, z: selectedTile.z } });
                                 } else {
                                     playSfx('ERROR');
                                 }
@@ -574,7 +576,7 @@ export const BuildingInspectorModal: React.FC<{
 
                     <button
                         onClick={() => {
-                            dispatch({ type: 'BULLDOZE_TILE', payload: { index: selectedTile } });
+                            dispatch({ type: 'BULLDOZE_TILE', payload: { x: selectedTile.x, z: selectedTile.z } });
                             playSfx('BULLDOZE');
                             onClose();
                         }}

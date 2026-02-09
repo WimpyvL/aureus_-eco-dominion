@@ -42,7 +42,6 @@ const WARNING_ICONS = {
 
 export class AgentRenderSystem {
     private scene: THREE.Scene;
-    private gridSize: number;
     private getHeightAt: (x: number, z: number) => number;
 
     private agentMeshes: Map<string, THREE.Group> = new Map();
@@ -58,11 +57,9 @@ export class AgentRenderSystem {
 
     constructor(
         scene: THREE.Scene,
-        gridSize: number,
         getHeightAt: (x: number, z: number) => number
     ) {
         this.scene = scene;
-        this.gridSize = gridSize;
         this.getHeightAt = getHeightAt;
 
         // Selection Ring
@@ -136,7 +133,6 @@ export class AgentRenderSystem {
     // =========================================================================
 
     private syncMeshes(agents: Agent[]) {
-        const offset = (this.gridSize - 1) / 2;
         const seen = new Set<string>();
 
         agents.forEach(agent => {
@@ -168,10 +164,8 @@ export class AgentRenderSystem {
             }
 
             // Calculate Position
-            const x = agent.visualX ?? agent.x;
-            const z = agent.visualZ ?? agent.z;
-            const worldX = x - offset;
-            const worldZ = z - offset;
+            const worldX = agent.visualX ?? agent.x;
+            const worldZ = agent.visualZ ?? agent.z;
 
             // Target Rotation Logic
             let targetRot = meshGroup.userData.targetRot ?? meshGroup.rotation.y;
@@ -181,8 +175,8 @@ export class AgentRenderSystem {
             if (agent.state === 'MOVING') {
                 if (agent.path && agent.path.length > 0) {
                     const nextWaypoint = agent.path[0];
-                    const nextX = (nextWaypoint.index % this.gridSize) - offset;
-                    const nextZ = Math.floor(nextWaypoint.index / this.gridSize) - offset;
+                    const nextX = nextWaypoint.x;
+                    const nextZ = nextWaypoint.z;
                     targetRot = Math.atan2(nextX - worldX, nextZ - worldZ);
                 } else {
                     const dx = worldX - prevX;
@@ -191,9 +185,9 @@ export class AgentRenderSystem {
                         targetRot = Math.atan2(dx, dz);
                     }
                 }
-            } else if ((agent.state === 'WORKING' || agent.state === 'SOCIALIZING') && agent.targetTileId !== null) {
-                const tx = (agent.targetTileId % this.gridSize) - offset;
-                const tz = Math.floor(agent.targetTileId / this.gridSize) - offset;
+            } else if ((agent.state === 'WORKING' || agent.state === 'SOCIALIZING') && agent.targetX !== null && agent.targetZ !== null) {
+                const tx = agent.targetX;
+                const tz = agent.targetZ;
                 targetRot = Math.atan2(tx - worldX, tz - worldZ);
             }
 

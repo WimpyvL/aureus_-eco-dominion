@@ -1,7 +1,7 @@
 
 import { BuildingType } from './buildings';
 import { Agent, AgentRequest, Job } from './agents';
-import { GridTile, WeatherState } from './world';
+import { GridTile, WeatherState, Chunk } from './world';
 import { GameResources, MarketState, Contract } from './economy';
 
 export enum Era {
@@ -119,8 +119,8 @@ export enum SfxType {
 }
 
 export type GameDiff =
-    | { type: 'GRID_UPDATE', updates: GridTile[] }
-    | { type: 'FX', fxType: 'MINING' | 'THEFT' | 'ECO_REHAB' | 'DEATH' | 'SMOKE' | 'DUST' | 'FARM', index: number };
+    | { type: 'CHUNK_UPDATE', cx: number, cz: number, updates: GridTile[] }
+    | { type: 'FX', fxType: 'MINING' | 'THEFT' | 'ECO_REHAB' | 'DEATH' | 'SMOKE' | 'DUST' | 'FARM', x: number, z: number };
 
 export type SimulationEffect =
     | GameDiff
@@ -128,13 +128,13 @@ export type SimulationEffect =
 
 export interface GameCommand {
     id: string; // Unique ID to prevent double execution
-    type: 'PLACE_BUILDING' | 'PLACE_SUB_BUILDING' | 'BULLDOZE' | 'BULLDOZE_SUB' | 'SPEED_UP' | 'REHABILITATE' | 'UPGRADE_BUILDING' | 'EXPLODE_TILE';
+    type: 'PLACE_BUILDING' | 'PLACE_SUB_BUILDING' | 'BULLDOZE' | 'BULLDOZE_SUB' | 'SPEED_UP' | 'REHABILITATE' | 'UPGRADE_BUILDING' | 'EXPLODE_TILE' | 'COMMAND_AGENT' | 'BUY_BUILDING' | 'SELL_RESOURCE' | 'BUY_RESOURCE' | 'SET_AUTO_SELL' | 'QUEUE_DIG' | 'MARK_HARVEST' | 'RESEARCH_TECH' | 'DELIVER_CONTRACT' | 'ADVANCE_TUTORIAL';
     payload: any;
 }
 
 export interface GameState {
     resources: GameResources;
-    grid: GridTile[];
+    chunks: Record<string, Chunk>; // Key: "cx,cz"
     agents: Agent[];
     jobs: Job[];
     inventory: Partial<Record<BuildingType, number>>;
@@ -143,6 +143,8 @@ export interface GameState {
     interactionMode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG' | 'TEST_DESTRUCT';
     step: GameStep;
     tickCount: number;
+    idCounter: number;
+    seed: number;
     viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON';
     logistics: LogisticsState;
     activeGoal: Goal | null;
@@ -218,14 +220,14 @@ export type Action =
     | { type: 'BUY_BUILDING', payload: { type: BuildingType, cost: number } }
     | { type: 'SELECT_BUILDING_TO_PLACE', payload: BuildingType | null }
     | { type: 'SELECT_AGENT', payload: string | null }
-    | { type: 'COMMAND_AGENT', payload: { agentId: string, tileId: number } }
+    | { type: 'COMMAND_AGENT', payload: { agentId: string, x: number, z: number } }
     | { type: 'ACTIVATE_BULLDOZER' }
-    | { type: 'PLACE_BUILDING', payload: { index: number } }
-    | { type: 'PLACE_BATCH_BUILDING', payload: { indices: number[], cost: number } }
-    | { type: 'BULLDOZE_TILE', payload: { index: number } }
-    | { type: 'SPEED_UP_BUILDING', payload: { index: number } }
-    | { type: 'REHABILITATE_TILE', payload: { index: number } }
-    | { type: 'UPGRADE_BUILDING', payload: { index: number } }
+    | { type: 'PLACE_BUILDING', payload: { x: number, z: number } }
+    | { type: 'PLACE_BATCH_BUILDING', payload: { coords: { x: number, z: number }[], cost: number } }
+    | { type: 'BULLDOZE_TILE', payload: { x: number, z: number } }
+    | { type: 'SPEED_UP_BUILDING', payload: { x: number, z: number } }
+    | { type: 'REHABILITATE_TILE', payload: { x: number, z: number } }
+    | { type: 'UPGRADE_BUILDING', payload: { x: number, z: number } }
     | { type: 'ADVANCE_TUTORIAL' }
     | { type: 'SKIP_TUTORIAL' }
     | { type: 'RESET_GAME' }
@@ -237,12 +239,12 @@ export type Action =
     | { type: 'CLAIM_GOAL' }
     | { type: 'DISMISS_NEWS', payload: string }
     | { type: 'UNLOCK_TECH', payload: TechId }
-    | { type: 'MINE_CLICK', payload: { index: number } }
+    | { type: 'MINE_CLICK', payload: { x: number, z: number } }
     | { type: 'CLEAR_EFFECTS' }
     | { type: 'ACCEPT_CONTRACT', payload: string }
     | { type: 'DELIVER_CONTRACT', payload: string }
     | { type: 'SET_INTERACTION_MODE', payload: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG' | 'TEST_DESTRUCT' }
     | { type: 'CHANGE_LAYER', payload: { delta: number } }
-    | { type: 'EXPLODE_TILE', payload: { index: number, radius: number, damage: number } }
+    | { type: 'EXPLODE_TILE', payload: { x: number, z: number, radius: number, damage: number } }
     | { type: 'SAVE_GAME' }
     | { type: 'LOAD_GAME', payload: GameState };

@@ -6,7 +6,6 @@
 
 import * as THREE from 'three';
 import { ThreeRenderAdapter } from '../render/ThreeRenderAdapter';
-import { GRID_SIZE } from '../utils/GameUtils';
 
 export class InputSystem {
     private raycaster: THREE.Raycaster;
@@ -27,9 +26,9 @@ export class InputSystem {
 
     // Callbacks provided by AureusWorld to dispatch to Redux/Engine
     // In a pure engine, we would dispatch actions directly, but we are bridging.
-    public onTileClick?: (index: number, isTouch: boolean) => void;
-    public onTileRightClick?: (index: number, isTouch: boolean) => void;
-    public onTileHover?: (index: number | null) => void;
+    public onTileClick?: (x: number, z: number, isTouch: boolean) => void;
+    public onTileRightClick?: (x: number, z: number, isTouch: boolean) => void;
+    public onTileHover?: (x: number | null, z: number | null) => void;
 
     constructor(renderAdapter: ThreeRenderAdapter, getTerrainHeight: (worldX: number, worldZ: number) => number) {
         this.renderAdapter = renderAdapter;
@@ -40,7 +39,7 @@ export class InputSystem {
         this.mouse = new THREE.Vector2();
 
         // Invisible plane for raycasting against "ground"
-        const planeGeo = new THREE.PlaneGeometry(GRID_SIZE * 3, GRID_SIZE * 3);
+        const planeGeo = new THREE.PlaneGeometry(10000, 10000); // Large enough for most views
         const planeMat = new THREE.MeshBasicMaterial({ visible: false });
         this.interactionPlane = new THREE.Mesh(planeGeo, planeMat);
         this.interactionPlane.rotation.x = -Math.PI / 2;
@@ -159,7 +158,7 @@ export class InputSystem {
         this.rayPlane.constant = -height;
     }
 
-    private getIntersection(clientX: number, clientY: number): { index: number, point: THREE.Vector3 } | null {
+    private getIntersection(clientX: number, clientY: number): { x: number, z: number, point: THREE.Vector3 } | null {
         // Normalized Device Coordinates
         const rect = this.domElement.getBoundingClientRect();
         this.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
@@ -167,13 +166,8 @@ export class InputSystem {
 
         this.raycaster.setFromCamera(this.mouse, this.renderAdapter.getCamera());
 
-        // ITERATIVE TERRAIN INTERSECTION:
-        // Raycast against y=0 gives wrong XZ for elevated terrain due to perspective.
-        // We iterate: raycast at estimated height, get terrain height at that XZ, refine.
-
         const target = new THREE.Vector3();
-        const offset = (GRID_SIZE - 1) / 2;
-        let currentPlaneHeight = -this.rayPlane.constant; // rayPlane.constant is negative of height
+        let currentPlaneHeight = -this.rayPlane.constant;
 
         for (let iter = 0; iter < 3; iter++) {
             const iterPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -currentPlaneHeight);
@@ -181,19 +175,16 @@ export class InputSystem {
 
             if (!hit) return null;
 
-            const gridX = Math.round(hit.x + offset);
-            const gridZ = Math.round(hit.z + offset);
-
-
+            const tileX = Math.round(hit.x);
+            const tileZ = Math.round(hit.z);
 
             // Query actual terrain height at this XZ
             const terrainHeight = this.getTerrainHeight(hit.x, hit.z);
 
             // If we're close enough (within 0.1 units), accept this result
             if (Math.abs(terrainHeight - currentPlaneHeight) < 0.1) {
-                const index = gridZ * GRID_SIZE + gridX;
                 hit.y = terrainHeight;
-                return { index, point: hit };
+                return { x: tileX, z: tileZ, point: hit };
             }
 
             // Refine: use terrain height for next iteration
@@ -201,33 +192,29 @@ export class InputSystem {
         }
 
         // After max iterations, use last result
-        const gridX = Math.round(target.x + offset);
-        const gridZ = Math.round(target.z + offset);
-
-        if (gridX >= 0 && gridX < GRID_SIZE && gridZ >= 0 && gridZ < GRID_SIZE) {
-            const index = gridZ * GRID_SIZE + gridX;
-            target.y = this.getTerrainHeight(target.x, target.z);
-            return { index, point: target };
-        }
-
-        // Return a result even if outside grid, using index -1
+        const tileX = Math.round(target.x);
+        const tileZ = Math.round(target.z);
         target.y = this.getTerrainHeight(target.x, target.z);
-        return { index: -1, point: target };
+        return { x: tileX, z: tileZ, point: target };
     }
 
     private handleClick(x: number, y: number, isRight: boolean, isTouch: boolean) {
         const hit = this.getIntersection(x, y);
         if (hit) {
             if (isRight) {
-                this.onTileRightClick?.(hit.index, isTouch);
+                this.onTileRightClick?.(hit.x, hit.z, isTouch);
             } else {
-                this.onTileClick?.(hit.index, isTouch);
+                this.onTileClick?.(hit.x, hit.z, isTouch);
             }
         }
     }
 
     private checkHover(x: number, y: number) {
         const hit = this.getIntersection(x, y);
-        this.onTileHover?.(hit ? hit.index : null);
+        if (hit) {
+            this.onTileHover?.(hit.x, hit.z);
+        } else {
+            this.onTileHover?.(null, null);
+        }
     }
 }

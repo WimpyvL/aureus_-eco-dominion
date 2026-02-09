@@ -1,57 +1,51 @@
-/**
- * Colony System
- * Handles agent recruitment, news generation, and population management.
- */
 
 import { BaseSimSystem } from '../Simulation';
 import { FixedContext } from '../../kernel';
-import { GameState, BuildingType, SfxType, AgentRole, Agent, GridTile } from '../../../types';
+import { GameState, BuildingType, SfxType, AgentRole, Agent, Chunk } from '../../../types';
 import { createColonist, MAX_AGENTS, CAPACITY_PER_QUARTERS } from '../logic/SimulationLogic';
-import { GRID_SIZE } from '../../utils/GameUtils';
 
 export class ColonySystem extends BaseSimSystem {
     readonly id = 'colony';
     readonly priority = 30;
 
     private lastRecruitmentCheck = 0;
-    private readonly RECRUITMENT_INTERVAL = 60.0; // Increased from 30 to 60 seconds (very slow)
-    private readonly RECRUITMENT_COST = 200; // Increased from 100 to 200 AGT
-    private readonly MIN_TRUST_FOR_RECRUITMENT = 10; // Need trust to attract colonists
-    private readonly MIN_CAPACITY_GAP = 2; // Must have at least 2 empty slots
+    private readonly RECRUITMENT_INTERVAL = 60.0;
+    private readonly RECRUITMENT_COST = 200;
+    private readonly MIN_TRUST_FOR_RECRUITMENT = 10;
+    private readonly MIN_CAPACITY_GAP = 2;
 
     tick(ctx: FixedContext, state: GameState): void {
         if (ctx.time - this.lastRecruitmentCheck < this.RECRUITMENT_INTERVAL) return;
         this.lastRecruitmentCheck = ctx.time;
 
         const agents = state.agents;
-        const grid = state.grid;
-        if (!agents || !grid) return;
+        const chunks = state.chunks;
+        if (!agents || !chunks) return;
 
         // Recruitment Logic
         const aliveColonists = agents.filter(a => a.type !== 'ILLEGAL_MINER');
         if (aliveColonists.length < MAX_AGENTS) {
-            const quarters = grid.filter(t => t.buildingType === BuildingType.STAFF_QUARTERS && !t.isUnderConstruction).length;
+            let quarters = 0;
+            for (const chunk of Object.values(chunks)) {
+                quarters += chunk.tiles.filter(t => t.buildingType === BuildingType.STAFF_QUARTERS && !t.isUnderConstruction).length;
+            }
+
             const capacity = (quarters * CAPACITY_PER_QUARTERS) + 4;
             const availableSlots = capacity - aliveColonists.length;
 
-            // Check all requirements:
-            // 1. Must have enough capacity with buffer
-            // 2. Must have sufficient AGT
-            // 3. Must have minimum trust level
             if (
                 availableSlots >= this.MIN_CAPACITY_GAP &&
                 state.resources.agt >= this.RECRUITMENT_COST &&
                 state.resources.trust >= this.MIN_TRUST_FOR_RECRUITMENT
             ) {
-                // Deduct recruitment cost
                 state.resources.agt -= this.RECRUITMENT_COST;
 
-                const spawnX = Math.floor(GRID_SIZE / 2);
-                const spawnZ = Math.floor(GRID_SIZE / 2);
+                // Spawn at origin (0,0) or near the first agent
+                const spawnX = 8;
+                const spawnZ = 8;
 
-                // Determine specialized role based on buildings
-                const role = this.determineNeededRole(grid, agents);
-                const newAgent = createColonist(spawnX, spawnZ, role);
+                const role = this.determineNeededRole(chunks, agents);
+                const newAgent = createColonist(spawnX, spawnZ, role, ctx);
                 agents.push(newAgent);
 
                 const roleNames: Record<AgentRole, string> = {
@@ -64,17 +58,15 @@ export class ColonySystem extends BaseSimSystem {
                 };
 
                 state.newsFeed.push({
-                    id: `arr_${Date.now()}`,
+                    id: ctx.getNextId?.('arr') || `arr_${Date.now()}`,
                     headline: `${newAgent.name} has joined as ${roleNames[role]}! (-${this.RECRUITMENT_COST} AGT)`,
                     type: 'POSITIVE',
-                    timestamp: Date.now()
+                    timestamp: state.tickCount
                 });
 
-                // Audio cue
                 state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
             } else {
-                // Provide feedback on why recruitment failed (only occasionally to avoid spam)
-                if (Math.random() < 0.1) { // 10% chance to show message
+                if ((ctx.random?.next() ?? Math.random()) < 0.1) {
                     let reason = '';
                     if (state.resources.agt < this.RECRUITMENT_COST) {
                         reason = `Recruitment blocked: Need ${this.RECRUITMENT_COST} AGT`;
@@ -86,10 +78,10 @@ export class ColonySystem extends BaseSimSystem {
 
                     if (reason) {
                         state.newsFeed.push({
-                            id: `recruit_fail_${Date.now()}`,
+                            id: ctx.getNextId?.('recruit_fail') || `recruit_fail_${Date.now()}`,
                             headline: reason,
                             type: 'NEGATIVE',
-                            timestamp: Date.now()
+                            timestamp: state.tickCount
                         });
                     }
                 }
@@ -97,18 +89,9 @@ export class ColonySystem extends BaseSimSystem {
         }
     }
 
-    /**
-     * Determines what role is most needed based on existing buildings
-     */
-    private determineNeededRole(grid: GridTile[], agents: Agent[]): AgentRole {
-        // Count existing roles
+    private determineNeededRole(chunks: Record<string, Chunk>, agents: Agent[]): AgentRole {
         const roleCounts: Record<AgentRole, number> = {
-            'WORKER': 0,
-            'MINER': 0,
-            'ENGINEER': 0,
-            'BOTANIST': 0,
-            'SECURITY': 0,
-            'ILLEGAL_MINER': 0
+            'WORKER': 0, 'MINER': 0, 'ENGINEER': 0, 'BOTANIST': 0, 'SECURITY': 0, 'ILLEGAL_MINER': 0
         };
 
         agents.forEach(a => {
@@ -117,27 +100,34 @@ export class ColonySystem extends BaseSimSystem {
             }
         });
 
-        // Count relevant buildings
-        const washPlants = grid.filter(t => t.buildingType === BuildingType.WASH_PLANT && !t.isUnderConstruction).length;
-        const recyclingPlants = grid.filter(t => t.buildingType === BuildingType.RECYCLING_PLANT && !t.isUnderConstruction).length;
-        const miningHeadframes = grid.filter(t => t.buildingType === BuildingType.MINING_HEADFRAME && !t.isUnderConstruction).length;
-        const gardens = grid.filter(t => t.buildingType === BuildingType.COMMUNITY_GARDEN && !t.isUnderConstruction).length;
-        const securityPosts = grid.filter(t => t.buildingType === BuildingType.SECURITY_POST && !t.isUnderConstruction).length;
-        const constructionSites = grid.filter(t => t.isUnderConstruction).length;
+        // Count buildings across chunks
+        let washPlants = 0, recyclingPlants = 0, miningHeadframes = 0, gardens = 0, securityPosts = 0, constructionSites = 0;
 
-        // Determine needs
-        const needsMiners = (washPlants + recyclingPlants + miningHeadframes) * 2; // 2 miners per mining building
-        const needsBotanists = gardens; // 1 botanist per garden
-        const needsSecurity = securityPosts; // 1 security per post
-        const needsEngineers = Math.min(5, Math.ceil(constructionSites / 2)); // Engineers for construction
+        for (const chunk of Object.values(chunks)) {
+            for (const tile of chunk.tiles) {
+                const type = tile.buildingType;
+                if (tile.isUnderConstruction) {
+                    constructionSites++;
+                    continue;
+                }
+                if (type === BuildingType.WASH_PLANT) washPlants++;
+                else if (type === BuildingType.RECYCLING_PLANT) recyclingPlants++;
+                else if (type === BuildingType.MINING_HEADFRAME) miningHeadframes++;
+                else if (type === BuildingType.COMMUNITY_GARDEN) gardens++;
+                else if (type === BuildingType.SECURITY_POST) securityPosts++;
+            }
+        }
 
-        // Priority system: Fill critical roles first
+        const needsMiners = (washPlants + recyclingPlants + miningHeadframes) * 2;
+        const needsBotanists = gardens;
+        const needsSecurity = securityPosts;
+        const needsEngineers = Math.min(5, Math.ceil(constructionSites / 2));
+
         if (roleCounts.MINER < needsMiners && washPlants > 0) return 'MINER';
         if (roleCounts.ENGINEER < needsEngineers && constructionSites > 0) return 'ENGINEER';
         if (roleCounts.SECURITY < needsSecurity && securityPosts > 0) return 'SECURITY';
         if (roleCounts.BOTANIST < needsBotanists && gardens > 0) return 'BOTANIST';
 
-        // Default to worker if no specialized need
         return 'WORKER';
     }
 }

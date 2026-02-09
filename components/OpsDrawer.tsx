@@ -110,7 +110,7 @@ export const OpsDrawer: React.FC<OpsDrawerProps> = ({ isOpen, onClose, state, di
         if (isOpen) setActiveTab('OVERVIEW');
     }, [isOpen]);
 
-    const quartersCount = state.grid.filter(t => t.buildingType === BuildingType.STAFF_QUARTERS && !t.isUnderConstruction).length;
+    const quartersCount = Object.values(state.chunks).flatMap(c => c.tiles).filter(t => t.buildingType === BuildingType.STAFF_QUARTERS && !t.isUnderConstruction).length;
     const currentCapacity = (quartersCount * CAPACITY_PER_QUARTERS) + 4;
     const colonistCount = state.agents.filter(a => a.type !== 'ILLEGAL_MINER').length;
 

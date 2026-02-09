@@ -5,11 +5,12 @@
  */
 
 import * as THREE from 'three';
-import { BuildingType, GridTile } from '../../../types';
+import { BuildingType, GridTile, Chunk } from '../../../types';
 import { BuildingFactory } from '../../../engine/render/utils/VoxelGenerators';
-import { BUILDINGS, COLORS } from '../../../engine/data/VoxelConstants'; // Ensure these are exported or available
+import { BUILDINGS, COLORS } from '../../../engine/data/VoxelConstants';
 import { sharedBoxGeo } from '../../../engine/render/utils/VoxelBuilder';
 import { mats } from '../../../engine/render/materials/VoxelMaterials';
+import { ChunkStore } from '../../../engine/space/ChunkStore';
 
 interface AnimationDef {
     mesh: THREE.Object3D;
@@ -29,7 +30,6 @@ interface Particle {
 
 export class BuildingRenderSystem {
     private scene: THREE.Scene;
-    private gridSize: number;
 
     // State
     private buildingMeshes: Map<number, THREE.Object3D> = new Map();
@@ -40,7 +40,7 @@ export class BuildingRenderSystem {
     private selectionCursor: THREE.Mesh;
     private ghostBuilding: THREE.Group | null = null;
     private ghostType: BuildingType | null = null;
-    private pinnedGhostIndex: number | null = null;
+    private pinnedGhostPos: { x: number, z: number } | null = null;
     private currentViewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE';
 
     // Materials / Geometry Reuse
@@ -58,9 +58,8 @@ export class BuildingRenderSystem {
     // Cache to detect changes
     private tileCache: Map<number, { type: string; progress: number; state: string }> = new Map();
 
-    constructor(scene: THREE.Scene, gridSize: number) {
+    constructor(scene: THREE.Scene) {
         this.scene = scene;
-        this.gridSize = gridSize;
 
         // Init Cursor
         this.selectionCursor = new THREE.Mesh(
@@ -71,52 +70,56 @@ export class BuildingRenderSystem {
         this.scene.add(this.selectionCursor);
     }
 
-    public update(dt: number, time: number, grid: GridTile[], dirtyKeys?: Set<string>, viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE') {
+    public update(dt: number, time: number, chunks: Record<string, Chunk>, dirtyKeys?: Set<string>, viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE') {
         this.currentViewMode = viewMode;
 
         // 1. Sync Grid Changes
-        if (dirtyKeys && dirtyKeys.has('grid')) {
-            const offset = (this.gridSize - 1) / 2;
+        if (dirtyKeys && dirtyKeys.has('chunks')) {
+            Object.values(chunks).forEach(chunk => {
+                if (!chunk.meshDirty && !chunk.simDirty) return; // Optimization
 
-            grid.forEach(tile => {
-                // Quick skip for most tiles
-                if (!tile.buildingType || tile.buildingType === BuildingType.EMPTY) {
-                    if (tile.foliage !== 'ILLEGAL_CAMP') {
-                        if (this.buildingMeshes.has(tile.id)) {
-                            this.removeTile(tile.id);
+                chunk.tiles.forEach(tile => {
+                    // Quick skip for most tiles
+                    if (!tile.buildingType || tile.buildingType === BuildingType.EMPTY) {
+                        if (tile.foliage !== 'ILLEGAL_CAMP') {
+                            if (this.buildingMeshes.has(tile.id)) {
+                                this.removeTile(tile.id);
+                            }
+                            return;
                         }
-                        return;
                     }
-                }
 
-                const cached = this.tileCache.get(tile.id);
-                const currentProgress = 1 - ((tile.constructionTimeLeft || 0) / (BUILDINGS[tile.buildingType]?.buildTime || 1));
+                    const cached = this.tileCache.get(tile.id);
+                    const currentProgress = 1 - ((tile.constructionTimeLeft || 0) / (BUILDINGS[tile.buildingType]?.buildTime || 1));
 
-                // For infrastructure tiles, include connection state in the hash so neighbors trigger updates
-                let connectionHash = '';
-                if (tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE || tile.buildingType === BuildingType.POWER_LINE) {
-                    const conn = this.getInfrastructureConnections(tile, grid);
-                    connectionHash = `_${conn.north}_${conn.south}_${conn.east}_${conn.west}`;
-                }
-                // Sub-building hash
-                let subHash = '';
-                if (tile.subBuildings) {
-                    Object.entries(tile.subBuildings).forEach(([layer, type]) => {
-                        subHash += `_L${layer}:${type}`;
-                    });
-                }
+                    // For infrastructure tiles, include connection state in the hash so neighbors trigger updates
+                    let connectionHash = '';
+                    if (tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE || tile.buildingType === BuildingType.POWER_LINE) {
+                        const conn = this.getInfrastructureConnections(tile, chunks);
+                        connectionHash = `_${conn.north}_${conn.south}_${conn.east}_${conn.west}`;
+                    }
+                    // Sub-building hash
+                    let subHash = '';
+                    if (tile.subBuildings) {
+                        Object.entries(tile.subBuildings).forEach(([layer, type]) => {
+                            subHash += `_L${layer}:${type}`;
+                        });
+                    }
 
-                const stateHash = `${tile.buildingType}_${tile.isUnderConstruction}_${tile.integrity}_${tile.waterStatus}_${tile.powerStatus}${connectionHash}${subHash}_VM:${viewMode}`;
+                    const stateHash = `${tile.buildingType}_${tile.isUnderConstruction}_${tile.integrity}_${tile.waterStatus}_${tile.powerStatus}${connectionHash}${subHash}_VM:${viewMode}`;
 
-                // Detect Changes
-                if (!cached || cached.type !== tile.buildingType || Math.abs(cached.progress - currentProgress) > 0.05 || cached.state !== stateHash) {
-                    this.updateTile(tile, currentProgress, offset, grid, viewMode);
-                    this.tileCache.set(tile.id, {
-                        type: tile.buildingType,
-                        progress: currentProgress,
-                        state: stateHash
-                    });
-                }
+                    // Detect Changes
+                    if (!cached || cached.type !== tile.buildingType || Math.abs(cached.progress - currentProgress) > 0.05 || cached.state !== stateHash) {
+                        this.updateTile(tile, currentProgress, chunks, viewMode);
+                        this.tileCache.set(tile.id, {
+                            type: tile.buildingType,
+                            progress: currentProgress,
+                            state: stateHash
+                        });
+                    }
+                });
+
+                // Reset flags after processing? (Or let engine handle it)
             });
         }
 
@@ -137,14 +140,14 @@ export class BuildingRenderSystem {
     /**
      * Calculate infrastructure connections by checking neighboring tiles
      */
-    private getInfrastructureConnections(tile: GridTile, grid: GridTile[]): { north: boolean; south: boolean; east: boolean; west: boolean } {
+    private getInfrastructureConnections(tile: GridTile, chunks: Record<string, Chunk>): { north: boolean; south: boolean; east: boolean; west: boolean } {
         const targetType = tile.buildingType;
 
-        // Find neighbors by coordinates (tile.x, tile.y)
-        const north = grid.find(t => t.x === tile.x && t.y === tile.y - 1);
-        const south = grid.find(t => t.x === tile.x && t.y === tile.y + 1);
-        const east = grid.find(t => t.x === tile.x + 1 && t.y === tile.y);
-        const west = grid.find(t => t.x === tile.x - 1 && t.y === tile.y);
+        // Find neighbors via ChunkStore
+        const north = ChunkStore.getTile(chunks, tile.x, tile.z - 1);
+        const south = ChunkStore.getTile(chunks, tile.x, tile.z + 1);
+        const east = ChunkStore.getTile(chunks, tile.x + 1, tile.z);
+        const west = ChunkStore.getTile(chunks, tile.x - 1, tile.z);
 
         return {
             north: north?.buildingType === targetType,
@@ -154,7 +157,7 @@ export class BuildingRenderSystem {
         };
     }
 
-    private updateTile(tile: GridTile, progress: number, offset: number, grid: GridTile[] | undefined, viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE') {
+    private updateTile(tile: GridTile, progress: number, chunks: Record<string, Chunk>, viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE') {
         // Remove existing
         if (this.buildingMeshes.has(tile.id)) {
             const mesh = this.buildingMeshes.get(tile.id)!;
@@ -170,7 +173,7 @@ export class BuildingRenderSystem {
         if (tile.buildingType === BuildingType.POND && !hasSub) return;
 
         // Skip multi-tile tails (infrastructure excluded)
-        if (tile.structureHeadIndex !== undefined && tile.id !== tile.structureHeadIndex &&
+        if (tile.structureHeadX !== undefined && (tile.x !== tile.structureHeadX || tile.z !== tile.structureHeadZ) &&
             !(tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE || tile.buildingType === BuildingType.POWER_LINE)) {
             return;
         }
@@ -187,12 +190,12 @@ export class BuildingRenderSystem {
         const dx = (w - 1) / 2;
         const dz = (d - 1) / 2;
 
-        // Position
-        root.position.set(tile.x - offset + dx, tile.terrainHeight * 0.5, tile.y - offset + dz);
+        // Position (Raw world coordinates)
+        root.position.set(tile.x + dx, tile.terrainHeight * 0.5, tile.z + dz);
 
         // Render Main Building
         if (tile.buildingType !== BuildingType.EMPTY && tile.buildingType !== BuildingType.POND) {
-            const seed = Math.abs(tile.x * 11 + tile.y * 17 + tile.id * 31);
+            const seed = Math.abs(tile.x * 11 + tile.z * 17 + tile.id * 31);
             const config: any = {
                 isUnderConstruction: tile.isUnderConstruction,
                 progress: progress,
@@ -204,8 +207,8 @@ export class BuildingRenderSystem {
             };
 
             let connections = undefined;
-            if (grid && (tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE || tile.buildingType === BuildingType.POWER_LINE)) {
-                connections = this.getInfrastructureConnections(tile, grid);
+            if (tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE || tile.buildingType === BuildingType.POWER_LINE) {
+                connections = this.getInfrastructureConnections(tile, chunks);
             }
 
             const buildingGroup = BuildingFactory[type]({ ...config, connections });
@@ -326,10 +329,7 @@ export class BuildingRenderSystem {
         if (mesh) {
             p.position.copy(mesh.position);
         } else {
-            const offset = (this.gridSize - 1) / 2;
-            const tx = tileId % this.gridSize;
-            const tz = Math.floor(tileId / this.gridSize);
-            p.position.set(tx - offset, 0.5, tz - offset);
+            p.position.set(0, 0, 0); // Temporary fallback, ideally use worldX/Z
         }
 
         p.position.y += 0.5 + Math.random() * 0.5;
@@ -345,7 +345,10 @@ export class BuildingRenderSystem {
         });
     }
 
-    public triggerEffect(tileId: number, type: string, offset: number) {
+    public triggerEffect(worldX: number, worldZ: number, type: string, offset: number) {
+        // Find or create a temporary tile object or just use coordinates
+        // For simplicity, we'll use buildingMeshes lookup if tileId was worldX*1M + worldZ
+        const tileId = Math.round(worldX) * 1000000 + Math.round(worldZ);
         if (type === 'DUST') {
             for (let i = 0; i < 5; i++) this.emitParticle(tileId, 'DIRT');
         } else if (type === 'MINING') {
@@ -357,19 +360,16 @@ export class BuildingRenderSystem {
         }
     }
 
-    public setPinnedGhost(index: number | null, y: number = 0) {
-        this.pinnedGhostIndex = index;
-        // If we have a pinned index, position the ghost there
-        if (index !== null && this.ghostBuilding) {
-            const offset = (this.gridSize - 1) / 2;
-            const x = index % this.gridSize;
-            const z = Math.floor(index / this.gridSize);
+    public setPinnedGhost(pos: { x: number, z: number } | null, y: number = 0) {
+        this.pinnedGhostPos = pos;
+        // If we have a pinned position, position the ghost there
+        if (pos !== null && this.ghostBuilding) {
             const def = BUILDINGS[this.ghostType!];
             const w = def?.width || 1;
             const d = def?.depth || 1;
             const dx = (w - 1) / 2;
             const dz = (d - 1) / 2;
-            this.ghostBuilding.position.set(x - offset + dx, y, z - offset + dz);
+            this.ghostBuilding.position.set(pos.x + dx, y, pos.z + dz);
             this.ghostBuilding.visible = true;
         }
     }
@@ -424,11 +424,7 @@ export class BuildingRenderSystem {
         // Priority: Pinned > Cursor > Fallback (Screen Center)
         let ghostPos = null;
 
-        if (this.pinnedGhostIndex !== null) {
-            // Already handled by setPinnedGhost, but we might want to ensure it stays there
-            // Actually setPinnedGhost positions it once.
-            // If we want it to persist, we rely on the group position.
-            // But if we want to update visibility...
+        if (this.pinnedGhostPos !== null) {
             if (this.ghostBuilding) this.ghostBuilding.visible = true;
         } else if (pos) {
             ghostPos = pos;
@@ -449,7 +445,7 @@ export class BuildingRenderSystem {
         }
 
         // 3. Update Ghost Building Position
-        if (this.ghostBuilding && this.pinnedGhostIndex === null) {
+        if (this.ghostBuilding && this.pinnedGhostPos === null) {
             // Use viewMode to determine layer validity, not y-coordinate
             const isUndergroundView = this.currentViewMode === 'UNDERGROUND';
 

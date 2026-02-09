@@ -3,7 +3,7 @@
  * Define all job types and their payloads here
  */
 
-export const ENGINE_SCHEMA_VERSION = 101;
+export const ENGINE_SCHEMA_VERSION = 102;
 
 /** Available job types */
 export type JobKind =
@@ -44,7 +44,6 @@ export interface MeshChunkJob extends BaseJob {
         cx: number;
         cz: number;
         tiles: any[]; // GridTile[] but can be loose for transfer
-        gridSize: number;
         viewMode?: 'SURFACE' | 'UNDERGROUND';
         lod?: number;
     }
@@ -106,12 +105,12 @@ export interface BaseJobResult {
 export interface MeshChunkResult extends BaseJobResult {
     kind: 'MESH_CHUNK';
     chunkId: string;
-    cx: number;
-    cz: number;
     solid: { p: Float32Array; n: Float32Array; c: Float32Array; u: Float32Array } | null;
     water: { p: Float32Array; n: Float32Array; c: Float32Array; u: Float32Array } | null;
     ghost: { p: Float32Array; n: Float32Array; c: Float32Array; u: Float32Array } | null;
     foliage: any[];
+    cx: number;
+    cz: number;
     lod?: number;
 }
 
@@ -119,7 +118,7 @@ export interface MeshChunkResult extends BaseJobResult {
 export interface PathfindResult extends BaseJobResult {
     kind: 'PATHFIND';
     agentId: string;
-    path: number[] | null;
+    path: any[] | null; // PathStep[]
 }
 
 /** Terrain generation result */

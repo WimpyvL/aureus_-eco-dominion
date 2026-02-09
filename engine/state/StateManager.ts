@@ -6,11 +6,13 @@
 
 import {
     GameState, BuildingType, Agent, GridTile, GameStep,
-    SfxType, GameCommand, Era
+    SfxType, GameCommand, Era, Chunk
 } from '../../types';
-import { GRID_SIZE } from '../utils/GameUtils';
-import { generateInitialGrid } from '../worldgen';
 import { INITIAL_RESOURCES } from '../data/VoxelConstants';
+import { ChunkStore } from '../space/ChunkStore';
+import { CHUNK_SIZE } from '../space/ChunkStore';
+
+import { Random } from '../kernel/Random';
 
 export type StateListener = (state: GameState) => void;
 
@@ -20,16 +22,22 @@ export class StateManager {
     private dirtyFlag = false;
     private dirtyKeys = new Set<keyof GameState>();
     private mutableContext: "simTick" | "none" = "none";
+    private random: Random;
 
     constructor(initialState?: Partial<GameState>) {
         this.state = this.createInitialState(initialState);
+        this.random = new Random(this.state.seed);
     }
 
     private createInitialState(overrides?: Partial<GameState>): GameState {
-        const grid = generateInitialGrid();
+        const chunks: Record<string, Chunk> = {};
+        const seed = overrides?.seed || Math.floor(Math.random() * 1000000);
+
+        // Generate initial chunk at 0,0
+        ChunkStore.ensureChunk(chunks, 0, 0, seed);
 
         return {
-            grid,
+            chunks,
             agents: this.createInitialAgents(),
             jobs: [],
             commandQueue: [],
@@ -56,6 +64,8 @@ export class StateManager {
             debugMode: false,
             cheatsEnabled: false, // DEV: Creative mode disabled
             tickCount: 0,
+            idCounter: 0,
+            seed: overrides?.seed || Math.floor(Math.random() * 1000000),
 
             market: {
                 minerals: {
@@ -155,7 +165,7 @@ export class StateManager {
     }
 
     private createInitialAgents(): Agent[] {
-        const center = Math.floor(GRID_SIZE / 2);
+        const center = 8; // Local center of chunk 0,0
         const names = ['Marcus', 'Elena', 'Kofi'];
 
         return names.map((name, i): Agent => ({
@@ -177,11 +187,25 @@ export class StateManager {
                 intelligence: 1,
             },
             currentJobId: null,
-            targetTileId: null,
+            targetX: null,
+            targetZ: null,
             path: null,
             layer: 0,
             inventory: { type: null, amount: 0, capacity: 10 }
         }));
+    }
+
+    // --- Determinism Helpers ---
+
+    getNextId(prefix: string): string {
+        const id = `${prefix}_${this.state.idCounter++}`;
+        this.dirtyFlag = true;
+        this.dirtyKeys.add('idCounter');
+        return id;
+    }
+
+    getRandom(): Random {
+        return this.random;
     }
 
     // --- State Access ---
@@ -222,8 +246,8 @@ export class StateManager {
     getMutableState(): GameState {
         this.assertMutableContext("simTick");
         this.dirtyFlag = true;
-        // Mark grid as dirty since most mutations affect the grid
-        this.dirtyKeys.add('grid');
+        // Mark chunks as dirty since most mutations affect the world state
+        this.dirtyKeys.add('chunks');
         return this.state;
     }
 
@@ -237,10 +261,33 @@ export class StateManager {
     notifyIfDirty(): void {
         if (this.dirtyFlag) {
             this.dirtyFlag = false;
+
+            // Shallow clone for React notification. 
+            // Deep freezing 10k items per frame (in dev) is too expensive (1 FPS).
             const snapshot = { ...this.state };
+
             this.listeners.forEach(listener => listener(snapshot));
             this.dirtyKeys.clear();
         }
+    }
+
+    private deepFreeze(obj: any): any {
+        if (obj === null || typeof obj !== 'object') return obj;
+
+        // Don't freeze Three.js objects or other complex types if we encounter them
+        // For game state, we mostly have grids, agents, resources which are plain objects/arrays
+        Object.freeze(obj);
+
+        Object.getOwnPropertyNames(obj).forEach(prop => {
+            const value = obj[prop];
+            if (value !== null &&
+                (typeof value === 'object' || typeof value === 'function') &&
+                !Object.isFrozen(value)) {
+                this.deepFreeze(value);
+            }
+        });
+
+        return obj;
     }
 
     forceNotify(): void {
@@ -264,7 +311,7 @@ export class StateManager {
 
     pushCommand(type: GameCommand['type'], payload: any): void {
         this.state.commandQueue.push({
-            id: `cmd_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            id: this.getNextId('cmd'),
             type,
             payload
         });

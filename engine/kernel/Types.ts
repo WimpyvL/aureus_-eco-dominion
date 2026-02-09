@@ -3,6 +3,8 @@
  * Central type definitions for the engine runtime
  */
 
+import { Random } from './Random';
+
 /** Context passed to per-frame callbacks */
 export interface FrameContext {
     /** Delta time since last frame (seconds) */
@@ -21,6 +23,10 @@ export interface FixedContext {
     stepIndex: number;
     /** Total elapsed time (seconds) */
     time: number;
+    /** Deterministic random number generator */
+    random?: Random;
+    /** Deterministic ID generator */
+    getNextId?: (prefix: string) => string;
 }
 
 /** Engine configuration */

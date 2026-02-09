@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { JobSystem, MeshChunkResult, MeshChunkJob, ENGINE_SCHEMA_VERSION, createJob } from '../../../engine/jobs';
 import { GridTile } from '../../../types';
 import { matMaster, mats } from '../../../engine/render/materials/VoxelMaterials';
-import { CHUNK_SIZE, getChunkId, getChunkKey } from '../../../engine/utils/ChunkUtils';
+import { CHUNK_SIZE, worldToChunk, toChunkKey } from '../../../engine/utils/coords';
 
 interface ChunkRenderData {
     mesh: THREE.Mesh | null;
@@ -20,7 +20,6 @@ interface ChunkRenderData {
 
 export class TerrainRenderSystem {
     private scene: THREE.Scene;
-    private gridSize: number;
     private jobSystem: JobSystem;
 
     private chunks: Map<string, ChunkRenderData & { lod: number }> = new Map();
@@ -39,9 +38,8 @@ export class TerrainRenderSystem {
     public onFoliageUpdate?: (key: string, items: any[]) => void;
     public onChunkDispose?: (key: string) => void;
 
-    constructor(scene: THREE.Scene, gridSize: number, jobSystem: JobSystem) {
+    constructor(scene: THREE.Scene, jobSystem: JobSystem) {
         this.scene = scene;
-        this.gridSize = gridSize;
         this.jobSystem = jobSystem;
     }
 
@@ -60,12 +58,8 @@ export class TerrainRenderSystem {
     update(cameraFocus: THREE.Vector3, camera?: THREE.Camera): void {
         // Convert world position to grid position, then to chunk coordinates
         // World (0,0) = center of grid. Grid tile (64,64) for 128x128.
-        const offset = (this.gridSize - 1) / 2;
-        const gridX = cameraFocus.x + offset;
-        const gridZ = cameraFocus.z + offset;
-
-        const cameraCx = Math.floor(gridX / CHUNK_SIZE);
-        const cameraCz = Math.floor(gridZ / CHUNK_SIZE);
+        const cameraCx = Math.floor(cameraFocus.x / CHUNK_SIZE);
+        const cameraCz = Math.floor(cameraFocus.z / CHUNK_SIZE);
 
 
         const now = Date.now();
@@ -90,7 +84,6 @@ export class TerrainRenderSystem {
 
         // Reuse box for checks
         const box = new THREE.Box3();
-        const chunkOffset = (this.gridSize - 1) / 2;
 
         for (let dx = -this.viewRadius; dx <= this.viewRadius; dx++) {
             for (let dz = -this.viewRadius; dz <= this.viewRadius; dz++) {
@@ -99,8 +92,8 @@ export class TerrainRenderSystem {
 
                 // Frustum Check
                 if (camera) {
-                    const xPos = (cx * CHUNK_SIZE) - chunkOffset;
-                    const zPos = (cz * CHUNK_SIZE) - chunkOffset;
+                    const xPos = cx * CHUNK_SIZE;
+                    const zPos = cz * CHUNK_SIZE;
 
                     // Define chunk bounds (Expanded for subterranean heights)
                     box.min.set(xPos, -50, zPos);
@@ -111,7 +104,7 @@ export class TerrainRenderSystem {
                     }
                 }
 
-                const key = getChunkKey(cx, cz);
+                const key = toChunkKey(cx, cz);
                 visibleChunks.add(key);
 
                 const dist = Math.max(Math.abs(dx), Math.abs(dz));
@@ -160,15 +153,15 @@ export class TerrainRenderSystem {
     }
 
     /**
-     * Sync grid state from game state
+     * Sync grid state from game state (now accepts all tiles or chunks)
      */
-    public syncGrid(grid: GridTile[]): void {
-        this.tileCache.clear(); // Clear existing cache to prevent duplicates
+    public syncGrid(tiles: GridTile[]): void {
+        this.tileCache.clear();
         const affected = new Set<string>();
 
-        for (const tile of grid) {
-            const { x: cx, z: cz } = getChunkId(tile.id);
-            const key = getChunkKey(cx, cz);
+        for (const tile of tiles) {
+            const { cx, cz } = worldToChunk(tile.x, tile.z, CHUNK_SIZE);
+            const key = toChunkKey(cx, cz);
 
             if (!this.tileCache.has(key)) {
                 this.tileCache.set(key, []);
@@ -185,7 +178,6 @@ export class TerrainRenderSystem {
             }
         }
 
-        // Force rebuild of all loaded chunks
         this.lastCameraCx = -999;
         this.lastCameraCz = -999;
     }
@@ -197,8 +189,8 @@ export class TerrainRenderSystem {
         const affected = new Set<string>();
 
         for (const tile of updates) {
-            const { x: cx, z: cz } = getChunkId(tile.id);
-            const key = getChunkKey(cx, cz);
+            const { cx, cz } = worldToChunk(tile.x, tile.z, CHUNK_SIZE);
+            const key = toChunkKey(cx, cz);
 
             let chunkTiles = this.tileCache.get(key);
             if (!chunkTiles) {
@@ -225,8 +217,21 @@ export class TerrainRenderSystem {
         }
     }
 
+    /**
+     * Implements targeted chunk update from Effect
+     */
+    public updateChunk(cx: number, cz: number, updates: GridTile[]): void {
+        const key = toChunkKey(cx, cz);
+        this.tileCache.set(key, updates);
+
+        const chunk = this.chunks.get(key);
+        if (chunk) {
+            chunk.dirty = true;
+        }
+    }
+
     private requestChunkBuild(cx: number, cz: number, lod: number = 1): void {
-        const key = getChunkKey(cx, cz);
+        const key = toChunkKey(cx, cz);
         const tiles = this.tileCache.get(key) || [];
 
         const job = createJob<MeshChunkJob>('MESH_CHUNK', {
@@ -236,7 +241,6 @@ export class TerrainRenderSystem {
                 cx,
                 cz,
                 tiles,
-                gridSize: this.gridSize,
                 viewMode: this.viewMode === 'UNDERGROUND' ? 'UNDERGROUND' : 'SURFACE',
                 lod
             }
@@ -274,9 +278,8 @@ export class TerrainRenderSystem {
         }
 
         // Calculate world position for chunk
-        const offset = (this.gridSize - 1) / 2;
-        const xPos = (res.cx * CHUNK_SIZE) - offset;
-        const zPos = (res.cz * CHUNK_SIZE) - offset;
+        const xPos = res.cx * CHUNK_SIZE;
+        const zPos = res.cz * CHUNK_SIZE;
 
         // Helper to create mesh from buffer data
         const createMesh = (data: any, mat: THREE.Material, castShadow: boolean): THREE.Mesh | null => {

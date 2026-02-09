@@ -5,22 +5,22 @@
 */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { GameState, BuildingType } from '../types';
-import { GRID_SIZE } from '../engine/utils/GameUtils';
+import { GameState, BuildingType, Chunk } from '../types';
 import { X, Map as MapIcon, Crosshair, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface WorldMapProps {
     isOpen: boolean;
     onClose: () => void;
-    grid: GameState['grid'];
+    chunks: Record<string, Chunk>;
     agents: GameState['agents'];
     playSfx: (type: any) => void;
 }
 
 const TILE_SIZE = 10;
-const MAP_SIZE = GRID_SIZE * TILE_SIZE;
+const WORLD_MAP_BOUNDARY = 200; // Visible boundary for the interactive map (radius in tiles)
+const MAP_SIZE = WORLD_MAP_BOUNDARY * 2 * TILE_SIZE;
 
-export const WorldMap: React.FC<WorldMapProps> = ({ isOpen, onClose, grid, agents, playSfx }) => {
+export const WorldMap: React.FC<WorldMapProps> = ({ isOpen, onClose, chunks, agents, playSfx }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [zoom, setZoom] = useState(1);
     const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -28,8 +28,9 @@ export const WorldMap: React.FC<WorldMapProps> = ({ isOpen, onClose, grid, agent
     const lastMouse = useRef({ x: 0, y: 0 });
 
     // Calculate Exploration Percentage
-    const exploredCount = grid.filter(t => t.explored).length;
-    const totalCount = grid.length;
+    const allTiles = Object.values(chunks).flatMap(c => c.tiles);
+    const exploredCount = allTiles.filter(t => t.explored).length;
+    const totalCount = allTiles.length || 1;
     const exploredPercent = Math.floor((exploredCount / totalCount) * 100);
 
     // Initial center
@@ -66,60 +67,59 @@ export const WorldMap: React.FC<WorldMapProps> = ({ isOpen, onClose, grid, agent
         ctx.lineWidth = 1;
         ctx.strokeRect(0, 0, MAP_SIZE, MAP_SIZE);
 
-        // Draw Tiles
-        grid.forEach(tile => {
-            const x = tile.x * TILE_SIZE;
-            const y = tile.y * TILE_SIZE;
+        // Draw Tiles from chunks
+        Object.values(chunks).forEach(chunk => {
+            chunk.tiles.forEach(tile => {
+                const x = tile.x * TILE_SIZE;
+                const y = tile.z * TILE_SIZE;
 
-            if (!tile.explored) {
-                // FOG OF WAR
-                // Draw slight grid pattern to show "unknown" but structured
-                ctx.fillStyle = '#000000';
-                ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
-                // Optional: Hatch pattern? Keeping simple black for now
-                return;
-            }
+                if (!tile.explored) {
+                    // FOG OF WAR
+                    ctx.fillStyle = '#000000';
+                    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                    return;
+                }
 
-            let color = '#334155';
+                let color = '#334155';
 
-            // Terrain Base
-            if (tile.biome === 'GRASS') color = '#15803d'; // distinct green
-            else if (tile.biome === 'SAND') color = '#ca8a04';
-            else if (tile.biome === 'STONE') color = '#475569';
-            else if (tile.biome === 'DIRT') color = '#713f12';
-            else if (tile.biome === 'SNOW') color = '#e2e8f0';
+                // Terrain Base
+                if (tile.biome === 'GRASS') color = '#15803d'; // distinct green
+                else if (tile.biome === 'SAND') color = '#ca8a04';
+                else if (tile.biome === 'STONE') color = '#475569';
+                else if (tile.biome === 'DIRT') color = '#713f12';
+                else if (tile.biome === 'SNOW') color = '#e2e8f0';
 
-            const isWater = tile.buildingType === BuildingType.POND || tile.buildingType === BuildingType.WATER_WELL;
+                const isWater = tile.buildingType === BuildingType.POND || tile.buildingType === BuildingType.WATER_WELL;
 
-            // Water
-            if (isWater) {
-                color = '#0891b2';
-            }
+                // Water
+                if (isWater) {
+                    color = '#0891b2';
+                }
 
-            // Buildings (Override terrain)
-            if (tile.buildingType !== BuildingType.EMPTY && !isWater) {
-                if (tile.buildingType === BuildingType.ROAD) color = '#334155';
-                else if (tile.buildingType === BuildingType.PIPE) color = '#0f172a';
-                else if (tile.isUnderConstruction) color = '#d97706';
-                else color = '#f8fafc';
-            }
+                // Buildings (Override terrain)
+                if (tile.buildingType !== BuildingType.EMPTY && !isWater) {
+                    if (tile.buildingType === BuildingType.ROAD) color = '#334155';
+                    else if (tile.buildingType === BuildingType.PIPE) color = '#0f172a';
+                    else if (tile.isUnderConstruction) color = '#d97706';
+                    else color = '#f8fafc';
+                }
 
-            // Hazards
-            if (tile.foliage === 'ILLEGAL_CAMP') color = '#be123c';
-            if (tile.foliage === 'MINE_HOLE') color = '#000000';
+                // Hazards
+                if (tile.foliage === 'ILLEGAL_CAMP') color = '#be123c';
+                if (tile.foliage === 'MINE_HOLE') color = '#000000';
 
-            ctx.fillStyle = color;
-            // Draw slightly larger for water to remove grid gaps (seamless)
-            const drawSize = isWater ? TILE_SIZE + 0.5 : TILE_SIZE;
-            ctx.fillRect(x, y, drawSize, drawSize);
+                ctx.fillStyle = color;
+                // Draw slightly larger for water to remove grid gaps (seamless)
+                const drawSize = isWater ? TILE_SIZE + 0.5 : TILE_SIZE;
+                ctx.fillRect(x, y, drawSize, drawSize);
 
-            // Grid lines overlay for visible tiles
-            // SKIP WATER to create seamless look
-            if (!isWater) {
-                ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-                ctx.lineWidth = 0.5;
-                ctx.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
-            }
+                // Grid lines overlay for visible tiles
+                if (!isWater) {
+                    ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+                    ctx.lineWidth = 0.5;
+                    ctx.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
+                }
+            });
         });
 
         // Draw Agents
@@ -146,7 +146,7 @@ export const WorldMap: React.FC<WorldMapProps> = ({ isOpen, onClose, grid, agent
 
         ctx.restore();
 
-    }, [isOpen, grid, agents, zoom, offset]);
+    }, [isOpen, chunks, agents, zoom, offset]);
 
     const handleWheel = (e: React.WheelEvent) => {
         const newZoom = Math.max(0.5, Math.min(4, zoom - e.deltaY * 0.001));

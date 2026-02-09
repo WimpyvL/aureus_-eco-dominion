@@ -2,7 +2,8 @@
 import { BaseSimSystem } from '../Simulation';
 import { FixedContext } from '../../kernel';
 import { GameState, GridTile, BuildingType, SfxType } from '../../../types';
-import { GRID_SIZE } from '../../utils/GameUtils';
+import { ChunkStore } from '../../space/ChunkStore';
+import { worldToChunk, CHUNK_SIZE } from '../../utils/coords';
 
 /**
  * Voxel Destruction System
@@ -15,19 +16,15 @@ export class VoxelDestructionSystem extends BaseSimSystem {
     tick(ctx: FixedContext, state: GameState): void {
         // Process Command Queue
         if (state.commandQueue && state.commandQueue.length > 0) {
-            // Filter out our commands to process
             const toProcess = state.commandQueue.filter(cmd => cmd.type === 'EXPLODE_TILE');
 
-            // Remove them from the main queue (mutation)
             if (toProcess.length > 0) {
                 state.commandQueue = state.commandQueue.filter(cmd => cmd.type !== 'EXPLODE_TILE');
 
                 for (const cmd of toProcess) {
                     if (cmd.type === 'EXPLODE_TILE') {
-                        const { index, radius, damage } = cmd.payload;
-                        const cx = index % GRID_SIZE;
-                        const cz = Math.floor(index / GRID_SIZE);
-                        this.applyRadialDamage(state, cx, cz, radius, damage);
+                        const { x, z, radius, damage } = cmd.payload;
+                        this.applyRadialDamage(state, x, z, radius, damage);
                     }
                 }
             }
@@ -42,8 +39,8 @@ export class VoxelDestructionSystem extends BaseSimSystem {
     /**
      * Applies damage to a voxel at a specific index and layer
      */
-    public startDamageTransaction(state: GameState, tileIndex: number, amount: number, isExplosive: boolean = false): void {
-        const tile = state.grid[tileIndex];
+    public startDamageTransaction(state: GameState, x: number, z: number, amount: number, isExplosive: boolean = false): void {
+        const tile = ChunkStore.getTile(state.chunks, x, z);
         if (!tile) return;
 
         // Ensure integrity is initialized
@@ -52,35 +49,33 @@ export class VoxelDestructionSystem extends BaseSimSystem {
         // Apply damage
         tile.integrity -= amount;
 
-        // Visual feedback (Darkening is handled by renderer based on integrity)
-        // FX
+        // Visual feedback
         if (amount > 5) {
-            state.pendingEffects.push({ type: 'FX', fxType: 'DUST', index: tileIndex });
+            state.pendingEffects.push({ type: 'FX', fxType: 'DUST', x, z });
             state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.MINING_HIT });
         }
 
         // Destruction Check
         if (tile.integrity <= 0) {
-            this.destroyVoxel(state, tileIndex, isExplosive);
+            this.destroyVoxel(state, x, z, isExplosive);
         }
     }
 
-    private destroyVoxel(state: GameState, index: number, explosive: boolean): void {
-        const tile = state.grid[index];
+    private destroyVoxel(state: GameState, x: number, z: number, explosive: boolean): void {
+        const tile = ChunkStore.getTile(state.chunks, x, z);
+        if (!tile) return;
 
-        // Spawn Debris (Logic adapted from _create_debri_multimesh)
-        // We use FX system for this
-        state.pendingEffects.push({ type: 'FX', fxType: 'MINING', index: index });
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.CAMP_BUILD }); // Collapse sound?
+        state.pendingEffects.push({ type: 'FX', fxType: 'MINING', x, z });
+        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.CAMP_BUILD });
 
         // Reset tile
         tile.buildingType = BuildingType.EMPTY;
         tile.integrity = 100;
         tile.foliage = 'NONE';
-        tile.terrainHeight = 0; // Flatten? Or keep height? standard destruction implies removal.
+        tile.terrainHeight = 0;
 
-        // Trigger structural check around this voxel
-        // We can do an immediate checks or wait for the tick
+        const { cx, cz } = worldToChunk(x, z, CHUNK_SIZE);
+        state.pendingEffects.push({ type: 'CHUNK_UPDATE', cx, cz, updates: [tile] });
     }
 
     /**
@@ -113,11 +108,11 @@ export class VoxelDestructionSystem extends BaseSimSystem {
     public applyRadialDamage(state: GameState, centerX: number, centerZ: number, radius: number, maxDamage: number): void {
         const rSq = radius * radius;
 
-        // Bounds
-        const minX = Math.max(0, Math.floor(centerX - radius));
-        const maxX = Math.min(GRID_SIZE - 1, Math.ceil(centerX + radius));
-        const minZ = Math.max(0, Math.floor(centerZ - radius));
-        const maxZ = Math.min(GRID_SIZE - 1, Math.ceil(centerZ + radius));
+        // Unbounded iteration: only touch tiles within radius
+        const minX = Math.floor(centerX - radius);
+        const maxX = Math.ceil(centerX + radius);
+        const minZ = Math.floor(centerZ - radius);
+        const maxZ = Math.ceil(centerZ + radius);
 
         for (let z = minZ; z <= maxZ; z++) {
             for (let x = minX; x <= maxX; x++) {
@@ -127,13 +122,11 @@ export class VoxelDestructionSystem extends BaseSimSystem {
 
                 if (distSq <= rSq) {
                     const dist = Math.sqrt(distSq);
-                    // Linear falloff from center (simplified curve)
                     const falloff = 1.0 - (dist / radius);
                     const damage = maxDamage * falloff;
 
                     if (damage > 0) {
-                        const idx = z * GRID_SIZE + x;
-                        this.startDamageTransaction(state, idx, damage, true);
+                        this.startDamageTransaction(state, x, z, damage, true);
                     }
                 }
             }

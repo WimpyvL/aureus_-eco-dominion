@@ -5,21 +5,22 @@
 */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { GameState, BuildingType } from '../types';
-import { GRID_SIZE } from '../engine/utils/GameUtils';
+import { GameState, BuildingType, Chunk } from '../types';
+import { ChunkStore } from '../engine/space/ChunkStore';
 import { Map, Maximize, ChevronUp } from 'lucide-react';
 
 interface MinimapProps {
-    grid: GameState['grid'];
+    chunks: Record<string, Chunk>;
     agents: GameState['agents'];
     viewMode: string;
     onOpenMap: () => void;
 }
 
 const TILE_SIZE = 3;
-const MAP_SIZE = GRID_SIZE * TILE_SIZE;
+const MAP_DISPLAY_SIZE = 48; // Fixed display size in tiles for the minimap preview
+const MAP_CANVAS_SIZE = MAP_DISPLAY_SIZE * TILE_SIZE;
 
-export const Minimap: React.FC<MinimapProps> = React.memo(({ grid, agents, viewMode, onOpenMap }) => {
+export const Minimap: React.FC<MinimapProps> = React.memo(({ chunks, agents, viewMode, onOpenMap }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isCollapsed, setIsCollapsed] = useState(true);
     const lastDrawTime = useRef<number>(0);
@@ -45,55 +46,66 @@ export const Minimap: React.FC<MinimapProps> = React.memo(({ grid, agents, viewM
 
             // Clear
             ctx.fillStyle = '#0f172a';
-            ctx.fillRect(0, 0, MAP_SIZE, MAP_SIZE);
+            ctx.fillRect(0, 0, MAP_CANVAS_SIZE, MAP_CANVAS_SIZE);
 
-            // Draw Grid
-            grid.forEach(tile => {
-                const x = (tile.x) * TILE_SIZE;
-                const y = (tile.y) * TILE_SIZE;
+            // Center minimap on origin (0,0) for now, or could follow player
+            // Let's center on 0,0 with MAP_DISPLAY_SIZE padding
+            const halfSize = Math.floor(MAP_DISPLAY_SIZE / 2);
 
-                // Fog of War Check
-                if (!tile.explored) {
-                    ctx.fillStyle = '#000000';
-                    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
-                    return;
-                }
+            // Draw Grid from chunks
+            Object.values(chunks).forEach(chunk => {
+                chunk.tiles.forEach(tile => {
+                    // Only draw if within minimap bounds relative to origin
+                    if (Math.abs(tile.x) > halfSize || Math.abs(tile.z) > halfSize) return;
 
-                let color = '#334155'; // Default dark
+                    const lx = (tile.x + halfSize) * TILE_SIZE;
+                    const ly = (tile.z + halfSize) * TILE_SIZE;
 
-                // Terrain Base
-                if (tile.biome === 'GRASS') color = '#5D9E45';
-                else if (tile.biome === 'SAND') color = '#eab308';
-                else if (tile.biome === 'STONE') color = '#64748b';
-                else if (tile.biome === 'DIRT') color = '#78350f';
-                else if (tile.biome === 'SNOW') color = '#f1f5f9';
+                    // Fog of War Check
+                    if (!tile.explored) {
+                        ctx.fillStyle = '#000000';
+                        ctx.fillRect(lx, ly, TILE_SIZE, TILE_SIZE);
+                        return;
+                    }
 
-                // Water
-                if (tile.buildingType === BuildingType.POND || tile.buildingType === BuildingType.WATER_WELL) {
-                    color = '#06b6d4';
-                }
+                    let color = '#334155'; // Default dark
 
-                // Buildings (Override terrain)
-                if (tile.buildingType !== BuildingType.EMPTY && tile.buildingType !== BuildingType.POND) {
-                    // Simple color coding for buildings
-                    if (tile.buildingType === BuildingType.ROAD) color = '#334155';
-                    else if (tile.buildingType === BuildingType.PIPE) color = '#1e293b';
-                    else if (tile.isUnderConstruction) color = '#fbbf24'; // Amber construction
-                    else color = '#f8fafc'; // White buildings
-                }
+                    // Terrain Base
+                    if (tile.biome === 'GRASS') color = '#5D9E45';
+                    else if (tile.biome === 'SAND') color = '#eab308';
+                    else if (tile.biome === 'STONE') color = '#64748b';
+                    else if (tile.biome === 'DIRT') color = '#78350f';
+                    else if (tile.biome === 'SNOW') color = '#f1f5f9';
 
-                // Hazards
-                if (tile.foliage === 'ILLEGAL_CAMP') color = '#e11d48';
-                if (tile.foliage === 'MINE_HOLE') color = '#000000';
+                    // Water
+                    if (tile.buildingType === BuildingType.POND || tile.buildingType === BuildingType.WATER_WELL) {
+                        color = '#06b6d4';
+                    }
 
-                ctx.fillStyle = color;
-                ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                    // Buildings (Override terrain)
+                    if (tile.buildingType !== BuildingType.EMPTY && tile.buildingType !== BuildingType.POND) {
+                        // Simple color coding for buildings
+                        if (tile.buildingType === BuildingType.ROAD) color = '#334155';
+                        else if (tile.buildingType === BuildingType.PIPE) color = '#1e293b';
+                        else if (tile.isUnderConstruction) color = '#fbbf24'; // Amber construction
+                        else color = '#f8fafc'; // White buildings
+                    }
+
+                    // Hazards
+                    if (tile.foliage === 'ILLEGAL_CAMP') color = '#e11d48';
+                    if (tile.foliage === 'MINE_HOLE') color = '#000000';
+
+                    ctx.fillStyle = color;
+                    ctx.fillRect(lx, ly, TILE_SIZE, TILE_SIZE);
+                });
             });
 
             // Draw Agents
             agents.forEach(agent => {
-                const ax = agent.x * TILE_SIZE;
-                const ay = agent.z * TILE_SIZE; // agent.z maps to grid y in 2D top-down
+                if (Math.abs(agent.x) > halfSize || Math.abs(agent.z) > halfSize) return;
+
+                const ax = (agent.x + halfSize) * TILE_SIZE;
+                const ay = (agent.z + halfSize) * TILE_SIZE;
 
                 ctx.fillStyle = agent.type === 'ILLEGAL_MINER' ? '#ef4444' : '#fbbf24';
                 ctx.beginPath();
@@ -107,7 +119,7 @@ export const Minimap: React.FC<MinimapProps> = React.memo(({ grid, agents, viewM
         frameId.current = requestAnimationFrame(draw);
 
         return () => cancelAnimationFrame(frameId.current);
-    }, [grid, agents, viewMode, isCollapsed]);
+    }, [chunks, agents, viewMode, isCollapsed]);
 
     if (isCollapsed) {
         return (
@@ -147,8 +159,8 @@ export const Minimap: React.FC<MinimapProps> = React.memo(({ grid, agents, viewM
                 >
                     <canvas
                         ref={canvasRef}
-                        width={MAP_SIZE}
-                        height={MAP_SIZE}
+                        width={MAP_CANVAS_SIZE}
+                        height={MAP_CANVAS_SIZE}
                         className="bg-slate-950 image-pixelated display-block border border-slate-800"
                         style={{ width: '135px', height: '135px' }}
                     />

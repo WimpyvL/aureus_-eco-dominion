@@ -22,8 +22,7 @@ export class ProductionSystem extends BaseSimSystem {
         const dt = ctx.time - this.lastUpdate;
         this.lastUpdate = ctx.time;
 
-        const grid = state.grid;
-        if (!grid) return;
+
 
         let mineralProd = 0;
         let woodProd = 0;
@@ -36,78 +35,83 @@ export class ProductionSystem extends BaseSimSystem {
         const modifiers = this.getModifiers(state);
         let totalIncome = 0;
 
-        for (const tile of grid) {
-            // Illegal camps penalize income
-            if (tile.foliage === 'ILLEGAL_CAMP') {
-                totalIncome -= 5;
-            }
-
-            if (tile.buildingType === BuildingType.EMPTY || tile.isUnderConstruction) {
-                // Passive foliage effects
-                if (tile.foliage === 'MINE_HOLE') ecoChange += 0.01;
-                continue;
-            }
-
-            // Multi-tile building optimization: only process head
-            if (tile.structureHeadIndex !== undefined && tile.id !== tile.structureHeadIndex) continue;
-
-            const def = BUILDINGS[tile.buildingType];
-            if (!def) continue;
-
-            // <UPGRADE LOGIC>
-            let currentDef: any = def;
-            if (def.upgrades && (tile.level || 1) > 1) {
-                const upgrade = def.upgrades.find(u => u.level === tile.level);
-                if (upgrade) {
-                    currentDef = { ...def, ...upgrade };
+        for (const chunk of Object.values(state.chunks)) {
+            for (const tile of chunk.tiles) {
+                // Illegal camps penalize income
+                if (tile.foliage === 'ILLEGAL_CAMP') {
+                    totalIncome -= 5;
                 }
-            }
-            // </UPGRADE LOGIC>
 
-            // Maintenance (Cost per second)
-            totalMaintenance += (currentDef.maintenance || 0) * modifiers.upkeep;
-
-            // Pollution (Eco impact)
-            ecoChange += (currentDef.pollution > 0 ? (currentDef.pollution * 0.05 / 10) : (currentDef.pollution / 10));
-
-            // Power/Water efficiency
-            let powerEfficiency = 1.0;
-            let waterEfficiency = 1.0;
-
-            // Buildings with power consumption operate at 25% if grid has deficit
-            if (currentDef.power?.consumes && state.powerGrid?.deficit > 0) {
-                powerEfficiency = 0.25;
-            }
-
-            // Buildings with water consumption depend on being connected to pipes
-            if (currentDef.water?.consumes) {
-                if (tile.waterStatus !== 'CONNECTED') {
-                    waterEfficiency = 0.1; // Virtually idle without water connection
-                } else if (state.waterNetwork?.deficit > 0) {
-                    waterEfficiency = 0.5; // Grid-wide pressure issues
+                if (tile.buildingType === BuildingType.EMPTY || tile.isUnderConstruction) {
+                    // Passive foliage effects
+                    if (tile.foliage === 'MINE_HOLE') ecoChange += 0.01;
+                    continue;
                 }
-            }
 
-            const utilityEfficiency = powerEfficiency * waterEfficiency;
+                // Multi-tile building optimization: only process head
+                if (tile.structureHeadX !== undefined && (tile.x !== tile.structureHeadX || tile.z !== tile.structureHeadZ)) continue;
 
-            // Production
-            if (currentDef.productionType === 'MINERALS') {
-                mineralProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05;
-            } else if (currentDef.productionType === 'WOOD') {
-                woodProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05;
-            } else if (currentDef.productionType === 'STONE') {
-                stoneProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05;
-            } else if (currentDef.productionType === 'AGT') {
-                totalIncome += (currentDef.production || 0) * ecoMult * trustMult * utilityEfficiency;
+                const def = BUILDINGS[tile.buildingType];
+                if (!def) continue;
+
+                // <UPGRADE LOGIC>
+                let currentDef: any = def;
+                if (def.upgrades && (tile.level || 1) > 1) {
+                    const upgrade = def.upgrades.find(u => u.level === tile.level);
+                    if (upgrade) {
+                        currentDef = { ...def, ...upgrade };
+                    }
+                }
+                // </UPGRADE LOGIC>
+
+                // Maintenance (Cost per second)
+                totalMaintenance += (currentDef.maintenance || 0) * modifiers.upkeep;
+
+                // Pollution (Eco impact)
+                ecoChange += (currentDef.pollution > 0 ? (currentDef.pollution * 0.05 / 10) : (currentDef.pollution / 10));
+
+                // Power/Water efficiency
+                let powerEfficiency = 1.0;
+                let waterEfficiency = 1.0;
+
+                // Buildings with power consumption operate at 25% if grid has deficit
+                if (currentDef.power?.consumes && state.powerGrid?.deficit > 0) {
+                    powerEfficiency = 0.25;
+                }
+
+                // Buildings with water consumption depend on being connected to pipes
+                if (currentDef.water?.consumes) {
+                    if (tile.waterStatus !== 'CONNECTED') {
+                        waterEfficiency = 0.1; // Virtually idle without water connection
+                    } else if (state.waterNetwork?.deficit > 0) {
+                        waterEfficiency = 0.5; // Grid-wide pressure issues
+                    }
+                }
+
+                const utilityEfficiency = powerEfficiency * waterEfficiency;
+
+                // Production
+                if (currentDef.productionType === 'MINERALS') {
+                    mineralProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05;
+                } else if (currentDef.productionType === 'WOOD') {
+                    woodProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05;
+                } else if (currentDef.productionType === 'STONE') {
+                    stoneProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05;
+                } else if (currentDef.productionType === 'AGT') {
+                    totalIncome += (currentDef.production || 0) * ecoMult * trustMult * utilityEfficiency;
+                }
             }
         }
 
+
         // Calculate Storage Capacity
-        const depots = grid.filter(t => t.buildingType === BuildingType.STORAGE_DEPOT && !t.isUnderConstruction).length;
-        const stockpiles = grid.filter(t => t.buildingType === BuildingType.STOCKPILE && !t.isUnderConstruction).length;
+        const allTiles = Object.values(state.chunks).flatMap(c => c.tiles);
+        const depots = allTiles.filter(t => t.buildingType === BuildingType.STORAGE_DEPOT && !t.isUnderConstruction).length;
+        const stockpiles = allTiles.filter(t => t.buildingType === BuildingType.STOCKPILE && !t.isUnderConstruction).length;
         const totalCapacity = BASE_STORAGE_CAPACITY +
             (depots * DEPOT_CAPACITY_BONUS) +
             (stockpiles * STOCKPILE_CAPACITY_BONUS);
+
 
         // Apply Results
         state.resources.agt += (totalIncome - totalMaintenance) * dt;
@@ -125,7 +129,7 @@ export class ProductionSystem extends BaseSimSystem {
 
         // Auto-Sell Logic
         if (state.logistics.autoSell && state.resources.minerals >= state.logistics.sellThreshold) {
-            this.executeAutoSell(state, modifiers);
+            this.executeAutoSell(ctx, state, modifiers);
         }
     }
 
@@ -157,7 +161,7 @@ export class ProductionSystem extends BaseSimSystem {
         return mods;
     }
 
-    private executeAutoSell(state: GameState, modifiers: any) {
+    private executeAutoSell(ctx: FixedContext, state: GameState, modifiers: any) {
         const ecoMult = getEcoMultiplier(state.resources.eco);
         const trustMult = 1 + (state.resources.trust / 200);
         const price = state.market.minerals.currentPrice;
@@ -169,10 +173,10 @@ export class ProductionSystem extends BaseSimSystem {
 
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.SELL });
         state.newsFeed.push({
-            id: `sell_${Date.now()}`,
+            id: ctx.getNextId?.('sell') || `sell_${Date.now()}`,
             headline: `Logistics: Auto-sold minerals for ${value} AGT.`,
             type: 'POSITIVE',
-            timestamp: Date.now()
+            timestamp: state.tickCount
         });
     }
 }

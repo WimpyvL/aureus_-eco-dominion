@@ -5,7 +5,8 @@
 
 import { BaseSimSystem } from '../Simulation';
 import { FixedContext } from '../../kernel';
-import { GameState, Era, SfxType } from '../../../types';
+import { GameState, Era, SfxType, BuildingType } from '../../../types';
+
 import { ERAS } from '../../data/VoxelConstants';
 
 export class EraSystem extends BaseSimSystem {
@@ -19,10 +20,10 @@ export class EraSystem extends BaseSimSystem {
         if (ctx.time - this.lastCheck < this.CHECK_INTERVAL) return;
         this.lastCheck = ctx.time;
 
-        this.checkEraProgression(state);
+        this.checkEraProgression(ctx, state);
     }
 
-    private checkEraProgression(state: GameState): void {
+    private checkEraProgression(ctx: FixedContext, state: GameState): void {
         const eras = [Era.SETTLEMENT, Era.GROWTH, Era.INDUSTRY, Era.SUSTAINABILITY, Era.PROSPERITY];
         const currentIndex = eras.indexOf(state.currentEra);
 
@@ -32,7 +33,7 @@ export class EraSystem extends BaseSimSystem {
             const nextDef = ERAS[nextEra];
 
             if (this.isEraUnlocked(state, nextDef.unlockConditions)) {
-                this.unlockEra(state, nextEra);
+                this.unlockEra(ctx, state, nextEra);
             }
         }
     }
@@ -53,14 +54,14 @@ export class EraSystem extends BaseSimSystem {
         if (conditions.minTrust && state.resources.trust < conditions.minTrust) return false;
 
         if (conditions.minBuildings) {
-            const count = state.grid.filter(t => t.buildingType !== 'EMPTY' && !t.isUnderConstruction).length;
+            const count = Object.values(state.chunks).flatMap(c => c.tiles).filter(t => t.buildingType !== BuildingType.EMPTY && !t.isUnderConstruction).length;
             if (count < conditions.minBuildings) return false;
         }
 
         return true;
     }
 
-    private unlockEra(state: GameState, era: Era): void {
+    private unlockEra(ctx: FixedContext, state: GameState, era: Era): void {
         state.currentEra = era;
         if (!state.unlockedEras.includes(era)) {
             state.unlockedEras.push(era);
@@ -73,10 +74,10 @@ export class EraSystem extends BaseSimSystem {
 
         // Notification
         state.newsFeed.push({
-            id: `era_${era}_${Date.now()}`,
+            id: ctx.getNextId?.('era') || `era_${era}_${Date.now()}`,
             headline: `NEW ERA UNLOCKED: ${def.name}!`,
             type: 'POSITIVE',
-            timestamp: Date.now()
+            timestamp: state.tickCount
         });
 
         // Audio Effect

@@ -27,10 +27,10 @@ export interface UseAureusEngineOptions {
     container: HTMLElement | null;
 
     /** Callbacks for external game interactions (optional, for compatibility) */
-    onTileClick?: (index: number, isTouch?: boolean) => void;
-    onTileRightClick?: (index: number, isTouch?: boolean) => void;
+    onTileClick?: (x: number, z: number, isTouch?: boolean) => void;
+    onTileRightClick?: (x: number, z: number, isTouch?: boolean) => void;
     onAgentClick?: (id: string | null) => void;
-    onTileHover?: (index: number | null) => void;
+    onTileHover?: (x: number | null, z: number | null) => void;
     onSfx?: (type: SfxType) => void;
 
     /** Whether the game is paused (e.g., on home page) */
@@ -149,10 +149,10 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                 // Use refs for callbacks to avoid stale closures
                 const config: AureusWorldConfig = {
                     container,
-                    onTileClick: (idx) => callbacksRef.current.onTileClick?.(idx),
-                    onTileRightClick: (idx) => callbacksRef.current.onTileRightClick?.(idx),
+                    onTileClick: (x, z, isTouch) => callbacksRef.current.onTileClick?.(x, z, isTouch),
+                    onTileRightClick: (x, z, isTouch) => callbacksRef.current.onTileRightClick?.(x, z, isTouch),
                     onAgentClick: (id) => callbacksRef.current.onAgentClick?.(id),
-                    onTileHover: (idx) => callbacksRef.current.onTileHover?.(idx),
+                    onTileHover: (x, z) => callbacksRef.current.onTileHover?.(x, z),
                     onSfx: (type) => callbacksRef.current.onSfx?.(type),
                 };
 

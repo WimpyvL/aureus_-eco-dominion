@@ -37,17 +37,18 @@ export class EnvironmentSystem extends BaseSimSystem {
             this.lastWeatherCheck = totalTime;
 
             // 5% chance of weather change
-            if (Math.random() < 0.05) {
+            const random = ctx.random ? ctx.random.next() : Math.random();
+            if (random < 0.05) {
                 const weathers: ('CLEAR' | 'CLOUDY' | 'RAINY' | 'STORM')[] = ['CLEAR', 'CLOUDY', 'RAINY', 'STORM'];
-                const nextWeather = weathers[Math.floor(Math.random() * weathers.length)];
+                const nextWeather = weathers[Math.floor((ctx.random ? ctx.random.next() : Math.random()) * weathers.length)];
 
                 if (state.weather.current !== nextWeather) {
                     state.weather.current = nextWeather;
                     state.newsFeed.push({
-                        id: `weather_${Date.now()}`,
+                        id: ctx.getNextId?.('weather') || `weather_${Date.now()}`,
                         headline: `Weather update: Skies are now ${nextWeather.toLowerCase()}.`,
                         type: 'NEUTRAL',
-                        timestamp: Date.now()
+                        timestamp: state.tickCount
                     });
                 }
             }

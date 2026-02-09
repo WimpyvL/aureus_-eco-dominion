@@ -13,6 +13,7 @@ import { useAureusEngine } from './game';
 import { BuildingType, GameStep, Agent, GameState } from './types';
 import { BUILDINGS } from './engine/data/VoxelConstants';
 import { getEcoMultiplier } from './engine/utils/GameUtils';
+import { ChunkStore } from './engine/space/ChunkStore';
 import {
     Zap, Utensils, Smile, Briefcase, X,
     Hammer, Pickaxe, Bed, Move, Eye, Wrench, FlaskConical,
@@ -159,17 +160,17 @@ const App: React.FC = () => {
     // UI-only state (not game logic)
     const [sidebarOpen, setSidebarOpen] = useState<'NONE' | 'OPS' | 'SHOP' | 'TRADE' | 'CREW' | 'TECH'>('NONE');
     const [activeHUDBlock, setActiveHUDBlock] = useState<string | null>(null);
-    const [selectedTileForAction, setSelectedTileForAction] = useState<number | null>(null);
+    const [selectedTilePos, setSelectedTilePos] = useState<{ x: number, z: number } | null>(null);
     const [isIntroAnim, setIsIntroAnim] = useState(false);
-    const [pendingPlacementIndex, setPendingPlacementIndex] = useState<number | null>(null);
-    const [pinnedTileIndex, setPinnedTileIndex] = useState<number | null>(null); // Track pinned tile for two-tap system
+    const [pendingPlacementPos, setPendingPlacementPos] = useState<{ x: number, z: number } | null>(null);
+    const [pinnedTilePos, setPinnedTilePos] = useState<{ x: number, z: number } | null>(null);
     const [showWorldMap, setShowWorldMap] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
     const showHomePage = location.pathname === '/';
     const [hasSave, setHasSave] = useState(false);
-    const [hoverTile, setHoverTile] = useState<number | null>(null);
-    const [digPromptIndex, setDigPromptIndex] = useState<number | null>(null);
+    const [hoverTilePos, setHoverTilePos] = useState<{ x: number, z: number } | null>(null);
+    const [digPromptPos, setDigPromptPos] = useState<{ x: number, z: number } | null>(null);
 
     // Container state - set after mount so engine hook can initialize
     const [container, setContainer] = useState<HTMLElement | null>(null);
@@ -182,42 +183,37 @@ const App: React.FC = () => {
     // Engine integration - state is owned by engine
     const { world, ready, state, loading, getDebugStats } = useAureusEngine({
         container,
-        onTileClick: (index, isTouch) => {
+        onTileClick: (x, z, isTouch) => {
             // Context-aware building placement system
             if (state?.interactionMode === 'BUILD' && state?.selectedBuilding) {
-                // If it's a mouse click (PC), show confirmation immediately
-                // On mobile (touch), we keep the two-tap system to prevent accidents
-                if (!isTouch || pinnedTileIndex === index) {
-                    // PC Click OR second tap on mobile → Show confirmation modal
-                    setPendingPlacementIndex(index);
+                if (!isTouch || (pinnedTilePos?.x === x && pinnedTilePos?.z === z)) {
+                    setPendingPlacementPos({ x, z });
                     playSfx(SfxType.UI_CLICK);
                 } else {
-                    // First tap on mobile → Pin ghost building
                     if (world) {
-                        world.pinBuildingForConfirmation(index);
+                        world.pinBuildingForConfirmation(x, z);
                     }
-                    setPinnedTileIndex(index);
+                    setPinnedTilePos({ x, z });
                     playSfx(SfxType.UI_CLICK);
                 }
             }
-            // Dungeon Keeper: Click to dig
             else if (state?.interactionMode === 'DIG') {
-                // Trigger dig prompt for the selected tile
-                setDigPromptIndex(index);
+                setDigPromptPos({ x, z });
                 playSfx(SfxType.UI_CLICK);
             }
-            // INSPECT or Neutral BUILD Mode: Check for buildings to show info
             else if (state?.interactionMode === 'INSPECT' || (state?.interactionMode === 'BUILD' && !state?.selectedBuilding)) {
-                const tile = state.grid[index];
-                if (tile && (tile.buildingType !== BuildingType.EMPTY || tile.foliage === 'MINE_HOLE')) {
-                    setSelectedTileForAction(index);
-                    playSfx(SfxType.UI_CLICK);
-                } else if (selectedTileForAction !== null) {
-                    setSelectedTileForAction(null);
+                if (state) {
+                    const tile = ChunkStore.getTile(state.chunks, x, z);
+                    if (tile && (tile.buildingType !== BuildingType.EMPTY || tile.foliage === 'MINE_HOLE')) {
+                        setSelectedTilePos({ x, z });
+                        playSfx(SfxType.UI_CLICK);
+                    } else if (selectedTilePos !== null) {
+                        setSelectedTilePos(null);
+                    }
                 }
             }
         },
-        onTileHover: (index) => setHoverTile(index),
+        onTileHover: (x, z) => setHoverTilePos(x !== null && z !== null ? { x, z } : null),
         onSfx: (type) => playSfx(type),
         paused: showHomePage,
     });
@@ -247,14 +243,14 @@ const App: React.FC = () => {
 
     // Clear pinned tile when selected building or interaction mode changes
     useEffect(() => {
-        if (world && pinnedTileIndex !== null) {
+        if (world && pinnedTilePos !== null) {
             // If user changed building or mode, clear the pin
             if (!state?.selectedBuilding || state?.interactionMode !== 'BUILD') {
-                world.clearPinnedBuilding();
-                setPinnedTileIndex(null);
+                world.pinBuildingForConfirmation(null, null);
+                setPinnedTilePos(null);
             }
         }
-    }, [world, state?.selectedBuilding, state?.interactionMode, pinnedTileIndex]);
+    }, [world, state?.selectedBuilding, state?.interactionMode, pinnedTilePos]);
 
 
     // Intro animation (Disabled)
@@ -295,6 +291,7 @@ const App: React.FC = () => {
 
     // Start game handlers
     const handleStartGame = useCallback(() => {
+        console.log('[App] Starting new game...');
         navigate('/game');
         audioRef.current.init();
     }, [navigate]);
@@ -302,6 +299,7 @@ const App: React.FC = () => {
     const handleContinueGame = useCallback(() => {
         const saved = localStorage.getItem('aureus_save_v2');
         if (saved && world) {
+            console.log('[App] Continuing game...');
             world.loadGame(saved);
             navigate('/game');
             audioRef.current.init();
@@ -310,9 +308,12 @@ const App: React.FC = () => {
 
     const handleStartDemo = useCallback(() => {
         if (world) {
+            console.log('[App] Starting Demo...');
             world.startDemo();
             navigate('/game');
             audioRef.current.init();
+        } else {
+            console.warn('[App] Cannot start demo: world not ready');
         }
     }, [world, navigate]);
 
@@ -338,14 +339,14 @@ const App: React.FC = () => {
 
         switch (action.type) {
             case 'PLACE_BUILDING':
-                world.placeBuilding(action.payload.index);
+                world.placeBuilding(action.payload.x, action.payload.z);
                 playSfx(SfxType.BUILD_START);
                 break;
             case 'BUY_BUILDING':
                 if (world) world.buyBuilding(action.payload.type, action.payload.cost);
                 break;
             case 'BULLDOZE_TILE':
-                world.bulldozeTile(action.payload.index);
+                world.bulldozeTile(action.payload.x, action.payload.z);
                 playSfx(SfxType.BULLDOZE);
                 break;
             case 'SELECT_BUILDING_TO_PLACE':
@@ -385,7 +386,7 @@ const App: React.FC = () => {
                 world.researchTech(action.payload);
                 break;
             case 'SPEED_UP_BUILDING':
-                world.speedUpConstruction(action.payload.index);
+                world.speedUpConstruction(action.payload.x, action.payload.z);
                 break;
             case 'ACCEPT_CONTRACT':
                 world.acceptContract(action.payload);
@@ -403,11 +404,11 @@ const App: React.FC = () => {
                 world.toggleViewMode();
                 break;
             case 'QUEUE_DIG':
-                world.queueDig(action.payload.index, action.payload.layer);
+                world.queueDig(action.payload.x, action.payload.z, action.payload.layer);
                 playSfx(SfxType.UI_CLICK);
                 break;
             case 'UPGRADE_BUILDING':
-                world.upgradeBuilding(action.payload.index);
+                world.upgradeBuilding(action.payload.x, action.payload.z);
                 playSfx(SfxType.UI_CLICK);
                 break;
             default:
@@ -531,7 +532,7 @@ const App: React.FC = () => {
                                 onToggleBlock={handleHUDToggle}
                             />
                             <Minimap
-                                grid={state.grid}
+                                chunks={state.chunks}
                                 agents={state.agents}
                                 viewMode={state.viewMode}
                                 onOpenMap={() => { setShowWorldMap(true); playSfx(SfxType.UI_OPEN); }}
@@ -540,7 +541,7 @@ const App: React.FC = () => {
                             <WorldMap
                                 isOpen={showWorldMap}
                                 onClose={() => setShowWorldMap(false)}
-                                grid={state.grid}
+                                chunks={state.chunks}
                                 agents={state.agents}
                                 playSfx={playSfx}
                             />
@@ -637,57 +638,57 @@ const App: React.FC = () => {
                             />
 
                             <ConstructionModal
-                                selectedTile={selectedTileForAction}
-                                grid={state.grid}
+                                selectedTile={selectedTilePos}
+                                chunks={state.chunks}
                                 gems={state.resources.gems}
                                 dispatch={dispatch}
-                                onClose={() => setSelectedTileForAction(null)}
+                                onClose={() => setSelectedTilePos(null)}
                                 playSfx={playSfx}
                             />
 
                             <BuildingInspectorModal
-                                selectedTile={selectedTileForAction}
-                                grid={state.grid}
+                                selectedTile={selectedTilePos}
+                                chunks={state.chunks}
                                 unlockedEras={state.unlockedEras}
                                 resources={state.resources}
                                 cheatsEnabled={state.cheatsEnabled}
                                 dispatch={dispatch}
-                                onClose={() => setSelectedTileForAction(null)}
+                                onClose={() => setSelectedTilePos(null)}
                                 playSfx={playSfx}
                             />
 
                             <MobileBuildingConfirmation
                                 buildingType={state.selectedBuilding}
-                                tileIndex={pendingPlacementIndex}
+                                tilePos={pendingPlacementPos}
                                 onConfirm={() => {
-                                    if (world && pendingPlacementIndex !== null) {
-                                        world.placeBuilding(pendingPlacementIndex);
-                                        world.clearPinnedBuilding();
-                                        setPendingPlacementIndex(null);
-                                        setPinnedTileIndex(null); // Reset two-tap flow
+                                    if (world && pendingPlacementPos !== null) {
+                                        world.placeBuilding(pendingPlacementPos.x, pendingPlacementPos.z);
+                                        world.pinBuildingForConfirmation(null, null);
+                                        setPendingPlacementPos(null);
+                                        setPinnedTilePos(null); // Reset two-tap flow
                                     }
                                 }}
                                 onCancel={() => {
                                     if (world) {
-                                        world.clearPinnedBuilding();
+                                        world.pinBuildingForConfirmation(null, null);
                                     }
-                                    setPendingPlacementIndex(null);
-                                    setPinnedTileIndex(null); // Reset two-tap flow
+                                    setPendingPlacementPos(null);
+                                    setPinnedTilePos(null); // Reset two-tap flow
                                 }}
                                 playSfx={playSfx}
                             />
 
-                            {digPromptIndex !== null && (
+                            {digPromptPos !== null && (
                                 <DigConfirmPopup
-                                    tileIndex={digPromptIndex}
-                                    grid={state.grid}
+                                    tilePos={digPromptPos}
+                                    chunks={state.chunks}
                                     viewMode={state.viewMode}
                                     currentUndergroundLayer={state.currentUndergroundLayer}
                                     onConfirm={(layer) => {
-                                        dispatch({ type: 'QUEUE_DIG', payload: { index: digPromptIndex, layer } });
-                                        setDigPromptIndex(null);
+                                        dispatch({ type: 'QUEUE_DIG', payload: { x: digPromptPos.x, z: digPromptPos.z, layer } });
+                                        setDigPromptPos(null);
                                     }}
-                                    onCancel={() => setDigPromptIndex(null)}
+                                    onCancel={() => setDigPromptPos(null)}
                                 />
                             )}
 

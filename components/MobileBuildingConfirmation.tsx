@@ -11,12 +11,12 @@ import { BUILDINGS } from '../engine/data/VoxelConstants';
 
 export const MobileBuildingConfirmation: React.FC<{
     buildingType: BuildingType | null;
-    tileIndex: number | null;
+    tilePos: { x: number, z: number } | null;
     onConfirm: () => void;
     onCancel: () => void;
     playSfx: (type: any) => void;
-}> = ({ buildingType, tileIndex, onConfirm, onCancel, playSfx }) => {
-    if (!buildingType || tileIndex === null) return null;
+}> = ({ buildingType, tilePos, onConfirm, onCancel, playSfx }) => {
+    if (!buildingType || tilePos === null) return null;
 
     const building = BUILDINGS[buildingType];
     if (!building) return null;

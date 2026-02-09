@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { bioLumeMaterial } from '../../../engine/render/materials/VoxelMaterials';
-import { CHUNK_SIZE } from '../../../engine/utils/ChunkUtils';
+import { CHUNK_SIZE } from '../../../engine/space/ChunkStore';
+
 
 export class UndergroundDecorationSystem {
     private scene: THREE.Scene;

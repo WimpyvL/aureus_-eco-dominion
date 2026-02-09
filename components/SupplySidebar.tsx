@@ -233,17 +233,11 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
 
     const handlePurchase = () => {
         if (!selectedItem) return;
-        const scaledCost = calculateBuildingCost(selectedItem, state.grid);
+        const scaledCost = calculateBuildingCost(selectedItem, state.chunks);
         if (state.cheatsEnabled || state.resources.agt >= scaledCost) {
             dispatch({ type: 'BUY_BUILDING', payload: { type: selectedItem, cost: state.cheatsEnabled ? 0 : scaledCost } });
             playSfx('SELL');
             setSelectedItem(null); // Close detail view on buy to allow placement
-            // Optional: Close sidebar too?
-            // onClose(); 
-            // Better to keep sidebar open if they want to buy multiple? 
-            // Usually "Buy" enters placement mode which might want full screen. 
-            // In Age of Empires etc, sidebar stays. But here placement mode might need view.
-            // Let's close sidebar to give view space for placement.
             onClose();
         } else {
             playSfx('ERROR');
@@ -340,11 +334,11 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                                 ) : (
                                     shopItems.map((type) => {
                                         const b = BUILDINGS[type];
-                                        const cost = calculateBuildingCost(type, state.grid);
+                                        const cost = calculateBuildingCost(type, state.chunks);
                                         const isEcoLocked = state.resources.eco < b.ecoReq;
                                         let dependencyMet = true;
                                         if (b.dependency) {
-                                            dependencyMet = state.grid.some(t => t.buildingType === b.dependency && !t.isUnderConstruction);
+                                            dependencyMet = Object.values(state.chunks).flatMap(c => c.tiles).some(t => t.buildingType === b.dependency && !t.isUnderConstruction);
                                         }
                                         const isEraLocked = !state.unlockedEras.includes(b.era);
                                         const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet || isEraLocked);
@@ -421,7 +415,7 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                         <div className="bg-slate-900 border-t-4 border-amber-500 rounded-lg shadow-2xl w-full max-w-[400px] overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-5 duration-300">
                             {(() => {
                                 const b = BUILDINGS[selectedItem];
-                                const scaledCost = calculateBuildingCost(selectedItem, state.grid);
+                                const scaledCost = calculateBuildingCost(selectedItem, state.chunks);
 
                                 // NEW: Multi-resource affordance check
                                 let canAfford = state.cheatsEnabled || state.resources.agt >= scaledCost;
@@ -441,7 +435,7 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                                 const isEcoLocked = state.resources.eco < b.ecoReq;
                                 let dependencyMet = true;
                                 if (b.dependency) {
-                                    dependencyMet = state.grid.some(t => t.buildingType === b.dependency && !t.isUnderConstruction);
+                                    dependencyMet = Object.values(state.chunks).flatMap(c => c.tiles).some(t => t.buildingType === b.dependency && !t.isUnderConstruction);
                                 }
                                 const isEraLocked = !state.unlockedEras.includes(b.era);
                                 const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet || isEraLocked);

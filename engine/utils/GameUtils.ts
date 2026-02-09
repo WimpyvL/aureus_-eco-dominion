@@ -4,115 +4,120 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import { BuildingType, BiomeType, GridTile, FoliageType } from '../../types';
+import { BuildingType, BiomeType, GridTile, FoliageType, Chunk } from '../types';
 import { BUILDINGS } from '../data/VoxelConstants';
 import { getBiomeAt } from '../worldgen/Core';
 
-// Map Size: 128x128 total.
-// Playable area: 128x128 (unlocked full map).
-export const GRID_SIZE = 128;
-const PLAYABLE_SIZE = 128; // Match GRID_SIZE to unlock full map
-const PADDING = 0; // No padding
+// Map Constants
+export const DEFAULT_VIEW_RADIUS = 6;
 
 // Note: World generation logic (noises, biome distribution) has been isolated 
 // into 'engine/worldgen'. Do not add procedural logic here.
 
 // --- GAME LOGIC ---
 
-/**
- * Propagates water connectivity across the entire grid.
- */
-export function updateWaterConnectivity(grid: GridTile[]): GridTile[] {
-    const connectedIndices = new Set<number>();
-    const queue: number[] = [];
+import { ChunkStore } from '../space/ChunkStore';
 
-    // 1. Seed queue with all Water Sources (Surface buildings providing water)
-    grid.forEach((tile, i) => {
-        if (tile.buildingType === BuildingType.POND || tile.buildingType === BuildingType.WATER_WELL) {
-            connectedIndices.add(i);
-            queue.push(i);
+/**
+ * Propagates water connectivity across the entire chunked world.
+ */
+export function updateWaterConnectivity(chunks: Record<string, Chunk>): Record<string, Chunk> {
+    const connectedCoords = new Set<string>();
+    const queue: { x: number, z: number }[] = [];
+
+    // 1. Seed queue with all Water Sources
+    for (const chunk of Object.values(chunks)) {
+        for (const tile of chunk.tiles) {
+            if (tile.buildingType === BuildingType.POND || tile.buildingType === BuildingType.WATER_WELL) {
+                const key = `${tile.x},${tile.z}`;
+                if (!connectedCoords.has(key)) {
+                    connectedCoords.add(key);
+                    queue.push({ x: tile.x, z: tile.z });
+                }
+            }
         }
-    });
+    }
 
     // 2. BFS Flood Fill through layer -1 (Underground Network)
     while (queue.length > 0) {
-        const currIdx = queue.shift()!;
+        const curr = queue.shift()!;
 
-        // Check Neighbors
+        // Check Neighbors (North, South, East, West)
         const neighbors = [
-            currIdx - GRID_SIZE, // Up
-            currIdx + GRID_SIZE, // Down
-            currIdx % GRID_SIZE !== 0 ? currIdx - 1 : -1, // Left
-            (currIdx + 1) % GRID_SIZE !== 0 ? currIdx + 1 : -1 // Right
-        ].filter(n => n >= 0 && n < grid.length);
+            { x: curr.x, z: curr.z - 1 },
+            { x: curr.x, z: curr.z + 1 },
+            { x: curr.x - 1, z: curr.z },
+            { x: curr.x + 1, z: curr.z }
+        ];
 
         for (const n of neighbors) {
-            if (connectedIndices.has(n)) continue;
+            const key = `${n.x},${n.z}`;
+            if (connectedCoords.has(key)) continue;
 
-            const tile = grid[n];
+            const tile = ChunkStore.getTile(chunks, n.x, n.z);
+            if (!tile) continue;
+
             // Propagation happens via pipes at layer -1
             const hasPipe = tile.subBuildings?.[-1] === BuildingType.PIPE;
             // Also sources themselves act as nodes in the network
             const isSource = tile.buildingType === BuildingType.WATER_WELL || tile.buildingType === BuildingType.POND;
 
             if (hasPipe || isSource) {
-                connectedIndices.add(n);
+                connectedCoords.add(key);
                 queue.push(n);
             }
         }
     }
 
-    // 3. Map status back to grid
-    return grid.map((tile, i) => {
-        // A tile is part of the network if it's in connectedIndices
-        const isNetworked = connectedIndices.has(i);
+    // 3. Map status back to tiles in all chunks
+    for (const chunk of Object.values(chunks)) {
+        for (let i = 0; i < chunk.tiles.length; i++) {
+            const tile = chunk.tiles[i];
+            const isNetworked = connectedCoords.has(`${tile.x},${tile.z}`);
 
-        // If it's a building that needs water, it's connected if its tile index is networked
-        // (Assuming a pipe exists on the same tile at layer -1 or it's a source)
-        if (tile.buildingType !== BuildingType.EMPTY) {
-            return { ...tile, waterStatus: isNetworked ? 'CONNECTED' : 'DISCONNECTED' };
+            if (tile.buildingType !== BuildingType.EMPTY || tile.subBuildings?.[-1] === BuildingType.PIPE) {
+                const newStatus = isNetworked ? 'CONNECTED' : 'DISCONNECTED';
+                if (tile.waterStatus !== newStatus) {
+                    chunk.tiles[i] = { ...tile, waterStatus: newStatus };
+                    chunk.simDirty = true;
+                }
+            }
         }
+    }
 
-        // Also update the visual state of pipes if they are in sub-buildings
-        if (tile.subBuildings?.[-1] === BuildingType.PIPE) {
-            // This allows pipes to show as connected visual-wise
-            return { ...tile, waterStatus: isNetworked ? 'CONNECTED' : 'DISCONNECTED' };
-        }
-
-        return tile;
-    });
+    return chunks;
 }
 
 // Utility: Check if a tile is connected to a water source via pipes
-export function isConnectedToWater(grid: GridTile[], startIndex: number): boolean {
-    // BFS through the same layer -1 logic
-    const queue = [startIndex];
-    const visited = new Set<number>();
-    visited.add(startIndex);
+export function isConnectedToWater(chunks: Record<string, Chunk>, startX: number, startZ: number): boolean {
+    const queue: { x: number, z: number }[] = [{ x: startX, z: startZ }];
+    const visited = new Set<string>();
+    visited.add(`${startX},${startZ}`);
 
     while (queue.length > 0) {
-        const currIdx = queue.shift()!;
+        const curr = queue.shift()!;
 
         // Check Neighbors
         const neighbors = [
-            currIdx - GRID_SIZE, // Up
-            currIdx + GRID_SIZE, // Down
-            currIdx % GRID_SIZE !== 0 ? currIdx - 1 : -1, // Left
-            (currIdx + 1) % GRID_SIZE !== 0 ? currIdx + 1 : -1 // Right
-        ].filter(n => n >= 0 && n < grid.length);
+            { x: curr.x, z: curr.z - 1 },
+            { x: curr.x, z: curr.z + 1 },
+            { x: curr.x - 1, z: curr.z },
+            { x: curr.x + 1, z: curr.z }
+        ];
 
         for (const n of neighbors) {
-            if (visited.has(n)) continue;
-            const tile = grid[n];
+            const key = `${n.x},${n.z}`;
+            if (visited.has(key)) continue;
 
-            // Found Water Source!
+            const tile = ChunkStore.getTile(chunks, n.x, n.z);
+            if (!tile) continue;
+
             if (tile.buildingType === BuildingType.POND || tile.buildingType === BuildingType.WATER_WELL) {
                 return true;
             }
 
-            // Continue searching if there's a pipe at layer -1
             if (tile.subBuildings?.[-1] === BuildingType.PIPE) {
-                visited.add(n);
+                visited.add(key);
                 queue.push(n);
             }
         }
@@ -126,54 +131,57 @@ export function getEcoMultiplier(eco: number): number {
 }
 
 // Helper: Count buildings for Scaling Costs
-export function calculateBuildingCost(type: BuildingType, grid: GridTile[]): number {
+export function calculateBuildingCost(type: BuildingType | null, chunks: Record<string, Chunk>): number {
+    if (!type) return 0;
+
     const base = BUILDINGS[type].cost;
 
-    // Infrastructure (Roads/Pipes) should have flat cost, no inflation
     if (type === BuildingType.ROAD || type === BuildingType.PIPE) {
         return base;
     }
 
-    // Logic for 2-tile buildings: divide by width to avoid double counting
-    const rawCount = grid.filter(t => t.buildingType === type).length;
-    let count = rawCount;
-    if (BUILDINGS[type].width === 2) count = Math.ceil(rawCount / 2);
+    let count = 0;
+    for (const chunk of Object.values(chunks)) {
+        for (const tile of chunk.tiles) {
+            if (tile.buildingType === type) {
+                // For multi-tile buildings, only count the head to avoid over-inflation
+                if (tile.structureHeadX === undefined || (tile.structureHeadX === tile.x && tile.structureHeadZ === tile.z)) {
+                    count++;
+                }
+            }
+        }
+    }
 
     // Inflation Formula: Base * (1.15 ^ count)
     return Math.floor(base * Math.pow(1.15, count));
 }
 
 // Helper: Bresenham's Line Algorithm for Grid
-export function getLineCoordinates(startIdx: number, endIdx: number): number[] {
-    const x0 = startIdx % GRID_SIZE;
-    const y0 = Math.floor(startIdx / GRID_SIZE);
-    const x1 = endIdx % GRID_SIZE;
-    const y1 = Math.floor(endIdx / GRID_SIZE);
-
-    const path: number[] = [];
+export function getLineCoordinates(x0: number, z0: number, x1: number, z1: number): { x: number, z: number }[] {
+    const path: { x: number, z: number }[] = [];
 
     const dx = Math.abs(x1 - x0);
-    const dy = Math.abs(y1 - y0);
+    const dz = Math.abs(z1 - z0);
     const sx = (x0 < x1) ? 1 : -1;
-    const sy = (y0 < y1) ? 1 : -1;
-    let err = dx - dy;
+    const sz = (z0 < z1) ? 1 : -1;
+    let err = dx - dz;
 
     let cx = x0;
-    let cy = y0;
+    let cz = z0;
 
     while (true) {
-        path.push(cy * GRID_SIZE + cx);
+        path.push({ x: cx, z: cz });
 
-        if ((cx === x1) && (cy === y1)) break;
+        if ((cx === x1) && (cz === z1)) break;
 
         const e2 = 2 * err;
-        if (e2 > -dy) {
-            err -= dy;
+        if (e2 > -dz) {
+            err -= dz;
             cx += sx;
         }
         if (e2 < dx) {
             err += dx;
-            cy += sy;
+            cz += sz;
         }
     }
     return path;

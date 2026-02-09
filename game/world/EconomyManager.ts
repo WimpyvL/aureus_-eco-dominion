@@ -19,25 +19,7 @@ export class EconomyManager {
      * Sell a specific resource for AGT currency
      */
     sellResource(resource: 'minerals' | 'gems' | 'wood' | 'stone'): void {
-        const state = this.stateManager.getMutableState();
-        const amount = state.resources[resource];
-        if (amount <= 0) return;
-
-        const ecoMult = getEcoMultiplier(state.resources.eco);
-        const trustMult = 1 + (state.resources.trust / 200);
-        const price = state.market[resource].currentPrice;
-
-        const value = Math.floor(amount * price * ecoMult * trustMult);
-        state.resources.agt += value;
-        state.resources[resource] = 0;
-
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.SELL });
-        state.newsFeed.unshift({
-            id: `sell_${resource}_${Date.now()}`,
-            headline: `Market Transaction: Sold ${resource} for ${value} AGT`,
-            type: 'POSITIVE',
-            timestamp: Date.now()
-        });
+        this.stateManager.pushCommand('SELL_RESOURCE', { resource });
     }
 
     /**
@@ -51,20 +33,7 @@ export class EconomyManager {
      * Sell gems (special handling)
      */
     sellGems(address?: string): void {
-        const state = this.stateManager.getMutableState();
-        const amount = state.resources.gems;
-        if (amount <= 0) return;
-
-        // "Deposit" gems to external wallet
-        state.resources.gems = 0;
-
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
-        state.newsFeed.unshift({
-            id: `deposit_gems_${Date.now()}`,
-            headline: `Deposited ${Math.floor(amount)} Thundergems to ${address || 'External Wallet'}`,
-            type: 'POSITIVE',
-            timestamp: Date.now()
-        });
+        this.stateManager.pushCommand('SELL_RESOURCE', { resource: 'gems', address });
     }
 
     /**
@@ -81,66 +50,20 @@ export class EconomyManager {
      * Buy a specific resource using AGT currency
      */
     buyResource(resource: 'minerals' | 'gems' | 'wood' | 'stone', amount: number): void {
-        const state = this.stateManager.getMutableState();
-
-        // Buyers pay a 25% "Import Fee" over market price
-        const price = state.market[resource].currentPrice * 1.25;
-        const totalCost = Math.floor(price * amount);
-
-        if (state.resources.agt < totalCost) {
-            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
-            return;
-        }
-
-        state.resources.agt -= totalCost;
-        state.resources[resource] += amount;
-
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
-        state.newsFeed.unshift({
-            id: `buy_${resource}_${Date.now()}`,
-            headline: `Import Dispatch: Acquired ${amount} ${resource} for ${totalCost} AGT`,
-            type: 'NEUTRAL',
-            timestamp: Date.now()
-        });
+        this.stateManager.pushCommand('BUY_RESOURCE', { resource, amount });
     }
 
     /**
      * Buy a building and add it to inventory
      */
     buyBuilding(buildingType: string, cost: number): void {
-        const state = this.stateManager.getMutableState();
-        const def = BUILDINGS[buildingType as BuildingType];
-
-        // Deduct multi-resource costs if defined
-        if (def && def.costs) {
-            Object.entries(def.costs).forEach(([res, amt]) => {
-                const resourceKey = res as keyof typeof state.resources;
-                const costAmt = amt as number;
-                if (costAmt && typeof state.resources[resourceKey] === 'number') {
-                    (state.resources[resourceKey] as number) -= costAmt;
-                }
-            });
-        } else {
-            // Legacy fall-back (usually AGT)
-            state.resources.agt -= cost;
-        }
-
-        // Add to inventory
-        const bType = buildingType as BuildingType;
-        if (!state.inventory[bType]) {
-            state.inventory[bType] = 0;
-        }
-        state.inventory[bType]!++;
-
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
+        this.stateManager.pushCommand('BUY_BUILDING', { buildingType, cost });
     }
 
     /**
      * Configure auto-sell settings
      */
     setAutoSell(enabled: boolean, threshold: number): void {
-        const state = this.stateManager.getMutableState();
-        state.logistics.autoSell = enabled;
-        state.logistics.sellThreshold = threshold;
+        this.stateManager.pushCommand('SET_AUTO_SELL', { enabled, threshold });
     }
 }

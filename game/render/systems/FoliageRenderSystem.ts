@@ -8,7 +8,6 @@ import * as THREE from 'three';
 import { BuildingFactory } from '../../../engine/render/utils/VoxelGenerators';
 import { matMaster } from '../../../engine/render/materials/VoxelMaterials';
 import { mergeGroupGeometry } from '../../../engine/render/utils/VoxelUtils';
-import { GRID_SIZE } from '../../../engine/utils/GameUtils';
 
 export interface FoliageItem {
     x: number;
@@ -84,7 +83,6 @@ export class FoliageRenderSystem {
 
         // 2. Sync Meshes
         const activeKeys = new Set<string>();
-        const offset = (GRID_SIZE - 1) / 2;
         const dummy = new THREE.Object3D();
 
         Object.entries(buckets).forEach(([type, items]) => {
@@ -129,7 +127,7 @@ export class FoliageRenderSystem {
                 const rotY = (seed % 4) * (Math.PI / 2);
 
                 // Position is absolute world coordinate from worker
-                dummy.position.set(item.x - offset, item.y, item.z - offset);
+                dummy.position.set(item.x, item.y, item.z);
                 dummy.rotation.set(0, rotY, 0);
                 dummy.scale.setScalar(1.0);
                 dummy.updateMatrix();

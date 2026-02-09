@@ -111,8 +111,8 @@ export const AgentDebugOverlay: React.FC<AgentDebugOverlayProps> = ({ agents, jo
                                     key={f}
                                     onClick={() => setFilter(f)}
                                     className={`flex-1 py-1 text-[8px] font-bold uppercase rounded transition-colors ${filter === f
-                                            ? 'bg-cyan-600 text-white'
-                                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                        ? 'bg-cyan-600 text-white'
+                                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                                         }`}
                                 >
                                     {f}
@@ -127,8 +127,8 @@ export const AgentDebugOverlay: React.FC<AgentDebugOverlayProps> = ({ agents, jo
                                     key={agent.id}
                                     onClick={() => setSelectedAgentId(agent.id === selectedAgentId ? null : agent.id)}
                                     className={`p-1.5 rounded cursor-pointer transition-all ${selectedAgentId === agent.id
-                                            ? 'bg-cyan-900/50 border border-cyan-500/50'
-                                            : 'bg-slate-800/50 hover:bg-slate-800 border border-transparent'
+                                        ? 'bg-cyan-900/50 border border-cyan-500/50'
+                                        : 'bg-slate-800/50 hover:bg-slate-800 border border-transparent'
                                         }`}
                                 >
                                     <div className="flex items-center justify-between">
@@ -158,12 +158,12 @@ export const AgentDebugOverlay: React.FC<AgentDebugOverlayProps> = ({ agents, jo
                                             </div>
 
                                             {/* Target */}
-                                            {agent.targetTileId !== null && (
+                                            {agent.targetX !== undefined && agent.targetZ !== undefined && (
                                                 <div className="flex items-center gap-1 text-[8px]">
                                                     <Target size={10} className="text-slate-500" />
                                                     <span className="text-slate-400">Target:</span>
                                                     <span className="font-mono text-amber-400">
-                                                        Tile #{agent.targetTileId}
+                                                        ({agent.targetX}, {agent.targetZ})
                                                     </span>
                                                 </div>
                                             )}

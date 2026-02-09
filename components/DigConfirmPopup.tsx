@@ -1,10 +1,11 @@
 import React from 'react';
 import { Pickaxe, ArrowDownCircle, X } from 'lucide-react';
-import { GridTile } from '../types';
+import { Chunk } from '../types';
+import { ChunkStore } from '../engine/space/ChunkStore';
 
 interface DigConfirmPopupProps {
-    tileIndex: number;
-    grid: GridTile[];
+    tilePos: { x: number, z: number };
+    chunks: Record<string, Chunk>;
     viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON';
     currentUndergroundLayer: number;
     onConfirm: (layer: number) => void;
@@ -12,9 +13,9 @@ interface DigConfirmPopupProps {
 }
 
 export const DigConfirmPopup: React.FC<DigConfirmPopupProps> = ({
-    tileIndex, grid, viewMode, currentUndergroundLayer, onConfirm, onCancel
+    tilePos, chunks, viewMode, currentUndergroundLayer, onConfirm, onCancel
 }) => {
-    const tile = grid[tileIndex];
+    const tile = ChunkStore.getTile(chunks, tilePos.x, tilePos.z);
     if (!tile) return null;
 
     const layerToDig = viewMode === 'UNDERGROUND'
@@ -60,7 +61,7 @@ export const DigConfirmPopup: React.FC<DigConfirmPopupProps> = ({
                     {isShaft ? 'Vertical Excavation' : 'Sector Expansion'}
                 </h3>
                 <p className="text-slate-500 text-[10px] font-mono uppercase tracking-[0.2em] mb-6 border-b border-slate-900 pb-2">
-                    Authorization Required: Area {tileIndex}
+                    Authorization Required: ({tilePos.x}, {tilePos.z})
                 </p>
 
                 <div className="space-y-4 mb-8">

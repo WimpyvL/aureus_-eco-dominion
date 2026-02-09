@@ -2,10 +2,10 @@
  * Engine Pathfinding Algorithm (A*)
  */
 
-import { GridTile, BuildingType } from '../../../types';
-import { GRID_SIZE } from '../../utils/GameUtils';
+import { GridTile, BuildingType, Chunk } from '../../../types';
+import { ChunkStore } from '../../space/ChunkStore';
 import { BinaryHeap } from '../../utils/BinaryHeap';
-// GRID_SIZE is imported from GameUtils
+
 
 // Costs for different terrains
 // Costs for different terrains
@@ -18,14 +18,13 @@ export const COST = {
 
 // Node wrapper for Heap
 interface PathNode {
-    index: number;
+    x: number;
+    z: number;
     layer: number;
     f: number;
 }
 
-const getDistance3D = (a: number, al: number, b: number, bl: number) => {
-    const ax = a % GRID_SIZE, az = Math.floor(a / GRID_SIZE);
-    const bx = b % GRID_SIZE, bz = Math.floor(b / GRID_SIZE);
+const getDistance3D = (ax: number, az: number, al: number, bx: number, bz: number, bl: number) => {
     // Chebyshev distance + vertical difference
     return Math.max(Math.abs(ax - bx), Math.abs(az - bz)) + Math.abs(al - bl);
 };
@@ -51,22 +50,24 @@ const getTileCostAtLayer = (tile: GridTile, layer: number): number => {
 
 /**
  * A* Pathfinding (3D Layer Aware)
- * Returns array of { index, layer } steps
+ * Returns array of { x, z, layer } steps
  */
 export function findPath3D(
-    startIdx: number, startLayer: number,
-    endIdx: number, endLayer: number,
-    grid: GridTile[]
-): { index: number, layer: number }[] | null {
-    if (startIdx === endIdx && startLayer === endLayer) return [{ index: endIdx, layer: endLayer }];
+    startX: number, startZ: number, startLayer: number,
+    endX: number, endZ: number, endLayer: number,
+    chunks: Record<string, Chunk>
+): { x: number, z: number, layer: number }[] | null {
+    if (startX === endX && startZ === endZ && startLayer === endLayer) {
+        return [{ x: endX, z: endZ, layer: endLayer }];
+    }
 
     const openSet = new BinaryHeap<PathNode>((a, b) => a.f - b.f);
-    openSet.push({ index: startIdx, layer: startLayer, f: getDistance3D(startIdx, startLayer, endIdx, endLayer) });
+    openSet.push({ x: startX, z: startZ, layer: startLayer, f: getDistance3D(startX, startZ, startLayer, endX, endZ, endLayer) });
 
-    const cameFrom = new Map<string, { index: number, layer: number }>();
+    const cameFrom = new Map<string, { x: number, z: number, layer: number }>();
     const gScore = new Map<string, number>();
 
-    const startKey = `${startIdx},${startLayer}`;
+    const startKey = `${startX},${startZ},${startLayer}`;
     gScore.set(startKey, 0);
 
     const visited = new Set<string>();
@@ -79,17 +80,17 @@ export function findPath3D(
         if (iterations > MAX_ITERATIONS) return null;
 
         const current = openSet.pop()!;
-        const { index: cIdx, layer: cL } = current;
-        const currentKey = `${cIdx},${cL}`;
+        const { x: cx, z: cz, layer: cL } = current;
+        const currentKey = `${cx},${cz},${cL}`;
 
-        if (cIdx === endIdx && cL === endLayer) {
+        if (cx === endX && cz === endZ && cL === endLayer) {
             // Reconstruct
-            const path = [{ index: cIdx, layer: cL }];
+            const path = [{ x: cx, z: cz, layer: cL }];
             let currKey = currentKey;
             while (cameFrom.has(currKey)) {
                 const prev = cameFrom.get(currKey)!;
                 path.unshift(prev);
-                currKey = `${prev.index},${prev.layer}`;
+                currKey = `${prev.x},${prev.z},${prev.layer}`;
             }
             return path.slice(1);
         }
@@ -97,9 +98,8 @@ export function findPath3D(
         if (visited.has(currentKey)) continue;
         visited.add(currentKey);
 
-        const cx = cIdx % GRID_SIZE;
-        const cz = Math.floor(cIdx / GRID_SIZE);
-        const currentTile = grid[cIdx];
+        const currentTile = ChunkStore.getTile(chunks, cx, cz);
+        if (!currentTile) continue;
 
         // --- 1. Lateral Neighbors (Same Layer) ---
         for (let dz = -1; dz <= 1; dz++) {
@@ -107,23 +107,20 @@ export function findPath3D(
                 if (dx === 0 && dz === 0) continue;
 
                 const nx = cx + dx, nz = cz + dz;
-                if (nx >= 0 && nx < GRID_SIZE && nz >= 0 && nz < GRID_SIZE) {
-                    const nIdx = nz * GRID_SIZE + nx;
-                    const nKey = `${nIdx},${cL}`;
-                    if (visited.has(nKey)) continue;
+                const nKey = `${nx},${nz},${cL}`;
+                if (visited.has(nKey)) continue;
 
-                    const neighborTile = grid[nIdx];
-                    if (neighborTile.locked) continue;
+                const neighborTile = ChunkStore.getTile(chunks, nx, nz);
+                if (!neighborTile || neighborTile.locked) continue;
 
-                    const cost = getTileCostAtLayer(neighborTile, cL);
-                    if (cost === Infinity) continue;
+                const cost = getTileCostAtLayer(neighborTile, cL);
+                if (cost === Infinity) continue;
 
-                    const tentativeG = (gScore.get(currentKey) ?? Infinity) + cost;
-                    if (tentativeG < (gScore.get(nKey) ?? Infinity)) {
-                        cameFrom.set(nKey, { index: cIdx, layer: cL });
-                        gScore.set(nKey, tentativeG);
-                        openSet.push({ index: nIdx, layer: cL, f: tentativeG + getDistance3D(nIdx, cL, endIdx, endLayer) });
-                    }
+                const tentativeG = (gScore.get(currentKey) ?? Infinity) + cost;
+                if (tentativeG < (gScore.get(nKey) ?? Infinity)) {
+                    cameFrom.set(nKey, { x: cx, z: cz, layer: cL });
+                    gScore.set(nKey, tentativeG);
+                    openSet.push({ x: nx, z: nz, layer: cL, f: tentativeG + getDistance3D(nx, nz, cL, endX, endZ, endLayer) });
                 }
             }
         }
@@ -134,7 +131,7 @@ export function findPath3D(
         for (const nL of layers) {
             if (nL < -10 || nL > 0) continue;
 
-            const nKey = `${cIdx},${nL}`;
+            const nKey = `${cx},${cz},${nL}`;
             if (visited.has(nKey)) continue;
 
             // Transition Logic
@@ -153,9 +150,9 @@ export function findPath3D(
             if (canTransition) {
                 const tentativeG = (gScore.get(currentKey) ?? Infinity) + 1.0; // Vertical move cost
                 if (tentativeG < (gScore.get(nKey) ?? Infinity)) {
-                    cameFrom.set(nKey, { index: cIdx, layer: cL });
+                    cameFrom.set(nKey, { x: cx, z: cz, layer: cL });
                     gScore.set(nKey, tentativeG);
-                    openSet.push({ index: cIdx, layer: nL, f: tentativeG + getDistance3D(cIdx, nL, endIdx, endLayer) });
+                    openSet.push({ x: cx, z: cz, layer: nL, f: tentativeG + getDistance3D(cx, cz, nL, endX, endZ, endLayer) });
                 }
             }
         }
@@ -165,7 +162,7 @@ export function findPath3D(
 }
 
 /** Legacy wrapper for surface-only pathfinding */
-export function findPath(startIdx: number, endIdx: number, grid: GridTile[]): number[] | null {
-    const path3d = findPath3D(startIdx, 0, endIdx, 0, grid);
-    return path3d ? path3d.map(p => p.index) : null;
+export function findPath(startX: number, startZ: number, endX: number, endZ: number, chunks: Record<string, Chunk>): { x: number, z: number }[] | null {
+    const path3d = findPath3D(startX, startZ, 0, endX, endZ, 0, chunks);
+    return path3d ? path3d.map(p => ({ x: p.x, z: p.z })) : null;
 }

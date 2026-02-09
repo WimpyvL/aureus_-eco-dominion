@@ -6,7 +6,8 @@ export type JobType = 'BUILD' | 'MINE' | 'DIG' | 'REINFORCE' | 'RESCUE' | 'FARM'
 export interface Job {
     id: string;
     type: JobType;
-    targetTileId: number;
+    targetX: number;
+    targetZ: number;
     priority: number; // 1-5
     assignedAgentId: string | null;
     progress?: number;
@@ -72,7 +73,8 @@ export interface AgentRequest {
 }
 
 export interface PathStep {
-    index: number;
+    x: number;
+    z: number;
     layer: number;
 }
 
@@ -88,7 +90,8 @@ export interface Agent {
     type: AgentRole;
     x: number;
     z: number;
-    targetTileId: number | null;
+    targetX: number | null;
+    targetZ: number | null;
     path: PathStep[] | null;
     layer: number; // Current vertical layer
     // Visual position for smooth rendering

@@ -60,10 +60,20 @@ export interface UndergroundTile {
 
 import { BuildingType } from './buildings';
 
+export interface Chunk {
+    cx: number;
+    cz: number;
+    tiles: GridTile[]; // Array of CHUNK_SIZE * CHUNK_SIZE
+    meshDirty: boolean;
+    simDirty: boolean;
+    lastAccessTime: number;
+    version: number;
+}
+
 export interface GridTile {
-    id: number;
-    x: number;
-    y: number;
+    id: number; // Global or chunk-unique ID
+    x: number; // World X
+    z: number; // World Z
     buildingType: BuildingType;
     level: number;
     terrainHeight: number;
@@ -73,7 +83,8 @@ export interface GridTile {
     integrity?: number;
     isUnderConstruction?: boolean;
     constructionTimeLeft?: number;
-    structureHeadIndex?: number;
+    structureHeadX?: number;
+    structureHeadZ?: number;
     waterStatus?: 'CONNECTED' | 'DISCONNECTED';
     powerStatus?: 'CONNECTED' | 'DISCONNECTED';
     rehabProgress?: number; // 0-100

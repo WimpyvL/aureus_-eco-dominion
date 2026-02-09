@@ -4,8 +4,8 @@
  * Manages serialization of complex objects like Maps.
  */
 
-import { GameState, Agent, GridTile } from '../../types';
-import { GRID_SIZE } from '../utils/GameUtils';
+import { GameState, Agent, GridTile, BuildingType } from '../../types';
+import { DEFAULT_VIEW_RADIUS } from '../utils/GameUtils';
 
 export class PersistenceManager {
     private readonly STORAGE_KEY = 'aureus_save_v2';
@@ -16,15 +16,41 @@ export class PersistenceManager {
     public saveGame(state: GameState): boolean {
         try {
             const serialized = JSON.stringify(state, (key, value) => {
-                // Handle Maps (Agent Memory)
-                if (value instanceof Map) {
-                    return {
-                        dataType: 'Map',
-                        value: Array.from(value.entries()) // Convert to [key, value][]
-                    };
+                // Prune non-essential chunk data to save space
+                if (key === 'chunks' && value && typeof value === 'object') {
+                    const prunedChunks: Record<string, any> = {};
+                    for (const [chunkKey, chunk] of Object.entries(value)) {
+                        const c = chunk as any;
+                        prunedChunks[chunkKey] = {
+                            tiles: c.tiles.map((tile: GridTile) => {
+                                const pruned: any = {
+                                    id: tile.id,
+                                    x: tile.x,
+                                    z: tile.z,
+                                    biome: tile.biome
+                                };
+
+                                if (tile.buildingType && tile.buildingType !== 'EMPTY') pruned.buildingType = tile.buildingType;
+                                if (tile.level && tile.level > 1) pruned.level = tile.level;
+                                if (tile.foliage && tile.foliage !== 'NONE') pruned.foliage = tile.foliage;
+                                if (tile.terrainHeight !== 0 && tile.terrainHeight !== undefined) pruned.terrainHeight = tile.terrainHeight;
+                                if (tile.isUnderConstruction) pruned.isUnderConstruction = tile.isUnderConstruction;
+                                if (tile.markedForHarvest) pruned.markedForHarvest = tile.markedForHarvest;
+                                if (tile.underground) pruned.underground = tile.underground;
+                                if (tile.digState) pruned.digState = tile.digState;
+                                if (tile.structureHeadX !== undefined) pruned.structureHeadX = tile.structureHeadX;
+                                if (tile.structureHeadZ !== undefined) pruned.structureHeadZ = tile.structureHeadZ;
+                                if (tile.explored) pruned.explored = tile.explored;
+                                if (tile.locked) pruned.locked = tile.locked;
+
+                                return pruned;
+                            })
+                        };
+                    }
+                    return prunedChunks;
                 }
 
-                // Exclude large transient objects if any (e.g. pendingEffects should be cleared)
+                // Exclude large transient objects if any
                 if (key === 'pendingEffects') return [];
                 if (key === 'commandQueue') return [];
 
@@ -32,11 +58,13 @@ export class PersistenceManager {
             });
 
             localStorage.setItem(this.STORAGE_KEY, serialized);
-            console.log('[PersistenceManager] Game saved successfully.');
-            // Update last save timestamp metadata if we want
             return true;
-        } catch (e) {
-            console.error('[PersistenceManager] Failed to save game:', e);
+        } catch (e: any) {
+            if (e.name === 'QuotaExceededError') {
+                console.warn('[PersistenceManager] Storage quota exceeded. Game state too large for localStorage.');
+            } else {
+                console.error('[PersistenceManager] Failed to save game:', e);
+            }
             return false;
         }
     }
@@ -64,13 +92,23 @@ export class PersistenceManager {
             if (!state.pendingEffects) state.pendingEffects = [];
             if (!state.commandQueue) state.commandQueue = [];
 
-            // MIGRATION: Unlock all tiles and set explored (removes old area restrictions)
-            if (state.grid) {
-                for (const tile of state.grid) {
-                    tile.locked = false;
-                    tile.explored = true;
+            // MIGRATION & REVIVAL: Ensure all tiles have required properties
+            if (state.chunks) {
+                for (const chunk of Object.values(state.chunks)) {
+                    for (const tile of chunk.tiles) {
+                        // Fill in defaults for pruned fields
+                        if (tile.buildingType === undefined) tile.buildingType = BuildingType.EMPTY;
+                        if (tile.level === undefined) tile.level = 1;
+                        if (tile.foliage === undefined) tile.foliage = 'NONE';
+                        if (tile.terrainHeight === undefined) tile.terrainHeight = 0;
+                        if (tile.underground === undefined) tile.underground = {};
+
+                        // Ensure explored and unlocked
+                        tile.locked = false;
+                        tile.explored = true;
+                    }
                 }
-                console.log('[PersistenceManager] Migrated grid: unlocked all tiles.');
+                console.log('[PersistenceManager] Revived and migrated chunk tiles.');
             }
 
             // Revive Grid: JSON.parse makes generic objects, but GridTile is an interface so it's fine.
@@ -103,11 +141,21 @@ export class PersistenceManager {
             if (!state.pendingEffects) state.pendingEffects = [];
             if (!state.commandQueue) state.commandQueue = [];
 
-            // MIGRATION: Unlock all tiles and set explored (removes old area restrictions)
-            if (state.grid) {
-                for (const tile of state.grid) {
-                    tile.locked = false;
-                    tile.explored = true;
+            // MIGRATION & REVIVAL: Ensure all tiles have required properties
+            if (state.chunks) {
+                for (const chunk of Object.values(state.chunks)) {
+                    for (const tile of chunk.tiles) {
+                        // Fill in defaults for pruned fields
+                        if (tile.buildingType === undefined) tile.buildingType = BuildingType.EMPTY;
+                        if (tile.level === undefined) tile.level = 1;
+                        if (tile.foliage === undefined) tile.foliage = 'NONE';
+                        if (tile.terrainHeight === undefined) tile.terrainHeight = 0;
+                        if (tile.underground === undefined) tile.underground = {};
+
+                        // Ensure explored and unlocked
+                        tile.locked = false;
+                        tile.explored = true;
+                    }
                 }
             }
 
