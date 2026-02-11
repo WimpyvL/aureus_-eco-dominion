@@ -14,3 +14,4 @@ export * from './WaterNetworkSystem';
 export * from './ExcavationSystem';
 export * from './TutorialDemoSystem';
 export * from './VoxelDestructionSystem';
+export * from './CommandDispatcher';

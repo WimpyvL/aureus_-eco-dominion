@@ -22,7 +22,7 @@ import {
     ColonySystem, LogisticsSystem, EventSystem, MissionSystem,
     ProductionSystem, ConstructionSystem, EraSystem,
     PowerGridSystem, WaterNetworkSystem, ExcavationSystem,
-    TutorialDemoSystem, VoxelDestructionSystem
+    TutorialDemoSystem, VoxelDestructionSystem, CommandDispatcher
 } from '../engine/sim/systems';
 import { PersistenceManager } from '../engine/sim/PersistenceManager';
 
@@ -69,6 +69,7 @@ export class AureusWorld extends BaseWorld {
     // Simulation Systems
     private agentSystem: AgentSystem;
     private constructionSystem: ConstructionSystem;
+    private commandDispatcher: CommandDispatcher;
 
     // Render Systems
     private agentRenderSystem: AgentRenderSystem;
@@ -133,11 +134,17 @@ export class AureusWorld extends BaseWorld {
         this.sim = new Simulation();
 
         // Simulation Systems
+        this.commandDispatcher = new CommandDispatcher();
+        this.sim.addSystem(this.commandDispatcher);
+
         this.constructionSystem = new ConstructionSystem();
         this.sim.addSystem(this.constructionSystem);
         this.sim.addSystem(new JobGenerationSystem());
         this.sim.addSystem(new EnvironmentSystem());
-        this.sim.addSystem(new EconomySystem());
+
+        const econ = new EconomySystem();
+        this.sim.addSystem(econ);
+
         this.sim.addSystem(new ColonySystem());
         this.sim.addSystem(new LogisticsSystem());
         this.sim.addSystem(new EventSystem());
@@ -149,11 +156,20 @@ export class AureusWorld extends BaseWorld {
         this.sim.addSystem(new TutorialDemoSystem());
 
         // Dungeon Keeper Systems
-        this.sim.addSystem(new ExcavationSystem());
+        const excavation = new ExcavationSystem();
+        this.sim.addSystem(excavation);
         this.sim.addSystem(new VoxelDestructionSystem());
 
         this.agentSystem = new AgentSystem(this.jobs, this.constructionSystem);
         this.sim.addSystem(this.agentSystem);
+
+        // Register systems to dispatcher for command order
+        // Only systems that implement handleCommand need to be registered here
+        this.commandDispatcher.setSystems([
+            econ,
+            this.constructionSystem,
+            excavation
+        ]);
 
         // Render Systems
         const getHeight = (worldX: number, worldZ: number) => {

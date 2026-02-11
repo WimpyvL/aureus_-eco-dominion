@@ -130,6 +130,7 @@ export interface GameCommand {
     id: string; // Unique ID to prevent double execution
     type: 'PLACE_BUILDING' | 'PLACE_SUB_BUILDING' | 'BULLDOZE' | 'BULLDOZE_SUB' | 'SPEED_UP' | 'REHABILITATE' | 'UPGRADE_BUILDING' | 'EXPLODE_TILE' | 'COMMAND_AGENT' | 'BUY_BUILDING' | 'SELL_RESOURCE' | 'BUY_RESOURCE' | 'SET_AUTO_SELL' | 'QUEUE_DIG' | 'MARK_HARVEST' | 'RESEARCH_TECH' | 'DELIVER_CONTRACT' | 'ADVANCE_TUTORIAL';
     payload: any;
+    issuedAtTick?: number;
 }
 
 export interface GameState {
@@ -202,6 +203,27 @@ export interface GameState {
     // View Transition Loading Screen
     isLoading: boolean;
     loadingMessage: string;
+
+    // Command Pipeline
+    debug: {
+        commandTrace: Array<{
+            tick: number;
+            commandId: string;
+            commandType: string;
+            payloadSummary: string;
+            handledBy: string;
+            result: { ok: boolean; code?: string; reason?: string };
+        }>;
+    };
+    ui: {
+        lastCommandResult: {
+            commandId: string;
+            type: string;
+            ok: boolean;
+            code?: string;
+            reason?: string;
+        } | null;
+    };
 }
 
 export interface LogisticsState {

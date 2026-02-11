@@ -4,8 +4,8 @@
  */
 
 import { BaseSimSystem } from '../Simulation';
-import { FixedContext } from '../../kernel';
-import { GameState, BuildingType, SfxType } from '../../../types';
+import { FixedContext, CommandContext, CommandResult, CommandErrorCode } from '../../kernel/Types';
+import { GameState, BuildingType, SfxType, GameCommand } from '../../../types';
 import { BUILDINGS } from '../../data/VoxelConstants';
 import { getEcoMultiplier } from '../../utils/GameUtils';
 
@@ -18,9 +18,6 @@ export class EconomySystem extends BaseSimSystem {
     private readonly MARKET_INTERVAL = 2.0; // Seconds
 
     tick(ctx: FixedContext, state: GameState): void {
-        // 1. Process Commands
-        this.processCommandQueue(ctx, state);
-
         if (ctx.time - this.lastMarketUpdate < this.MARKET_INTERVAL) return;
         this.lastMarketUpdate = ctx.time;
 
@@ -78,54 +75,59 @@ export class EconomySystem extends BaseSimSystem {
         // Gems and AGT usually uncapped or separate
     }
 
-    private processCommandQueue(ctx: FixedContext, state: GameState) {
-        if (!state.commandQueue) return;
-
-        const economyCommands = ['BUY_BUILDING', 'SELL_RESOURCE', 'BUY_RESOURCE', 'SET_AUTO_SELL'];
-        for (let i = state.commandQueue.length - 1; i >= 0; i--) {
-            const cmd = state.commandQueue[i];
-            if (economyCommands.includes(cmd.type)) {
-                switch (cmd.type) {
-                    case 'BUY_BUILDING':
-                        this.handleBuyBuilding(cmd.payload.buildingType, cmd.payload.cost, state);
-                        break;
-                    case 'SELL_RESOURCE':
-                        this.handleSellResource(cmd.payload.resource, cmd.payload.address, state);
-                        break;
-                    case 'BUY_RESOURCE':
-                        this.handleBuyResource(cmd.payload.resource, cmd.payload.amount, state);
-                        break;
-                    case 'SET_AUTO_SELL':
-                        state.logistics.autoSell = cmd.payload.enabled;
-                        state.logistics.sellThreshold = cmd.payload.threshold;
-                        break;
-                }
-                state.commandQueue.splice(i, 1);
-            }
+    handleCommand(cmd: GameCommand, ctx: CommandContext, state: GameState): CommandResult | null {
+        switch (cmd.type) {
+            case 'BUY_BUILDING':
+                return this.handleBuyBuilding(cmd.payload.buildingType, cmd.payload.cost, state);
+            case 'SELL_RESOURCE':
+                return this.handleSellResource(cmd.payload.resource, cmd.payload.address, state);
+            case 'BUY_RESOURCE':
+                return this.handleBuyResource(cmd.payload.resource, cmd.payload.amount, state);
+            case 'SET_AUTO_SELL':
+                state.logistics.autoSell = cmd.payload.enabled;
+                state.logistics.sellThreshold = cmd.payload.threshold;
+                return { ok: true };
+            default:
+                return null;
         }
     }
 
-    private handleBuyBuilding(buildingType: string, cost: number, state: GameState) {
+    private handleBuyBuilding(buildingType: string, cost: number, state: GameState): CommandResult {
         const def = BUILDINGS[buildingType as BuildingType];
-        if (def && def.costs) {
+        if (!def) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: `Unknown building type: ${buildingType}` };
+
+        if (def.costs) {
+            // Check resources first
+            for (const [res, amt] of Object.entries(def.costs)) {
+                const resourceKey = res as keyof typeof state.resources;
+                if (typeof state.resources[resourceKey] === 'number' && (state.resources[resourceKey] as number) < (amt as number)) {
+                    state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+                    return { ok: false, code: CommandErrorCode.INSUFFICIENT_RESOURCES, reason: `Insufficient ${res}` };
+                }
+            }
+
+            // Deduct resources
             Object.entries(def.costs).forEach(([res, amt]) => {
                 const resourceKey = res as keyof typeof state.resources;
-                if (typeof state.resources[resourceKey] === 'number') {
-                    (state.resources[resourceKey] as number) -= (amt as number);
-                }
+                (state.resources[resourceKey] as number) -= (amt as number);
             });
         } else {
+            if (state.resources.agt < cost) {
+                state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+                return { ok: false, code: CommandErrorCode.INSUFFICIENT_RESOURCES, reason: 'Insufficient AGT' };
+            }
             state.resources.agt -= cost;
         }
 
         const bType = buildingType as BuildingType;
         state.inventory[bType] = (state.inventory[bType] || 0) + 1;
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
+        return { ok: true };
     }
 
-    private handleSellResource(resource: 'minerals' | 'gems' | 'wood' | 'stone', address: string | undefined, state: GameState) {
+    private handleSellResource(resource: 'minerals' | 'gems' | 'wood' | 'stone', address: string | undefined, state: GameState): CommandResult {
         const amount = state.resources[resource];
-        if (amount <= 0) return;
+        if (amount <= 0) return { ok: false, code: CommandErrorCode.INVALID_STATE, reason: `No ${resource} to sell` };
 
         if (resource === 'gems') {
             state.resources.gems = 0;
@@ -136,7 +138,7 @@ export class EconomySystem extends BaseSimSystem {
                 type: 'POSITIVE',
                 timestamp: state.tickCount
             });
-            return;
+            return { ok: true };
         }
 
         const ecoMult = getEcoMultiplier(state.resources.eco);
@@ -153,15 +155,16 @@ export class EconomySystem extends BaseSimSystem {
             type: 'POSITIVE',
             timestamp: state.tickCount
         });
+        return { ok: true };
     }
 
-    private handleBuyResource(resource: 'minerals' | 'gems' | 'wood' | 'stone', amount: number, state: GameState) {
+    private handleBuyResource(resource: 'minerals' | 'gems' | 'wood' | 'stone', amount: number, state: GameState): CommandResult {
         const price = state.market[resource].currentPrice * 1.25;
         const totalCost = Math.floor(price * amount);
 
         if (state.resources.agt < totalCost) {
             state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
-            return;
+            return { ok: false, code: CommandErrorCode.INSUFFICIENT_RESOURCES, reason: 'Insufficient AGT' };
         }
 
         state.resources.agt -= totalCost;
@@ -173,6 +176,7 @@ export class EconomySystem extends BaseSimSystem {
             type: 'NEUTRAL',
             timestamp: state.tickCount
         });
+        return { ok: true };
     }
 
     private fluatuateResource(ctx: FixedContext, m: any) {

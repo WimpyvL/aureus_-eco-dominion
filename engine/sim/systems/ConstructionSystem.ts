@@ -5,8 +5,8 @@
  */
 
 import { BaseSimSystem } from '../Simulation';
-import { FixedContext } from '../../kernel';
-import { GameState, GridTile, BuildingType, SfxType, Chunk } from '../../../types';
+import { FixedContext, CommandContext, CommandResult, CommandErrorCode } from '../../kernel/Types';
+import { GameState, GridTile, BuildingType, SfxType, Chunk, GameCommand } from '../../../types';
 import { BUILDINGS } from '../../data/VoxelConstants';
 import { updateWaterConnectivity } from '../../utils/GameUtils';
 import { ChunkStore } from '../../space/ChunkStore';
@@ -17,10 +17,7 @@ export class ConstructionSystem extends BaseSimSystem {
     readonly priority = 60; // Run high to handle placement/removal before sim systems
 
     tick(ctx: FixedContext, state: GameState): void {
-        // 1. Process Command Queue
-        this.processCommandQueue(ctx, state);
-
-        // 2. Passive Construction Progress (All head tiles under construction progress slowly)
+        // 1. Passive Construction Progress (All head tiles under construction progress slowly)
         if (state.tickCount % 60 === 0) {
             for (const chunk of Object.values(state.chunks)) {
                 for (const tile of chunk.tiles) {
@@ -38,46 +35,27 @@ export class ConstructionSystem extends BaseSimSystem {
         }
     }
 
-    private processCommandQueue(ctx: FixedContext, state: GameState) {
-        if (!state.commandQueue || state.commandQueue.length === 0) return;
-
-        // Process all commands
-        // We use a while loop or just iterate and clear.
-        // Since we are synchronous here, we can iterate and clear.
-        const queue = state.commandQueue;
-        for (const cmd of queue) {
-            // Check if already processed (though clearing prevents this)
-            // Execute
-            switch (cmd.type) {
-                case 'PLACE_BUILDING':
-                    this.placeBuilding(cmd.payload.x, cmd.payload.z, cmd.payload.buildingType, state, cmd.payload.isInstant);
-                    break;
-                case 'PLACE_SUB_BUILDING':
-                    this.placeSubBuilding(cmd.payload.x, cmd.payload.z, cmd.payload.buildingType, cmd.payload.layer, state, cmd.payload.isInstant);
-                    break;
-                case 'BULLDOZE':
-                    this.bulldozeBuilding(cmd.payload.x, cmd.payload.z, state);
-                    break;
-                case 'BULLDOZE_SUB':
-                    this.bulldozeSubBuilding(cmd.payload.x, cmd.payload.z, cmd.payload.layer, state);
-                    break;
-                case 'SPEED_UP':
-                    this.speedUpConstruction(cmd.payload.x, cmd.payload.z, state);
-                    break;
-                case 'REHABILITATE':
-                    this.rehabilitateTile(ctx, cmd.payload.x, cmd.payload.z, state);
-                    break;
-                case 'UPGRADE_BUILDING':
-                    this.handleUpgradeBuilding(cmd.payload.buildingId, state);
-                    break;
-                case 'MARK_HARVEST':
-                    this.handleMarkHarvest(cmd.payload.x, cmd.payload.z, state);
-                    break;
-            }
+    handleCommand(cmd: GameCommand, ctx: CommandContext, state: GameState): CommandResult | null {
+        switch (cmd.type) {
+            case 'PLACE_BUILDING':
+                return this.placeBuilding(cmd.payload.x, cmd.payload.z, cmd.payload.buildingType, state, cmd.payload.isInstant);
+            case 'PLACE_SUB_BUILDING':
+                return this.placeSubBuilding(cmd.payload.x, cmd.payload.z, cmd.payload.buildingType, cmd.payload.layer, state, cmd.payload.isInstant);
+            case 'BULLDOZE':
+                return this.bulldozeBuilding(cmd.payload.x, cmd.payload.z, state);
+            case 'BULLDOZE_SUB':
+                return this.bulldozeSubBuilding(cmd.payload.x, cmd.payload.z, cmd.payload.layer, state);
+            case 'SPEED_UP':
+                return this.speedUpConstruction(cmd.payload.x, cmd.payload.z, state);
+            case 'REHABILITATE':
+                return this.rehabilitateTile(ctx, cmd.payload.x, cmd.payload.z, state);
+            case 'UPGRADE_BUILDING':
+                return this.handleUpgradeBuilding(cmd.payload.buildingId, state);
+            case 'MARK_HARVEST':
+                return this.handleMarkHarvest(cmd.payload.x, cmd.payload.z, state);
+            default:
+                return null;
         }
-
-        // Clear Queue
-        state.commandQueue = [];
     }
 
     /**
@@ -185,13 +163,9 @@ export class ConstructionSystem extends BaseSimSystem {
         updateWaterConnectivity(state.chunks);
     }
 
-    /**
-     * Places a building on the grid.
-     * Handles multi-tile footprint and initial construction state.
-     */
-    public placeBuilding(x: number, z: number, buildingType: BuildingType, state: GameState, isInstant: boolean = false): void {
+    public placeBuilding(x: number, z: number, buildingType: BuildingType, state: GameState, isInstant: boolean = false): CommandResult {
         const def = BUILDINGS[buildingType];
-        if (!def) return;
+        if (!def) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: `Unknown building type: ${buildingType}` };
 
         const w = def.width || 1;
         const d = def.depth || 1;
@@ -204,6 +178,12 @@ export class ConstructionSystem extends BaseSimSystem {
                 const tx = x + dx;
                 const tz = z + dz;
                 const tile = ChunkStore.getTile(state.chunks, tx, tz);
+                if (!tile) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: `Tile at (${tx}, ${tz}) not found` };
+
+                if (tile.buildingType !== BuildingType.EMPTY && tile.buildingType !== BuildingType.POND) {
+                    return { ok: false, code: CommandErrorCode.TILE_OCCUPIED, reason: `Tile at (${tx}, ${tz}) is already occupied` };
+                }
+
                 if (tile) {
                     Object.assign(tile, {
                         buildingType,
@@ -239,9 +219,9 @@ export class ConstructionSystem extends BaseSimSystem {
      * Removes a building or foliage from a tile.
      * Handles multi-tile cleanup.
      */
-    public bulldozeBuilding(x: number, z: number, state: GameState): void {
+    public bulldozeBuilding(x: number, z: number, state: GameState): CommandResult {
         const tile = ChunkStore.getTile(state.chunks, x, z);
-        if (!tile) return;
+        if (!tile) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: 'Tile not found' };
 
         const updates: GridTile[] = [];
         const affectedChunks = new Set<string>();
@@ -307,9 +287,13 @@ export class ConstructionSystem extends BaseSimSystem {
     /**
      * Instantly completes construction for a gem cost.
      */
-    public speedUpConstruction(x: number, z: number, state: GameState): void {
+    public speedUpConstruction(x: number, z: number, state: GameState): CommandResult {
         const tile = ChunkStore.getTile(state.chunks, x, z);
-        if (!tile) return;
+        if (!tile) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: 'Tile not found' };
+
+        if (!tile.isUnderConstruction) return { ok: false, code: CommandErrorCode.INVALID_STATE, reason: 'No construction in progress' };
+
+        if (state.resources.gems < 1) return { ok: false, code: CommandErrorCode.INSUFFICIENT_RESOURCES, reason: 'Insufficient Gems' };
 
         const hx = tile.structureHeadX !== undefined ? tile.structureHeadX : x;
         const hz = tile.structureHeadZ !== undefined ? tile.structureHeadZ : z;
@@ -317,13 +301,23 @@ export class ConstructionSystem extends BaseSimSystem {
 
         state.resources.gems = Math.max(0, state.resources.gems - 1);
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
+        return { ok: true };
     }
 
     /**
      * Initiates rehabilitation of a polluted tile.
      */
-    public rehabilitateTile(ctx: FixedContext, x: number, z: number, state: GameState): void {
-        if (state.resources.agt < 100) return;
+    public rehabilitateTile(ctx: FixedContext, x: number, z: number, state: GameState): CommandResult {
+        if (state.resources.agt < 100) return { ok: false, code: CommandErrorCode.INSUFFICIENT_RESOURCES, reason: 'Insufficient AGT' };
+
+        const tile = ChunkStore.getTile(state.chunks, x, z);
+        if (!tile) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: 'Tile not found' };
+        if (!tile.foliage || tile.foliage === 'NONE') {
+            // Check if it's generally "dirty" or has some indicator we can use
+            if (tile.rehabProgress === undefined) {
+                return { ok: false, code: CommandErrorCode.INVALID_STATE, reason: 'Tile does not need rehabilitation' };
+            }
+        }
 
         const exists = state.jobs.some(j => j.type === 'REHABILITATE' && j.targetX === x && j.targetZ === z);
         if (!exists) {
@@ -342,15 +336,18 @@ export class ConstructionSystem extends BaseSimSystem {
                 const { cx, cz } = worldToChunk(x, z, CHUNK_SIZE);
                 state.pendingEffects.push({ type: 'CHUNK_UPDATE', cx, cz, updates: [tile] });
             }
+            return { ok: true };
+        } else {
+            return { ok: false, code: CommandErrorCode.ALREADY_PROCESSING, reason: 'Rehabilitation already in progress' };
         }
     }
 
-    public placeSubBuilding(x: number, z: number, buildingType: BuildingType, layer: number, state: GameState, isInstant: boolean = false): void {
+    public placeSubBuilding(x: number, z: number, buildingType: BuildingType, layer: number, state: GameState, isInstant: boolean = false): CommandResult {
         const tile = ChunkStore.getTile(state.chunks, x, z);
-        if (!tile) return;
+        if (!tile) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: 'Tile not found' };
 
         const def = BUILDINGS[buildingType];
-        if (!def) return;
+        if (!def) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: `Unknown sub-building type: ${buildingType}` };
 
         if (!tile.subBuildings) tile.subBuildings = {};
         if (!tile.digState) tile.digState = {};
@@ -369,23 +366,27 @@ export class ConstructionSystem extends BaseSimSystem {
         const { cx, cz } = worldToChunk(x, z, CHUNK_SIZE);
         state.pendingEffects.push({ type: 'CHUNK_UPDATE', cx, cz, updates: [tile] });
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BUILD_START });
+        return { ok: true };
     }
 
-    public bulldozeSubBuilding(x: number, z: number, layer: number, state: GameState): void {
+    public bulldozeSubBuilding(x: number, z: number, layer: number, state: GameState): CommandResult {
         const tile = ChunkStore.getTile(state.chunks, x, z);
-        if (!tile || !tile.subBuildings) return;
+        if (!tile || !tile.subBuildings) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: 'Tile or sub-buildings not found' };
 
         if (tile.subBuildings[layer]) {
             delete tile.subBuildings[layer];
             if (Object.keys(tile.subBuildings).length === 0) {
                 if (tile.digState) tile.digState[layer] = 0; // Filled
             }
+        } else {
+            return { ok: false, code: CommandErrorCode.INVALID_STATE, reason: `No sub-building on layer ${layer}` };
         }
 
         updateWaterConnectivity(state.chunks);
         const { cx, cz } = worldToChunk(x, z, CHUNK_SIZE);
         state.pendingEffects.push({ type: 'CHUNK_UPDATE', cx, cz, updates: [tile] });
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BULLDOZE });
+        return { ok: true };
     }
 
     /**
@@ -414,19 +415,19 @@ export class ConstructionSystem extends BaseSimSystem {
     /**
      * Upgrades a building to the next level.
      */
-    public upgradeBuilding(ctx: FixedContext, x: number, z: number, state: GameState): void {
+    public upgradeBuilding(ctx: FixedContext | CommandContext, x: number, z: number, state: GameState): CommandResult {
         const tile = ChunkStore.getTile(state.chunks, x, z);
-        if (!tile || tile.buildingType === BuildingType.EMPTY) return;
+        if (!tile || tile.buildingType === BuildingType.EMPTY) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: 'Building not found' };
 
         const hx = tile.structureHeadX !== undefined ? tile.structureHeadX : x;
         const hz = tile.structureHeadZ !== undefined ? tile.structureHeadZ : z;
         const headTile = ChunkStore.getTile(state.chunks, hx, hz);
-        if (!headTile) return;
+        if (!headTile) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: 'Structure head not found' };
 
         const def = BUILDINGS[headTile.buildingType];
         if (!def || !def.upgrades) {
             state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
-            return;
+            return { ok: false, code: CommandErrorCode.INVALID_STATE, reason: 'Building cannot be upgraded' };
         }
 
         const currentLevel = headTile.level || 1;
@@ -435,13 +436,13 @@ export class ConstructionSystem extends BaseSimSystem {
 
         if (!upgrade) {
             state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
-            return;
+            return { ok: false, code: CommandErrorCode.INVALID_STATE, reason: `No more upgrades for ${def.name}` };
         }
 
         if (upgrade.era && state.currentEra < upgrade.era && !state.unlockedEras?.includes(upgrade.era)) {
             if (!state.cheatsEnabled) {
                 state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
-                return;
+                return { ok: false, code: CommandErrorCode.FORBIDDEN, reason: 'Required era not unlocked' };
             }
         }
 
@@ -454,7 +455,7 @@ export class ConstructionSystem extends BaseSimSystem {
                 (state.resources.gems || 0) < (costs.gems || 0)) {
 
                 state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
-                return;
+                return { ok: false, code: CommandErrorCode.INSUFFICIENT_RESOURCES, reason: 'Insufficient resources for upgrade' };
             }
 
             state.resources.agt = (state.resources.agt || 0) - (costs.agt || 0);
@@ -510,24 +511,27 @@ export class ConstructionSystem extends BaseSimSystem {
             type: 'POSITIVE',
             timestamp: state.tickCount
         });
+
+        return { ok: true };
     }
 
-    private handleMarkHarvest(x: number, z: number, state: GameState) {
+    private handleMarkHarvest(x: number, z: number, state: GameState): CommandResult {
         const tile = ChunkStore.getTile(state.chunks, x, z);
-        if (!tile || !tile.foliage || tile.foliage === 'NONE') return;
+        if (!tile || !tile.foliage || tile.foliage === 'NONE') return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: 'No foliage to harvest' };
 
         tile.markedForHarvest = !tile.markedForHarvest;
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_CLICK });
+        return { ok: true };
     }
 
-    private handleUpgradeBuilding(id: string, state: GameState) {
+    private handleUpgradeBuilding(id: string, state: GameState): CommandResult {
         // Find building by ID
         for (const chunk of Object.values(state.chunks)) {
-            const tile = chunk.tiles.find(t => t.id === id || (t.buildingType !== BuildingType.EMPTY && t.x + '_' + t.z === id));
+            const tile = chunk.tiles.find(t => t.id.toString() === id || (t.buildingType !== BuildingType.EMPTY && t.x + '_' + t.z === id));
             if (tile) {
-                this.upgradeBuilding({ time: 0, delta: 0 } as any, tile.x, tile.z, state);
-                return;
+                return this.upgradeBuilding({ time: 0, delta: 0, fixedDt: 0, stepIndex: 0 } as any, tile.x, tile.z, state);
             }
         }
+        return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: `Building ${id} not found` };
     }
 }
