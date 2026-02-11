@@ -12,11 +12,7 @@ import { MiningHeadframeFactory } from './MiningHeadframe';
 import { SawmillFactory } from './Sawmill';
 import { StoneQuarryFactory } from './StoneQuarry';
 import { StorageDepotFactory } from './StorageDepot';
-import { StorageExtensionFactory } from './StorageExtension';
 import { WorkshopFactory } from './Workshop';
-import { SupportPillarFactory } from './SupportPillar';
-import { MiningDrillFactory } from './MiningDrill';
-import { UndergroundFansFactory } from './UndergroundFans';
 
 export const Era1Buildings = {
     [BuildingType.ROAD]: RoadFactory,
@@ -31,9 +27,5 @@ export const Era1Buildings = {
     [BuildingType.SAWMILL]: SawmillFactory,
     [BuildingType.STONE_QUARRY]: StoneQuarryFactory,
     [BuildingType.STORAGE_DEPOT]: StorageDepotFactory,
-    [BuildingType.STORAGE_EXTENSION]: StorageExtensionFactory,
-    [BuildingType.WORKSHOP]: WorkshopFactory,
-    [BuildingType.SUPPORT_PILLAR]: SupportPillarFactory,
-    [BuildingType.MINING_DRILL]: MiningDrillFactory,
-    [BuildingType.UNDERGROUND_FANS]: UndergroundFansFactory
+    [BuildingType.WORKSHOP]: WorkshopFactory
 };

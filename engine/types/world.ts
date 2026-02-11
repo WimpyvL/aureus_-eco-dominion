@@ -47,25 +47,16 @@ export interface WeatherState {
     intensity: number; // 0-1
 }
 
-export interface UndergroundTile {
-    excavated: boolean;
-    oreType?: 'GOLD' | 'IRON' | 'GEM' | 'COAL';
-    oreVisible: boolean;  // Fog-of-war: true when adjacent is excavated
-    supportType?: 'PILLAR' | 'WOOD_BEAM' | 'STEEL_BEAM';
-    collapseRisk: number; // 0-100
-    collapsed?: boolean;
-    trappedAgentIds?: string[];
-    rescueDeadline?: number; // Tick when agents die
-}
-
 import { BuildingType } from './buildings';
 
 export interface Chunk {
     cx: number;
     cz: number;
     tiles: GridTile[]; // Array of CHUNK_SIZE * CHUNK_SIZE
+
     meshDirty: boolean;
-    simDirty: boolean;
+    simDirty: boolean; // Surface sim dirty
+
     lastAccessTime: number;
     version: number;
 }
@@ -90,12 +81,4 @@ export interface GridTile {
     rehabProgress?: number; // 0-100
     markedForHarvest?: boolean;
     explored?: boolean;
-
-    // Dungeon Keeper System
-    underground: Record<number, UndergroundTile>; // Layer -1 to -10
-    hasEntrance?: boolean; // MINE_ENTRANCE on surface
-
-    // Legacy compatibility (to be deprecated or mapped to layer -1)
-    subBuildings?: Record<number, BuildingType>;
-    digState?: Record<number, number>;
 }

@@ -8,7 +8,6 @@ import { BuildingRenderSystem } from '../render/systems/BuildingRenderSystem';
 import { BuildingType, SfxType, Chunk } from '../../types';
 import { BUILDINGS } from '../../engine/data/VoxelConstants';
 import { ChunkStore } from '../../engine/space/ChunkStore';
-
 export class BuildingManager {
     private stateManager: StateManager;
     private buildingRenderSystem: BuildingRenderSystem;
@@ -25,7 +24,7 @@ export class BuildingManager {
         const state = this.stateManager.getState();
         const buildingType = (type || state.selectedBuilding) as BuildingType;
 
-        console.log('[BuildingManager] placeBuilding:', x, z, buildingType, state.viewMode);
+        console.log('[BuildingManager] placeBuilding:', x, z, buildingType);
 
         if (!buildingType) {
             console.warn('[BuildingManager] No buildingType');
@@ -49,12 +48,7 @@ export class BuildingManager {
             return;
         }
 
-        // Context-aware placement (surface vs underground)
-        if (state.viewMode === 'UNDERGROUND') {
-            this.placeUndergroundBuilding(x, z, buildingType, state);
-        } else {
-            this.placeSurfaceBuilding(x, z, buildingType, state);
-        }
+        this.placeSurfaceBuilding(x, z, buildingType, state);
     }
 
     /**
@@ -65,54 +59,9 @@ export class BuildingManager {
         this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.BUILD });
     }
 
-    /**
-     * Place a building underground
-     */
-    private placeUndergroundBuilding(x: number, z: number, buildingType: BuildingType, state: any): void {
-        const layer = state.currentUndergroundLayer;
-        const tile = ChunkStore.getTile(state.chunks, x, z);
-        const strata = tile?.underground ? tile.underground[layer] : null;
-
-        // Only allow subterranean construction on excavated tiles
-        if (!strata || !strata.excavated) {
-            console.warn('[BuildingManager] Cannot build on unexcavated bedrock');
-            this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.ERROR });
-            return;
-        }
-
-        const subterraneanTypes = [
-            BuildingType.PIPE,
-            BuildingType.SUPPORT_PILLAR,
-            BuildingType.MINING_DRILL,
-            BuildingType.UNDERGROUND_FANS,
-            BuildingType.ORE_EXTRACTOR
-        ];
-
-        if (subterraneanTypes.includes(buildingType)) {
-            this.stateManager.pushCommand('PLACE_SUB_BUILDING', { x, z, buildingType, layer });
-            this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.BUILD });
-        } else {
-            console.warn(`${buildingType} cannot be placed underground`);
-            this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.ERROR });
-        }
-    }
-
     bulldozeTile(x: number, z: number): void {
-        const state = this.stateManager.getState();
-        const tile = ChunkStore.getTile(state.chunks, x, z);
-        if (!tile) return;
-
-        if (state.viewMode === 'UNDERGROUND') {
-            const layer = state.currentUndergroundLayer;
-            const hasSub = tile.subBuildings && tile.subBuildings[layer];
-            if (hasSub) {
-                this.stateManager.pushCommand('BULLDOZE_SUB', { x, z, layer });
-                this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.BULLDOZE });
-            }
-        } else {
-            this.stateManager.pushCommand('BULLDOZE', { x, z });
-            this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.BUILD });
-        }
+        this.stateManager.pushCommand('BULLDOZE', { x, z });
+        this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.BUILD });
     }
 
     /**
@@ -140,13 +89,7 @@ export class BuildingManager {
     pinBuildingForConfirmation(x: number, z: number): void {
         const state = this.stateManager.getState();
         const tile = ChunkStore.getTile(state.chunks, x, z);
-        const surfaceY = tile ? tile.terrainHeight * 0.5 : 0;
-
-        let y = surfaceY;
-        if (state.viewMode === 'UNDERGROUND') {
-            // Use 2.0 depth scaling for underground layers
-            y = surfaceY + (state.currentUndergroundLayer * 2.0);
-        }
+        const y = tile ? tile.terrainHeight * 0.5 : 0;
 
         this.buildingRenderSystem.setPinnedGhost({ x, z }, y);
     }

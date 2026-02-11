@@ -91,7 +91,6 @@ export enum GameStep {
     TUTORIAL_PLACE = 'TUTORIAL_PLACE',
     TUTORIAL_NEEDS = 'TUTORIAL_NEEDS',
     TUTORIAL_POWER = 'TUTORIAL_POWER',
-    TUTORIAL_UNDERGROUND = 'TUTORIAL_UNDERGROUND',
     TUTORIAL_RESEARCH = 'TUTORIAL_RESEARCH',
     TUTORIAL_ERA = 'TUTORIAL_ERA',
     DEMO = 'DEMO',
@@ -128,30 +127,30 @@ export type SimulationEffect =
 
 export interface GameCommand {
     id: string; // Unique ID to prevent double execution
-    type: 'PLACE_BUILDING' | 'PLACE_SUB_BUILDING' | 'BULLDOZE' | 'BULLDOZE_SUB' | 'SPEED_UP' | 'REHABILITATE' | 'UPGRADE_BUILDING' | 'EXPLODE_TILE' | 'COMMAND_AGENT' | 'BUY_BUILDING' | 'SELL_RESOURCE' | 'BUY_RESOURCE' | 'SET_AUTO_SELL' | 'QUEUE_DIG' | 'MARK_HARVEST' | 'RESEARCH_TECH' | 'DELIVER_CONTRACT' | 'ADVANCE_TUTORIAL';
+    type: 'PLACE_BUILDING' | 'BULLDOZE' | 'SPEED_UP' | 'REHABILITATE' | 'UPGRADE_BUILDING' | 'EXPLODE_TILE' | 'COMMAND_AGENT' | 'BUY_BUILDING' | 'SELL_RESOURCE' | 'BUY_RESOURCE' | 'SET_AUTO_SELL' | 'MARK_HARVEST' | 'RESEARCH_TECH' | 'DELIVER_CONTRACT' | 'ADVANCE_TUTORIAL' | 'START_DEMO' | 'DISMISS_POPUP';
     payload: any;
     issuedAtTick?: number;
 }
 
 export interface GameState {
     resources: GameResources;
-    chunks: Record<string, Chunk>; // Key: "cx,cz"
+    chunks: Record<string, Chunk>; // Surface chunks
     agents: Agent[];
     jobs: Job[];
     inventory: Partial<Record<BuildingType, number>>;
     selectedBuilding: BuildingType | null;
     selectedAgentId: string | null;
-    interactionMode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG' | 'TEST_DESTRUCT';
+    interactionMode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'TEST_DESTRUCT';
     step: GameStep;
     tickCount: number;
     idCounter: number;
     seed: number;
-    viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON';
+    spawnX: number;  // World X offset for this game's starting point
+    spawnZ: number;  // World Z offset for this game's starting point
     logistics: LogisticsState;
     activeGoal: Goal | null;
     newsFeed: NewsItem[];
     activeEvents: GlobalEvent[];
-    currentUndergroundLayer: number; // Current subterranean depth being viewed (-1 to -10)
     research: ResearchState;
     debugMode: boolean;
     cheatsEnabled: boolean;
@@ -253,7 +252,6 @@ export type Action =
     | { type: 'ADVANCE_TUTORIAL' }
     | { type: 'SKIP_TUTORIAL' }
     | { type: 'RESET_GAME' }
-    | { type: 'TOGGLE_VIEW' }
     | { type: 'TOGGLE_DEBUG' }
     | { type: 'TOGGLE_CHEATS' }
     | { type: 'ENTER_FPS' }
@@ -265,8 +263,7 @@ export type Action =
     | { type: 'CLEAR_EFFECTS' }
     | { type: 'ACCEPT_CONTRACT', payload: string }
     | { type: 'DELIVER_CONTRACT', payload: string }
-    | { type: 'SET_INTERACTION_MODE', payload: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG' | 'TEST_DESTRUCT' }
-    | { type: 'CHANGE_LAYER', payload: { delta: number } }
+    | { type: 'SET_INTERACTION_MODE', payload: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'TEST_DESTRUCT' }
     | { type: 'EXPLODE_TILE', payload: { x: number, z: number, radius: number, damage: number } }
     | { type: 'SAVE_GAME' }
     | { type: 'LOAD_GAME', payload: GameState };

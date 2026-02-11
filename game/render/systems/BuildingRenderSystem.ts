@@ -41,7 +41,7 @@ export class BuildingRenderSystem {
     private ghostBuilding: THREE.Group | null = null;
     private ghostType: BuildingType | null = null;
     private pinnedGhostPos: { x: number, z: number } | null = null;
-    private currentViewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE';
+    private currentViewMode: 'SURFACE' | 'FIRST_PERSON' = 'SURFACE';
 
     // Materials / Geometry Reuse
     private particleGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
@@ -70,7 +70,7 @@ export class BuildingRenderSystem {
         this.scene.add(this.selectionCursor);
     }
 
-    public update(dt: number, time: number, chunks: Record<string, Chunk>, dirtyKeys?: Set<string>, viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE') {
+    public update(dt: number, time: number, chunks: Record<string, Chunk>, dirtyKeys?: Set<string>, viewMode: 'SURFACE' | 'FIRST_PERSON' = 'SURFACE') {
         this.currentViewMode = viewMode;
 
         // 1. Sync Grid Changes
@@ -98,19 +98,11 @@ export class BuildingRenderSystem {
                         const conn = this.getInfrastructureConnections(tile, chunks);
                         connectionHash = `_${conn.north}_${conn.south}_${conn.east}_${conn.west}`;
                     }
-                    // Sub-building hash
-                    let subHash = '';
-                    if (tile.subBuildings) {
-                        Object.entries(tile.subBuildings).forEach(([layer, type]) => {
-                            subHash += `_L${layer}:${type}`;
-                        });
-                    }
-
-                    const stateHash = `${tile.buildingType}_${tile.isUnderConstruction}_${tile.integrity}_${tile.waterStatus}_${tile.powerStatus}${connectionHash}${subHash}_VM:${viewMode}`;
+                    const stateHash = `${tile.buildingType}_${tile.isUnderConstruction}_${tile.integrity}_${tile.waterStatus}_${tile.powerStatus}_VM:${viewMode}`;
 
                     // Detect Changes
                     if (!cached || cached.type !== tile.buildingType || Math.abs(cached.progress - currentProgress) > 0.05 || cached.state !== stateHash) {
-                        this.updateTile(tile, currentProgress, chunks, viewMode);
+                        this.updateTile(tile, currentProgress, chunks);
                         this.tileCache.set(tile.id, {
                             type: tile.buildingType,
                             progress: currentProgress,
@@ -157,7 +149,7 @@ export class BuildingRenderSystem {
         };
     }
 
-    private updateTile(tile: GridTile, progress: number, chunks: Record<string, Chunk>, viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE') {
+    private updateTile(tile: GridTile, progress: number, chunks: Record<string, Chunk>) {
         // Remove existing
         if (this.buildingMeshes.has(tile.id)) {
             const mesh = this.buildingMeshes.get(tile.id)!;
@@ -166,11 +158,10 @@ export class BuildingRenderSystem {
             this.animatedElements.delete(tile.id);
         }
 
-        const hasSub = tile.subBuildings && Object.keys(tile.subBuildings).length > 0;
-        if (tile.buildingType === BuildingType.EMPTY && tile.foliage !== 'ILLEGAL_CAMP' && !hasSub) return;
+        if (tile.buildingType === BuildingType.EMPTY && tile.foliage !== 'ILLEGAL_CAMP') return;
 
         // Water is handled by TerrainRenderSystem now
-        if (tile.buildingType === BuildingType.POND && !hasSub) return;
+        if (tile.buildingType === BuildingType.POND) return;
 
         // Skip multi-tile tails (infrastructure excluded)
         if (tile.structureHeadX !== undefined && (tile.x !== tile.structureHeadX || tile.z !== tile.structureHeadZ) &&
@@ -194,7 +185,7 @@ export class BuildingRenderSystem {
         root.position.set(tile.x + dx, tile.terrainHeight * 0.5, tile.z + dz);
 
         // Render Main Building
-        if (tile.buildingType !== BuildingType.EMPTY && tile.buildingType !== BuildingType.POND) {
+        if (tile.buildingType !== BuildingType.EMPTY) {
             const seed = Math.abs(tile.x * 11 + tile.z * 17 + tile.id * 31);
             const config: any = {
                 isUnderConstruction: tile.isUnderConstruction,
@@ -213,10 +204,7 @@ export class BuildingRenderSystem {
 
             const buildingGroup = BuildingFactory[type]({ ...config, connections });
 
-            // NEW: Hide top side in underground view
-            if (viewMode === 'UNDERGROUND') {
-                buildingGroup.visible = false;
-            }
+
 
             if (tile.isUnderConstruction) {
                 const scale = 0.4 + (progress * 0.6);
@@ -243,37 +231,7 @@ export class BuildingRenderSystem {
             root.add(buildingGroup);
         }
 
-        // --- Sub-Building Rendering (Infrastructure Layer) ---
-        if (tile.subBuildings) {
-            Object.entries(tile.subBuildings).forEach(([layerStr, subType]) => {
-                const layer = parseInt(layerStr);
-                // For now, focus on Layer -1 (Infrastructure)
-                if (layer === -1 && BuildingFactory[subType]) {
-                    const subGroup = BuildingFactory[subType]({ waterStatus: tile.waterStatus });
-                    subGroup.position.y = -1.0; // Level -1
 
-                    // If construction is happening, apply effects
-                    if (tile.isUnderConstruction) {
-                        subGroup.traverse((c: any) => {
-                            if (c.isMesh) {
-                                c.material = new THREE.MeshStandardMaterial({
-                                    color: 0x00ffff, transparent: true, opacity: 0.6,
-                                    roughness: 0.2, metalness: 0.8, emissive: 0x00ffff, emissiveIntensity: 0.4
-                                });
-                            }
-                        });
-                    }
-
-                    root.add(subGroup);
-                }
-            });
-        }
-
-        // Render Trench/Excavation markers
-        if (tile.digState && tile.digState[-1] === 1) {
-            const trench = BuildingFactory['TRENCH']();
-            root.add(trench);
-        }
 
         // Collect Animations
         const anims: AnimationDef[] = [];
@@ -406,14 +364,12 @@ export class BuildingRenderSystem {
         }
     }
 
-    public setCursorMode(mode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG') {
+    public setCursorMode(mode: 'BUILD' | 'BULLDOZE' | 'INSPECT') {
         const mat = this.selectionCursor.material as THREE.MeshBasicMaterial;
         if (mode === 'BULLDOZE') {
             mat.color.setHex(0xf43f5e); // Red
         } else if (mode === 'INSPECT') {
             mat.color.setHex(0x3b82f6); // Blue
-        } else if (mode === 'DIG') {
-            mat.color.setHex(0xf59e0b); // Amber
         } else {
             mat.color.setHex(0x22c55e); // Green
         }
@@ -446,33 +402,7 @@ export class BuildingRenderSystem {
 
         // 3. Update Ghost Building Position
         if (this.ghostBuilding && this.pinnedGhostPos === null) {
-            // Use viewMode to determine layer validity, not y-coordinate
-            const isUndergroundView = this.currentViewMode === 'UNDERGROUND';
-
-            const subterraneanOnlyTypes = [
-                // PIPE is allowed on surface too, so it's not "subterranean-only"
-                BuildingType.SUPPORT_PILLAR,
-                BuildingType.MINING_DRILL,
-                BuildingType.UNDERGROUND_FANS,
-                BuildingType.ORE_EXTRACTOR
-            ];
-
-            const isSubterraneanOnlyType = subterraneanOnlyTypes.includes(this.ghostType!);
-            const isPipe = this.ghostType === BuildingType.PIPE;
-
-            // Subterranean-only buildings can only be placed underground
-            // PIPE can be placed anywhere
-            // All other buildings can only be placed on surface
-            const isValidForLayer = isUndergroundView
-                ? (isSubterraneanOnlyType || isPipe)
-                : (!isSubterraneanOnlyType);
-
-            // DEBUG: Log ghost visibility calculation
-            if (Math.random() < 0.01) {
-                console.log('[Ghost] viewMode:', this.currentViewMode, 'ghostType:', this.ghostType, 'isValidForLayer:', isValidForLayer, 'ghostPos:', ghostPos);
-            }
-
-            if (ghostPos && isValidForLayer) {
+            if (ghostPos) {
                 this.ghostBuilding.visible = true;
 
                 // Snap to grid

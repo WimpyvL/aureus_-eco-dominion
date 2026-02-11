@@ -64,11 +64,6 @@ export const getBuildingIcon = (type: BuildingType) => {
         // Era 5: Prosperity
         case BuildingType.MONUMENT: return <Trophy size={18} />;
         case BuildingType.SPACEPORT: return <Rocket size={18} />;
-        case BuildingType.SUPPORT_PILLAR: return <GitCommit size={18} />;
-        case BuildingType.MINING_DRILL: return <Pickaxe size={18} />;
-        case BuildingType.UNDERGROUND_FANS: return <Wind size={18} />;
-        case BuildingType.ORE_EXTRACTOR: return <Container size={18} />;
-        case BuildingType.STOCKPILE: return <Package size={18} />;
         default: return <X size={18} />;
     }
 };
@@ -114,7 +109,6 @@ const ITEM_CATEGORIES: Record<BuildingType, CategoryType> = {
     [BuildingType.SAFARI_LODGE]: 'ADVANCED',
     [BuildingType.GREEN_TECH_LAB]: 'ADVANCED',
     [BuildingType.STORAGE_DEPOT]: 'UTILITIES',
-    [BuildingType.STOCKPILE]: 'UTILITIES',
     [BuildingType.WORKSHOP]: 'BASICS',
     [BuildingType.GENERATOR]: 'UTILITIES',
     // Era 2: Growth
@@ -132,15 +126,10 @@ const ITEM_CATEGORIES: Record<BuildingType, CategoryType> = {
     // Era 5: Prosperity
     [BuildingType.SPACEPORT]: 'ADVANCED',
     [BuildingType.MONUMENT]: 'ADVANCED',
-    [BuildingType.SUPPORT_PILLAR]: 'BASICS',
-    [BuildingType.MINING_DRILL]: 'PRODUCTION',
-    [BuildingType.UNDERGROUND_FANS]: 'UTILITIES',
-    [BuildingType.ORE_EXTRACTOR]: 'PRODUCTION',
     [BuildingType.POWER_LINE]: 'BASICS',
     [BuildingType.EMPTY]: 'ALL',
     [BuildingType.SAWMILL]: 'PRODUCTION',
-    [BuildingType.STONE_QUARRY]: 'PRODUCTION',
-    [BuildingType.STORAGE_EXTENSION]: 'UTILITIES'
+    [BuildingType.STONE_QUARRY]: 'PRODUCTION'
 };
 
 export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dispatch, onClose, playSfx }) => {
@@ -155,7 +144,6 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
             BuildingType.ROAD, BuildingType.PIPE, BuildingType.FENCE,
             BuildingType.STAFF_QUARTERS, BuildingType.CANTEEN, BuildingType.WORKSHOP,
             BuildingType.WASH_PLANT, BuildingType.SOLAR_ARRAY, BuildingType.WATER_WELL, BuildingType.STORAGE_DEPOT,
-            BuildingType.STOCKPILE,
             BuildingType.MINING_HEADFRAME,
             // Era 2: Growth
             BuildingType.MEDICAL_BAY, BuildingType.TRAINING_CENTER, BuildingType.GENERATOR,
@@ -168,36 +156,18 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
             BuildingType.NATURE_RESERVE, BuildingType.HYDROPONICS, BuildingType.GEOTHERMAL_PLANT,
             // Era 5: Prosperity
             BuildingType.SAFARI_LODGE, BuildingType.GREEN_TECH_LAB,
-            BuildingType.MONUMENT, BuildingType.SPACEPORT,
-            // Underground
-            BuildingType.SUPPORT_PILLAR, BuildingType.MINING_DRILL, BuildingType.UNDERGROUND_FANS, BuildingType.ORE_EXTRACTOR
+            // Era 5: Prosperity
+            BuildingType.SAFARI_LODGE, BuildingType.GREEN_TECH_LAB,
+            BuildingType.MONUMENT, BuildingType.SPACEPORT
         ];
 
         return all.filter(type => {
             const matchesCategory = activeCategory === 'ALL' || ITEM_CATEGORIES[type] === activeCategory;
             const matchesSearch = BUILDINGS[type].name.toLowerCase().includes(searchQuery.toLowerCase());
 
-            // View Mode Filter
-            const isUndergroundItem = [
-                BuildingType.PIPE,
-                BuildingType.SUPPORT_PILLAR,
-                BuildingType.MINING_DRILL,
-                BuildingType.ORE_EXTRACTOR,
-                BuildingType.UNDERGROUND_FANS
-            ].includes(type);
-
-            if (state.viewMode === 'UNDERGROUND') {
-                return matchesCategory && matchesSearch && isUndergroundItem;
-            } else {
-                return matchesCategory && matchesSearch && !([
-                    BuildingType.SUPPORT_PILLAR,
-                    BuildingType.MINING_DRILL,
-                    BuildingType.ORE_EXTRACTOR,
-                    BuildingType.UNDERGROUND_FANS
-                ].includes(type));
-            }
+            return matchesCategory && matchesSearch;
         });
-    }, [activeCategory, searchQuery, state.viewMode]);
+    }, [activeCategory, searchQuery]);
 
     const sidebarRef = React.useRef<HTMLDivElement>(null);
 

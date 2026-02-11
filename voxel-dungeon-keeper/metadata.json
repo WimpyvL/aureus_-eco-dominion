@@ -1,0 +1,5 @@
+{
+  "name": "Voxel Dungeon Keeper",
+  "description": "A voxel-based dungeon management game where you command minions to expand your underground empire. Features procedural AI-driven banter and real-time voxel mining mechanics.",
+  "requestFramePermissions": []
+}

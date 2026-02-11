@@ -16,13 +16,13 @@ import { StreamingManager } from '../engine/space';
 import { JobSystem, MeshChunkResult, PathfindResult, WorkerPool } from '../engine/jobs';
 import { ThreeRenderAdapter } from '../engine/render';
 import { Simulation } from '../engine/sim';
-import { subterraneanClippingPlane } from '../engine/render/materials/VoxelMaterials';
 import {
     AgentSystem, JobGenerationSystem, EnvironmentSystem, EconomySystem,
     ColonySystem, LogisticsSystem, EventSystem, MissionSystem,
     ProductionSystem, ConstructionSystem, EraSystem,
-    PowerGridSystem, WaterNetworkSystem, ExcavationSystem,
-    TutorialDemoSystem, VoxelDestructionSystem, CommandDispatcher
+    PowerGridSystem, WaterNetworkSystem,
+    TutorialDemoSystem, CommandDispatcher,
+    ResearchSystem
 } from '../engine/sim/systems';
 import { PersistenceManager } from '../engine/sim/PersistenceManager';
 
@@ -35,15 +35,15 @@ import { BuildingRenderSystem } from './render/systems/BuildingRenderSystem';
 import { AgentRenderSystem } from './render/systems/AgentRenderSystem';
 import { EnvironmentRenderSystem } from './render/systems/EnvironmentRenderSystem';
 import { IsoCameraSystem } from './render/IsoCameraSystem';
-import { UndergroundDecorationSystem } from './render/systems/UndergroundDecorationSystem';
 import { InputSystem } from '../engine/input/InputSystem';
 import { StateManager, StateListener } from '../engine/state/StateManager';
 import {
     EconomyManager, BuildingManager, ResearchManager,
-    UndergroundManager, AgentManager
+    AgentManager
 } from './world';
 import { ChunkStore } from '../engine/space/ChunkStore';
-import { worldToChunk, CHUNK_SIZE } from '../engine/utils/coords';
+import { worldToChunk, worldToLocal, CHUNK_SIZE } from '../engine/utils/coords';
+
 
 export interface AureusWorldConfig {
     container: HTMLElement;
@@ -77,7 +77,6 @@ export class AureusWorld extends BaseWorld {
     private foliageRenderSystem: FoliageRenderSystem;
     private buildingRenderSystem: BuildingRenderSystem;
     private environmentRenderSystem: EnvironmentRenderSystem;
-    private undergroundDecorationSystem: UndergroundDecorationSystem;
     private cameraSystem: IsoCameraSystem;
 
     private persistenceManager: PersistenceManager;
@@ -86,7 +85,6 @@ export class AureusWorld extends BaseWorld {
     private economyManager: EconomyManager;
     private buildingManager: BuildingManager;
     private researchManager: ResearchManager;
-    private undergroundManager: UndergroundManager;
     private agentManager: AgentManager;
 
     // Terrain height callback (used by agents and input)
@@ -108,18 +106,6 @@ export class AureusWorld extends BaseWorld {
         // Initialize State Manager (Engine owns state)
         this.stateManager = new StateManager();
         this.persistenceManager = new PersistenceManager();
-
-        // Initialize World Managers
-        this.economyManager = new EconomyManager(this.stateManager);
-        this.buildingManager = new BuildingManager(this.stateManager, this.buildingRenderSystem);
-        this.researchManager = new ResearchManager(this.stateManager);
-        this.undergroundManager = new UndergroundManager(
-            this.stateManager,
-            this.cameraSystem,
-            this.terrainRenderSystem,
-            this.environmentRenderSystem
-        );
-        this.agentManager = new AgentManager(this.stateManager, this.cameraSystem);
 
         // Initialize engine subsystems
         this.streamMgr = new StreamingManager({
@@ -153,28 +139,32 @@ export class AureusWorld extends BaseWorld {
         this.sim.addSystem(new WaterNetworkSystem());
         this.sim.addSystem(new ProductionSystem());
         this.sim.addSystem(new EraSystem());
-        this.sim.addSystem(new TutorialDemoSystem());
+        const tutorialDemo = new TutorialDemoSystem();
+        this.sim.addSystem(tutorialDemo);
 
-        // Dungeon Keeper Systems
-        const excavation = new ExcavationSystem();
-        this.sim.addSystem(excavation);
-        this.sim.addSystem(new VoxelDestructionSystem());
+
 
         this.agentSystem = new AgentSystem(this.jobs, this.constructionSystem);
         this.sim.addSystem(this.agentSystem);
+
+        const researchSystem = new ResearchSystem();
+        this.sim.addSystem(researchSystem);
 
         // Register systems to dispatcher for command order
         // Only systems that implement handleCommand need to be registered here
         this.commandDispatcher.setSystems([
             econ,
             this.constructionSystem,
-            excavation
+            this.agentSystem,
+            researchSystem,
+            tutorialDemo
         ]);
 
         // Render Systems
         const getHeight = (worldX: number, worldZ: number) => {
             const state = this.stateManager.getState();
-            const tile = ChunkStore.getTile(state.chunks, Math.round(worldX), Math.round(worldZ));
+            const chunks = state.chunks;
+            const tile = ChunkStore.getTile(chunks, Math.round(worldX), Math.round(worldZ));
             return tile ? tile.terrainHeight * 0.5 : 0;
         };
 
@@ -194,7 +184,6 @@ export class AureusWorld extends BaseWorld {
         this.foliageRenderSystem = new FoliageRenderSystem(this.render.getScene());
         this.buildingRenderSystem = new BuildingRenderSystem(this.render.getScene());
         this.environmentRenderSystem = new EnvironmentRenderSystem(this.render);
-        this.undergroundDecorationSystem = new UndergroundDecorationSystem(this.render.getScene());
         this.cameraSystem = new IsoCameraSystem(this.render);
 
         // Wire Terrain -> Foliage
@@ -207,6 +196,17 @@ export class AureusWorld extends BaseWorld {
 
         // Enable camera by default (no legacy mode)
         this.cameraSystem.setEnabled(true);
+
+        // Jump camera to the randomized spawn location
+        const state = this.stateManager.getState();
+        this.cameraSystem.jumpTo(state.spawnX, state.spawnZ);
+
+        // Initialize World Managers (Must happen after Render Systems)
+        this.economyManager = new EconomyManager(this.stateManager);
+        this.buildingManager = new BuildingManager(this.stateManager, this.buildingRenderSystem);
+        this.researchManager = new ResearchManager(this.stateManager);
+        this.researchManager = new ResearchManager(this.stateManager);
+        this.agentManager = new AgentManager(this.stateManager, this.cameraSystem);
     }
 
 
@@ -231,7 +231,7 @@ export class AureusWorld extends BaseWorld {
         const state = this.stateManager.getState();
         const buildingType = (type || state.selectedBuilding) as BuildingType;
 
-        console.log('[placeBuilding] Called with (x, z):', x, z, 'buildingType:', buildingType, 'viewMode:', state.viewMode);
+        console.log('[placeBuilding] Called with (x, z):', x, z, 'buildingType:', buildingType);
 
         if (!buildingType) {
             console.warn('[placeBuilding] No buildingType, returning');
@@ -244,51 +244,6 @@ export class AureusWorld extends BaseWorld {
             return;
         }
 
-        // Validate placement
-        const tile = ChunkStore.getTile(state.chunks, x, z);
-        if (!tile) {
-            console.warn('[placeBuilding] Tile is null - generating chunk if needed?');
-            // In a real scenario, we'd ensure chunk exists or wait for load
-            return;
-        }
-        if (tile.buildingType !== BuildingType.EMPTY && tile.buildingType !== BuildingType.POND) {
-            console.warn('[placeBuilding] Tile is not empty or pond, current type:', tile.buildingType);
-            return;
-        }
-
-        // Context-aware placement
-        if (state.viewMode === 'UNDERGROUND') {
-            const layer = state.currentUndergroundLayer;
-            const strata = tile.underground ? tile.underground[layer] : null;
-
-            // Only allow subterranean construction on excavated tiles
-            if (!strata || !strata.excavated) {
-                console.warn("Cannot build on unexcavated bedrock.");
-                this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.ERROR });
-                return;
-            }
-
-            const subterraneanTypes = [
-                BuildingType.PIPE,
-                BuildingType.SUPPORT_PILLAR,
-                BuildingType.MINING_DRILL,
-                BuildingType.UNDERGROUND_FANS,
-                BuildingType.ORE_EXTRACTOR,
-                BuildingType.STOCKPILE
-            ];
-
-            if (subterraneanTypes.includes(buildingType)) {
-                this.stateManager.pushCommand('PLACE_SUB_BUILDING', { x, z, buildingType, layer });
-                this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.BUILD });
-                return;
-            } else {
-                console.warn(`${buildingType} cannot be placed underground.`);
-                this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.ERROR });
-                return;
-            }
-        }
-
-
         // Place via ConstructionSystem
         this.stateManager.pushCommand('PLACE_BUILDING', { x, z, buildingType });
 
@@ -298,18 +253,9 @@ export class AureusWorld extends BaseWorld {
 
     bulldozeTile(x: number, z: number): void {
         const state = this.stateManager.getState();
-        const tile = ChunkStore.getTile(state.chunks, x, z);
+        const chunks = state.chunks;
+        const tile = ChunkStore.getTile(chunks, x, z);
         if (!tile) return;
-
-        if (state.viewMode === 'UNDERGROUND') {
-            const layer = state.currentUndergroundLayer;
-            const hasSub = tile.subBuildings && tile.subBuildings[layer];
-            if (hasSub) {
-                this.stateManager.pushCommand('BULLDOZE_SUB', { x, z, layer });
-                this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.BULLDOZE });
-            }
-            return;
-        }
 
         this.stateManager.pushCommand('BULLDOZE', { x, z });
 
@@ -339,12 +285,7 @@ export class AureusWorld extends BaseWorld {
         const state = this.stateManager.getState();
         const tile = ChunkStore.getTile(state.chunks, x, z);
         const surfaceY = tile ? tile.terrainHeight * 0.5 : 0;
-
         let y = surfaceY;
-        if (state.viewMode === 'UNDERGROUND') {
-            // Use 2.0 depth scaling for underground layers
-            y = surfaceY + (state.currentUndergroundLayer * 2.0);
-        }
 
         // Pin the ghost building at this location for mobile confirmation
         this.buildingRenderSystem.setPinnedGhost({ x, z }, y);
@@ -363,7 +304,7 @@ export class AureusWorld extends BaseWorld {
         this.stateManager.pushCommand('COMMAND_AGENT', { agentId, x, z });
     }
 
-    setInteractionMode(mode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG'): void {
+    setInteractionMode(mode: 'BUILD' | 'BULLDOZE' | 'INSPECT'): void {
         this.stateManager.update({ interactionMode: mode });
         this.buildingRenderSystem.setCursorMode(mode);
     }
@@ -394,7 +335,7 @@ export class AureusWorld extends BaseWorld {
     }
 
     researchTech(techId: string): void {
-        this.researchManager.researchTech(techId);
+        this.stateManager.pushCommand('RESEARCH_TECH', { techId });
     }
 
     toggleDebug(): void {
@@ -425,41 +366,9 @@ export class AureusWorld extends BaseWorld {
      * Dismiss the era unlocked popup
      */
     dismissEraPopup(): void {
-        this.stateManager.update({ eraUnlockedPopup: null });
+        this.stateManager.pushCommand('DISMISS_POPUP', {});
     }
 
-    toggleViewMode(): void {
-        this.undergroundManager.toggleViewMode();
-    }
-
-    public changeUndergroundLayer(delta: number): void {
-        this.undergroundManager.changeUndergroundLayer(delta);
-    }
-
-    queueDig(x: number, z: number, layer: number): void {
-        this.undergroundManager.queueDig(x, z, layer);
-    }
-
-    private isLayerAccessible(x: number, z: number, layer: number, chunks: Record<string, Chunk>): boolean {
-        // Top layer always accessible from surface
-        if (layer === -1) return true;
-
-        const tile = ChunkStore.getTile(chunks, x, z);
-        if (!tile) return false;
-
-        // DK2 Priority: Horizontal access (from neighbors at same depth)
-        const offsets = [{ dx: 0, dz: -1 }, { dx: 0, dz: 1 }, { dx: -1, dz: 0 }, { dx: 1, dz: 0 }];
-
-        for (const off of offsets) {
-            const nt = ChunkStore.getTile(chunks, x + off.dx, z + off.dz);
-            if (nt && nt.underground[layer]?.excavated) return true;
-        }
-
-        // Vertical access (from layer above) - only if the tile directly above is excavated
-        if (tile.underground[layer + 1]?.excavated) return true;
-
-        return false;
-    }
 
     acceptContract(contractId: string): void {
         // Contracts use amount field, not status
@@ -467,34 +376,11 @@ export class AureusWorld extends BaseWorld {
     }
 
     advanceTutorial(): void {
-        const state = this.stateManager.getMutableState();
-        const steps = [
-            GameStep.INTRO,
-            GameStep.TUTORIAL_NAV,
-            GameStep.TUTORIAL_MINE,
-            GameStep.TUTORIAL_SELL,
-            GameStep.TUTORIAL_BUY,
-            GameStep.TUTORIAL_PLACE,
-            GameStep.TUTORIAL_NEEDS,
-            GameStep.TUTORIAL_POWER,
-            GameStep.TUTORIAL_UNDERGROUND,
-            GameStep.TUTORIAL_RESEARCH,
-            GameStep.TUTORIAL_ERA,
-            GameStep.DEMO,
-            GameStep.PLAYING
-        ];
-
-        const idx = steps.indexOf(state.step);
-        if (idx !== -1 && idx < steps.length - 1) {
-            this.stateManager.update({ step: steps[idx + 1] });
-            this.stateManager.pushEffect({ type: 'AUDIO', sfx: SfxType.UI_COIN });
-        }
+        this.stateManager.pushCommand('ADVANCE_TUTORIAL', {});
     }
 
     startDemo(): void {
-        this.stateManager.update({
-            step: GameStep.DEMO,
-        });
+        this.stateManager.pushCommand('START_DEMO', {});
         this.setGamePaused(false);
     }
 
@@ -543,7 +429,6 @@ export class AureusWorld extends BaseWorld {
 
             // Re-sync visual systems
             this.terrainRenderSystem.syncGrid(Object.values(loadedState.chunks).flatMap(c => (c as any).tiles));
-            this.changeUndergroundLayer(0); // Reset layer view
 
             console.log('[AureusWorld] Game Loaded.');
         } else {
@@ -561,32 +446,19 @@ export class AureusWorld extends BaseWorld {
         this.inputSystem = new InputSystem(this.render, this.getTerrainHeight);
 
         this.inputSystem.onTileClick = (x, z, isTouch) => {
-            if (this.stateManager.getState().viewMode === 'UNDERGROUND') {
-                this.handleUndergroundInteraction(x, z, 'click', isTouch);
-            } else {
-                this.handleSurfaceInteraction(x, z, 'click', isTouch);
-            }
+            this.handleSurfaceInteraction(x, z, 'click', isTouch);
         };
 
         this.inputSystem.onTileRightClick = (x, z, isTouch) => {
-            if (this.stateManager.getState().viewMode === 'UNDERGROUND') {
-                this.handleUndergroundInteraction(x, z, 'right-click', isTouch);
-            } else {
-                this.handleSurfaceInteraction(x, z, 'right-click', isTouch);
-            }
+            this.handleSurfaceInteraction(x, z, 'right-click', isTouch);
         };
 
         this.inputSystem.onTileHover = (x, z) => {
-            if (this.stateManager.getState().viewMode === 'UNDERGROUND') {
-                this.handleUndergroundInteraction(x || 0, z || 0, 'hover');
-            } else {
-                this.handleSurfaceInteraction(x || 0, z || 0, 'hover');
-            }
+            this.handleSurfaceInteraction(x || 0, z || 0, 'hover');
             if (this.config?.onTileHover) this.config.onTileHover(x, z);
         };
 
         this.inputSystem.init();
-        this.undergroundManager.setInputSystem(this.inputSystem);
     }
 
     protected async onInit(): Promise<void> {
@@ -598,66 +470,11 @@ export class AureusWorld extends BaseWorld {
         // Sync initial grid to worker
         const state = this.stateManager.getState();
 
-        // Procedural Underground Generation (Once per save)
-        // If underground layer is missing, generate it now
-        if (Object.keys(state.chunks).length > 0) {
-            let needsGen = false;
-            const firstChunk = Object.values(state.chunks)[0] as any;
-            if (firstChunk && firstChunk.tiles.length > 0) {
-                const t = firstChunk.tiles[0];
-                if (t && (!t.underground || Object.keys(t.underground).length === 0)) {
-                    needsGen = true;
-                }
-            }
-
-            if (needsGen) {
-                console.log("Generating underground layers...");
-                for (const chunk of Object.values(state.chunks)) {
-                    for (const tile of (chunk as any).tiles) {
-                        // Initialize underground structure if missing
-                        if (!tile.underground) tile.underground = {};
-
-                        // Layers -1 to -10
-                        for (let layer = -1; layer >= -10; layer--) {
-                            // Skip if already exists
-                            if (tile.underground[layer]) continue;
-
-                            // Default solid earth
-                            tile.underground[layer] = {
-                                excavated: false,
-                                collapseRisk: 0,
-                                oreVisible: false
-                            };
-
-                            // Ore Generation Logic
-                            const rand = Math.random();
-                            let oreType: 'GOLD' | 'IRON' | 'GEM' | 'COAL' | undefined;
-
-                            if (layer <= -8) { // Deep layers (-8 to -10): Gems, Gold
-                                if (rand < 0.05) oreType = 'GEM';
-                                else if (rand < 0.15) oreType = 'GOLD';
-                            } else if (layer <= -4) { // Mid layers (-4 to -7): Gold, Iron
-                                if (rand < 0.05) oreType = 'GOLD';
-                                else if (rand < 0.20) oreType = 'IRON';
-                                else if (rand < 0.30) oreType = 'COAL';
-                            } else { // Shallow layers (-1 to -3): Coal, Iron
-                                if (rand < 0.05) oreType = 'IRON';
-                                else if (rand < 0.15) oreType = 'COAL';
-                            }
-
-                            if (oreType) {
-                                tile.underground[layer].oreType = oreType;
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
         // Initial sync of all currently loaded chunks
         this.workerPool.broadcast({ type: 'SYNC_CHUNKS', payload: state.chunks });
         this.terrainRenderSystem.syncGrid(Object.values(state.chunks).flatMap(c => (c as any).tiles));
-        this.buildingRenderSystem.update(0, 0, state.chunks, new Set(), 'SURFACE');
+        this.buildingRenderSystem.update(0, 0, state.chunks, new Set());
         if (state.agents.length > 0) {
             const firstAgent = state.agents[0];
             this.cameraSystem.zoomToPosition(firstAgent.x, firstAgent.z, 2);
@@ -679,7 +496,6 @@ export class AureusWorld extends BaseWorld {
         // Save game on exit
         this.saveGameQuiet();
 
-        this.undergroundDecorationSystem.dispose();
         this.sim.dispose();
         this.workerPool.dispose();
         this.jobs.clear();
@@ -809,14 +625,37 @@ export class AureusWorld extends BaseWorld {
     draw(ctx: FrameContext): void {
         const state = this.stateManager.getState();
 
+        // Process and clear pending effects BEFORE render updates
+        // This ensures that worker state is synced (UPDATE_CHUNK) before we potentially dispatch MESH_CHUNK jobs
+        if (state.pendingEffects.length > 0) {
+            state.pendingEffects.forEach(effect => {
+                if (effect.type === 'AUDIO' && this.config?.onSfx) {
+                    this.config.onSfx(effect.sfx);
+                } else if (effect.type === 'FX') {
+                    this.buildingRenderSystem.triggerEffect(effect.x, effect.z, effect.fxType, 0);
+                } else if (effect.type === 'CHUNK_UPDATE') {
+                    this.terrainRenderSystem.updateChunk(effect.cx, effect.cz, effect.updates);
+
+                    // FIX: Sync chunk to worker
+                    const key = `${effect.cx},${effect.cz}`;
+                    const chunks = state.chunks;
+                    const chunk = chunks[key];
+                    if (chunk) {
+                        this.workerPool.broadcast({ type: 'UPDATE_CHUNK', payload: { key, chunk } });
+                    }
+                }
+            });
+            state.pendingEffects.length = 0;
+        }
+
         // Update render systems
         this.cameraSystem.update(ctx.dt);
         this.agentRenderSystem.setSelectedAgent(state.selectedAgentId);
         const zoomLevel = this.cameraSystem.cameraZoom;
-        this.agentRenderSystem.update(ctx.dt, ctx.time, state.agents, zoomLevel, state.viewMode);
+        this.agentRenderSystem.update(ctx.dt, ctx.time, state.agents, zoomLevel);
 
         this.terrainRenderSystem.update(this.cameraSystem.cameraFocus, this.render.getCamera());
-        this.buildingRenderSystem.update(ctx.dt, ctx.time, state.chunks, this.stateManager.getDirtyKeys(), state.viewMode);
+        this.buildingRenderSystem.update(ctx.dt, ctx.time, state.chunks, this.stateManager.getDirtyKeys());
 
         const cursor = this.inputSystem?.getCurrentCursor() || null;
         if (cursor) {
@@ -827,51 +666,11 @@ export class AureusWorld extends BaseWorld {
             const tile = ChunkStore.getTile(state.chunks, gx, gz);
             const surfaceY = tile ? tile.terrainHeight * 0.5 : 0;
 
-            if (state.viewMode === 'UNDERGROUND') {
-                let deepestLayer = 0;
-                if (tile?.underground) {
-                    for (let l = -1; l >= -10; l--) {
-                        if (tile.underground[l]?.excavated) {
-                            deepestLayer = l;
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                const depth = deepestLayer === 0 ? -1.0 : deepestLayer;
-                cursor.y = surfaceY + depth;
-            } else {
-                cursor.y = surfaceY;
-            }
+            cursor.y = surfaceY;
         }
 
-        if (state.viewMode === 'UNDERGROUND') {
-            // Find terrain height at camera focus to set base slice height
-            const focus = this.cameraSystem.cameraFocus;
-            const gx = Math.round(focus.x);
-            const gz = Math.round(focus.z);
-            const focusTile = ChunkStore.getTile(state.chunks, gx, gz);
-            const baseSurfaceY = focusTile ? focusTile.terrainHeight * 0.5 : 5.0;
-
-            // To hide everything ABOVE depth D, we use Normal(0, -1, 0)
-            subterraneanClippingPlane.normal.set(0, -1, 0);
-
-            // Set the cut-off with proper depth scaling (2 units per layer)
-            // This ensures we see the excavated volume properly
-            const layerDepth = state.currentUndergroundLayer * 2.0;
-            subterraneanClippingPlane.constant = baseSurfaceY + layerDepth + 1.0;
-        } else {
-            // Restore to "no clipping"
-            subterraneanClippingPlane.normal.set(0, 1, 0);
-            subterraneanClippingPlane.constant = 1000;
-            // Force disable clipping to be safe
-            this.render.getRenderer().localClippingEnabled = false;
-        }
-
-        // Enable clipping only in Underground mode
-        if (state.viewMode === 'UNDERGROUND') {
-            this.render.getRenderer().localClippingEnabled = true;
-        }
+        // Disable clipping in single-layer mode
+        this.render.getRenderer().localClippingEnabled = false;
 
         this.buildingRenderSystem.updateCursor(
             cursor,
@@ -885,32 +684,8 @@ export class AureusWorld extends BaseWorld {
             this.cameraSystem.cameraFocus
         );
 
-        this.undergroundDecorationSystem.update(
-            ctx.dt,
-            ctx.time,
-            state.viewMode,
-            this.cameraSystem.cameraFocus
-        );
-
         this.render.draw(ctx);
 
-        // Process and clear pending effects
-        if (state.pendingEffects.length > 0) {
-            state.pendingEffects.forEach(effect => {
-                if (effect.type === 'AUDIO' && this.config?.onSfx) {
-                    this.config.onSfx(effect.sfx);
-                } else if (effect.type === 'FX') {
-                    // buildingRenderSystem needs update
-                    this.buildingRenderSystem.triggerEffect(effect.x, effect.z, effect.fxType, 0);
-                } else if (effect.type === 'CHUNK_UPDATE') {
-                    // Update renderers for this chunk
-                    this.terrainRenderSystem.updateChunk(effect.cx, effect.cz, effect.updates);
-                    // No more global SYNC_GRID broadcast here, handles per chunk
-                }
-            });
-            // Clear the array (mutates the state object)
-            state.pendingEffects.length = 0;
-        }
 
         // Notify React of any state changes
         this.stateManager.notifyIfDirty();
@@ -947,7 +722,8 @@ export class AureusWorld extends BaseWorld {
         }
 
         // 2. Building/Tile Selection (notify React)
-        const tile = ChunkStore.getTile(state.chunks, x, z);
+        const chunks = state.chunks;
+        const tile = ChunkStore.getTile(chunks, x, z);
         if (!tile) return;
         const canHarvest = isHarvestable(tile.foliage);
 
@@ -979,37 +755,6 @@ export class AureusWorld extends BaseWorld {
         }
     }
 
-    private handleUndergroundInteraction(x: number, z: number, type: 'click' | 'right-click' | 'hover', isTouch: boolean = false) {
-        const state = this.stateManager.getState();
-        const config = this.config!;
-
-        if (type === 'hover') {
-            config.onTileHover?.(x, z);
-            const tile = ChunkStore.getTile(state.chunks, x, z);
-            if (tile?.underground) {
-                for (let l = -1; l >= -10; l--) {
-                    const strata = tile.underground[l];
-                    if (strata && strata.oreType && strata.oreVisible) {
-                        break;
-                    }
-                }
-            }
-            return;
-        }
-
-        if (type === 'right-click') {
-            if (state.selectedAgentId) {
-                this.stateManager.pushCommand('COMMAND_AGENT', { agentId: state.selectedAgentId, x, z });
-            }
-            config.onTileRightClick?.(x, z, isTouch);
-            return;
-        }
-
-        if (type === 'click') {
-            this.undergroundManager.queueDig(x, z, state.currentUndergroundLayer);
-        }
-        config.onTileClick?.(x, z, isTouch);
-    }
 
     // ═══════════════════════════════════════════════════════════════
 

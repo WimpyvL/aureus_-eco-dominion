@@ -8,6 +8,7 @@
 import { Chunk, GridTile, BuildingType, BiomeType } from '../../types';
 import { floorDiv, mod, toChunkKey, worldToChunk, worldToLocal } from '../utils/coords';
 import { getBiomeAt, getFoliageAt } from '../worldgen/Core';
+import { VOXEL_BUFFER_SIZE, getVoxelIndex, VoxelBits, V_ORE_MASK } from '../types/voxels';
 
 export const CHUNK_SIZE = 16;
 
@@ -21,7 +22,7 @@ export class ChunkStore {
         const key = toChunkKey(cx, cz);
         if (chunks[key]) return chunks[key];
 
-        const chunk = this.generateChunk(cx, cz, seed);
+        const chunk = this.createChunk(cx, cz, seed);
         chunks[key] = chunk;
         return chunk;
     }
@@ -29,7 +30,7 @@ export class ChunkStore {
     /**
      * Generates a new chunk deterministically based on coordinates and seed.
      */
-    private static generateChunk(cx: number, cz: number, seed: number): Chunk {
+    public static createChunk(cx: number, cz: number, seed: number = 0): Chunk {
         const tiles: GridTile[] = [];
         const worldOriginX = cx * CHUNK_SIZE;
         const worldOriginZ = cz * CHUNK_SIZE;
@@ -54,7 +55,6 @@ export class ChunkStore {
                     foliage,
                     locked: false,
                     explored: true,
-                    underground: {},
                     markedForHarvest: false
                 });
             }

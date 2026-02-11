@@ -80,12 +80,12 @@ export class AgentRenderSystem {
         // this.scene.add(this.eagle);
     }
 
-    public update(dt: number, totalTime: number, agents: Agent[], zoomLevel: number = 20, viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE') {
+    public update(dt: number, totalTime: number, agents: Agent[], zoomLevel: number = 20) {
         // Sync Agents
         this.syncMeshes(agents);
 
         // Animate
-        this.animate(dt, totalTime, zoomLevel, viewMode);
+        this.animate(dt, totalTime, zoomLevel);
     }
 
     public setSelectedAgent(id: string | null) {
@@ -216,12 +216,12 @@ export class AgentRenderSystem {
         });
     }
 
-    private animate(dt: number, time: number, zoomLevel: number, viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE') {
+    private animate(dt: number, time: number, zoomLevel: number) {
         const LOD_LOW = 160;
 
         // Eagle
         if (this.eagle) {
-            if (zoomLevel > LOD_LOW || viewMode === 'UNDERGROUND') {
+            if (zoomLevel > LOD_LOW) {
                 this.eagle.visible = false;
             } else {
                 this.eagle.visible = true;
@@ -233,33 +233,18 @@ export class AgentRenderSystem {
         this.agentMeshes.forEach((meshGroup, agentId) => {
             const targetPos = meshGroup.userData.targetPos;
             const agentData = meshGroup.userData.agentData as Agent;
-            const agentLayer = agentData?.layer || 0;
-
             // Pos Lerp
             if (targetPos) {
-                meshGroup.position.x = THREE.MathUtils.lerp(meshGroup.position.x, targetPos.x, 0.15);
-                meshGroup.position.z = THREE.MathUtils.lerp(meshGroup.position.z, targetPos.z, 0.15);
+                meshGroup.position.x = THREE.MathUtils.lerp(meshGroup.position.x, targetPos.x, 0.08); // Softened from 0.15
+                meshGroup.position.z = THREE.MathUtils.lerp(meshGroup.position.z, targetPos.z, 0.08); // Softened from 0.15
 
                 // Get terrain height at agent position
                 const terrainHeight = this.getHeightAt(meshGroup.position.x, meshGroup.position.z);
-
-                // Calculate Y position based on layer with 2.0 depth scaling
-                // Surface (layer 0): place directly on terrain
-                // Underground (layer < 0): place at terrain + (layer * 2.0) for proper depth
-                const targetY = agentLayer < 0 ? (terrainHeight + agentLayer * 2.0) : terrainHeight;
-                meshGroup.position.y = THREE.MathUtils.lerp(meshGroup.position.y, targetY, 0.3);
+                meshGroup.position.y = THREE.MathUtils.lerp(meshGroup.position.y, terrainHeight, 0.15); // Softened from 0.3
             }
 
-            // Visibility logic based on view mode and layer
-            if (viewMode === 'UNDERGROUND') {
-                // In underground mode, show agents that are underground
-                // Show agents at the current layer or within 1 layer of it for better visibility
-                const currentLayer = agentData?.layer || 0;
-                meshGroup.visible = currentLayer < 0;
-            } else {
-                // In surface mode, only show surface agents
-                meshGroup.visible = agentLayer === 0;
-            }
+            // Always visible on surface
+            meshGroup.visible = true;
 
             // Rot Lerp
             const targetRot = meshGroup.userData.targetRot;
@@ -267,7 +252,7 @@ export class AgentRenderSystem {
                 let diff = targetRot - meshGroup.rotation.y;
                 while (diff > Math.PI) diff -= Math.PI * 2;
                 while (diff < -Math.PI) diff += Math.PI * 2;
-                meshGroup.rotation.y += THREE.MathUtils.lerp(0, diff, 0.12);
+                meshGroup.rotation.y += THREE.MathUtils.lerp(0, diff, 0.06); // Softened from 0.12
             }
 
             // Status Indicators
@@ -307,25 +292,25 @@ export class AgentRenderSystem {
         if (zoomLevel > 140) return; // Static when far
 
         if (state === 'MOVING') {
-            const speed = 12;
+            const speed = 7; // Reduced from 12
             const walk = Math.sin(localTime * speed);
 
             // Legs
-            if (parts.legL) parts.legL.rotation.x = -walk * 0.6;
-            if (parts.legR) parts.legR.rotation.x = walk * 0.6;
+            if (parts.legL) parts.legL.rotation.x = -walk * 0.5; // Slightly reduced amplitude 0.6->0.5
+            if (parts.legR) parts.legR.rotation.x = walk * 0.5;
 
             // Arms (opposite to legs)
-            if (parts.armL) parts.armL.rotation.x = walk * 0.4;
-            if (parts.armR) parts.armR.rotation.x = -walk * 0.4;
+            if (parts.armL) parts.armL.rotation.x = walk * 0.3; // Reduced from 0.4
+            if (parts.armR) parts.armR.rotation.x = -walk * 0.3;
 
             // Subtle body bobbing
-            mesh.position.y += Math.abs(walk) * 0.02;
+            mesh.position.y += Math.abs(walk) * 0.01; // Reduced from 0.02
         } else if (state === 'WORKING') {
-            const speed = 15;
+            const speed = 9; // Reduced from 15
             const work = Math.sin(localTime * speed);
 
             // Hammering/working motion with right arm
-            if (parts.armR) parts.armR.rotation.x = -0.5 + work * 0.8;
+            if (parts.armR) parts.armR.rotation.x = -0.5 + work * 0.6; // Reduced amplitude 0.8->0.6
             if (parts.armL) parts.armL.rotation.x = 0.2;
 
             // Reset legs
@@ -333,11 +318,11 @@ export class AgentRenderSystem {
             if (parts.legR) parts.legR.rotation.x = 0;
         } else {
             // Idle breathing / bobbing
-            const breathe = Math.sin(localTime * 2);
+            const breathe = Math.sin(localTime * 1.2); // Reduced from 2
 
             // Very subtle arm movement
-            if (parts.armL) parts.armL.rotation.x = breathe * 0.05;
-            if (parts.armR) parts.armR.rotation.x = breathe * 0.05;
+            if (parts.armL) parts.armL.rotation.x = breathe * 0.03; // Reduced from 0.05
+            if (parts.armR) parts.armR.rotation.x = breathe * 0.03;
 
             // Reset legs
             if (parts.legL) parts.legL.rotation.x = 0;

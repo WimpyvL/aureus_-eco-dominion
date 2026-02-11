@@ -122,6 +122,12 @@ export class EconomySystem extends BaseSimSystem {
         const bType = buildingType as BuildingType;
         state.inventory[bType] = (state.inventory[bType] || 0) + 1;
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
+        state.newsFeed.unshift({
+            id: `buy_bld_${Date.now()}`,
+            headline: `Acquired 1 ${def.name}.`,
+            type: 'POSITIVE',
+            timestamp: state.tickCount
+        });
         return { ok: true };
     }
 

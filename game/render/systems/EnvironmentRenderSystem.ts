@@ -15,7 +15,7 @@ export class EnvironmentRenderSystem {
     // State
     private timeOfDay = 12000;
     private weather: 'CLEAR' | 'RAINY' | 'STORM' | 'TOXIC' | 'HEAT' = 'CLEAR';
-    private viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE';
+    private viewMode: 'SURFACE' | 'FIRST_PERSON' = 'SURFACE';
 
     // Target Values for Interpolation
     private targetBgColor = new THREE.Color(COLORS.BG);
@@ -143,7 +143,7 @@ export class EnvironmentRenderSystem {
         this.updateRain(dt);
     }
 
-    public setViewMode(mode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON') {
+    public setViewMode(mode: 'SURFACE' | 'FIRST_PERSON') {
         this.viewMode = mode;
     }
 
@@ -214,16 +214,7 @@ export class EnvironmentRenderSystem {
             this.targetLightIntensity = intensity;
         }
 
-        // Underground Override - tighter fog for cave atmosphere
-        if (this.viewMode === 'UNDERGROUND') {
-            this.targetBgColor.setHex(0x0f0f12); // Deep dark
-            this.targetFogColor.setHex(0x0f0f12);
-            this.targetFogNear = 60;
-            this.targetFogFar = 200;
-            this.targetLightColor.setHex(0x88aaff);
-            this.targetLightIntensity = 0.8;
-            this.isRaining = false;
-        }
+
     }
 
     private interpolate(dt: number) {
@@ -282,9 +273,16 @@ export class EnvironmentRenderSystem {
             this.sunMesh.scale.setScalar(1.0);
         }
 
-        // Move directional light to match sun position
+        // Move directional light to match sun position, relative to focus
         if (this.adapter.directionalLight) {
-            this.adapter.directionalLight.position.copy(sunPos);
+            this.adapter.directionalLight.position.set(
+                this.cameraFocus.x + sunPos.x,
+                sunPos.y,
+                this.cameraFocus.z + sunPos.z
+            );
+            // Bias helps prevent shadow acne on voxel surfaces
+            this.adapter.directionalLight.shadow.bias = -0.0001; // Slightly reduced bias -0.0005 was too aggressive
+            this.adapter.directionalLight.shadow.normalBias = 0.04; // Increased normal bias for better results on vertical faces
             // Light target follows camera
             this.adapter.directionalLight.target.position.set(
                 this.cameraFocus.x,

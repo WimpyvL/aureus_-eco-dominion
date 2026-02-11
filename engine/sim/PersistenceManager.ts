@@ -36,8 +36,7 @@ export class PersistenceManager {
                                 if (tile.terrainHeight !== 0 && tile.terrainHeight !== undefined) pruned.terrainHeight = tile.terrainHeight;
                                 if (tile.isUnderConstruction) pruned.isUnderConstruction = tile.isUnderConstruction;
                                 if (tile.markedForHarvest) pruned.markedForHarvest = tile.markedForHarvest;
-                                if (tile.underground) pruned.underground = tile.underground;
-                                if (tile.digState) pruned.digState = tile.digState;
+
                                 if (tile.structureHeadX !== undefined) pruned.structureHeadX = tile.structureHeadX;
                                 if (tile.structureHeadZ !== undefined) pruned.structureHeadZ = tile.structureHeadZ;
                                 if (tile.explored) pruned.explored = tile.explored;
@@ -101,7 +100,7 @@ export class PersistenceManager {
                         if (tile.level === undefined) tile.level = 1;
                         if (tile.foliage === undefined) tile.foliage = 'NONE';
                         if (tile.terrainHeight === undefined) tile.terrainHeight = 0;
-                        if (tile.underground === undefined) tile.underground = {};
+
 
                         // Ensure explored and unlocked
                         tile.locked = false;
@@ -150,7 +149,7 @@ export class PersistenceManager {
                         if (tile.level === undefined) tile.level = 1;
                         if (tile.foliage === undefined) tile.foliage = 'NONE';
                         if (tile.terrainHeight === undefined) tile.terrainHeight = 0;
-                        if (tile.underground === undefined) tile.underground = {};
+
 
                         // Ensure explored and unlocked
                         tile.locked = false;

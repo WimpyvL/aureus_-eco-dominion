@@ -24,7 +24,7 @@ export class TerrainRenderSystem {
 
     private chunks: Map<string, ChunkRenderData & { lod: number }> = new Map();
     private tileCache: Map<string, GridTile[]> = new Map();
-    private viewMode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON' = 'SURFACE';
+    private viewMode: 'SURFACE' | 'FIRST_PERSON' = 'SURFACE';
 
     // View radius in chunks (Reduced for optimization)
     private viewRadius = 5;
@@ -43,13 +43,22 @@ export class TerrainRenderSystem {
         this.jobSystem = jobSystem;
     }
 
-    public setViewMode(mode: 'SURFACE' | 'UNDERGROUND' | 'FIRST_PERSON'): void {
+    public setViewMode(mode: 'SURFACE' | 'FIRST_PERSON'): void {
         if (this.viewMode === mode) return;
         this.viewMode = mode;
         // Invalidate all chunks to force rebuild with new view mode
         for (const chunk of this.chunks.values()) {
             chunk.dirty = true;
         }
+    }
+
+    /**
+     * Forces a complete reload of all chunks
+     */
+    public forceReload(): void {
+        this.dispose();
+        this.lastCameraCx = -999;
+        this.lastCameraCz = -999;
     }
 
     /**
@@ -95,8 +104,8 @@ export class TerrainRenderSystem {
                     const xPos = cx * CHUNK_SIZE;
                     const zPos = cz * CHUNK_SIZE;
 
-                    // Define chunk bounds (Expanded for subterranean heights)
-                    box.min.set(xPos, -50, zPos);
+                    // Define chunk bounds
+                    box.min.set(xPos, -10, zPos);
                     box.max.set(xPos + CHUNK_SIZE, 80, zPos + CHUNK_SIZE);
 
                     if (!frustum.intersectsBox(box)) {
@@ -241,7 +250,7 @@ export class TerrainRenderSystem {
                 cx,
                 cz,
                 tiles,
-                viewMode: this.viewMode === 'UNDERGROUND' ? 'UNDERGROUND' : 'SURFACE',
+                viewMode: 'SURFACE',
                 lod
             }
         });

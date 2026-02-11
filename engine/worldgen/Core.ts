@@ -169,13 +169,6 @@ const Generators = {
         voxels.push({ x: 2, y: 3, z: 0, c: mat }); voxels.push({ x: 2, y: 4, z: 0, c: mat }); voxels.push({ x: 2, y: 5, z: 0, c: mat });
         return voxels;
     },
-    mineHole: () => {
-        const v: Voxel[] = [];
-        v.push({ x: 0, y: -1, z: 0, c: 'dead' });
-        v.push({ x: 1, y: 0, z: 0, c: 'rock' }); v.push({ x: -1, y: 0, z: 0, c: 'rock' });
-        v.push({ x: 0, y: 0, z: 1, c: 'rock' }); v.push({ x: 0, y: 0, z: -1, c: 'rock' });
-        return v;
-    }
 };
 
 export const TreeDefs: Record<string, () => Voxel[]> = {
@@ -191,8 +184,7 @@ export const TreeDefs: Record<string, () => Voxel[]> = {
     'BUSH_OAK': () => Generators.rock(1, 'leaf'),
     'SHRUB_DRY': () => Generators.rock(1, 'dead'),
     'CRYSTAL_SPIKE': () => [{ x: 0, y: 0, z: 0, c: 'crystal' }, { x: 0, y: 1, z: 0, c: 'crystal' }, { x: 0, y: 2, z: 0, c: 'crystal' }],
-    'GOLD_VEIN': () => Generators.rock(2, 'rock', 'gold'),
-    'MINE_HOLE': () => Generators.mineHole()
+    'GOLD_VEIN': () => Generators.rock(2, 'rock', 'gold')
 };
 
 export function getFoliageAt(x: number, z: number, biome: string, height: number, detail: number): FoliageType | 'GOLD_VEIN' | 'NONE' {

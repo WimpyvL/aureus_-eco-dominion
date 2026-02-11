@@ -25,7 +25,6 @@ export class IsoCameraSystem {
     public cameraElevation = Math.PI / 3.5;  // ~51 degrees
     public targetFocusY = 0;
     public currentFocusY = 0;
-    public undergroundMode = false;
 
     // Input State
     private isDragging = false;
@@ -367,12 +366,6 @@ export class IsoCameraSystem {
         this.targetFocusY = y;
     }
 
-    public setUndergroundMode(enabled: boolean): void {
-        this.undergroundMode = enabled;
-        // Re-calculate zoom immediately when mode changes
-        this.calculateAndSetZoom();
-    }
-
     public update(dt: number): void {
         // Smoothly interpolate vertical focus
         const lerpSpeed = 5.0; // Adjust for transition speed
@@ -399,9 +392,8 @@ export class IsoCameraSystem {
      * Centralized zoom calculation based on mode and current zoomLevel
      */
     private calculateAndSetZoom(): void {
-        // "Zoomed in more and zoom out alot less" - Requested by User
-        const base = this.undergroundMode ? 5 : 10;
-        const stepSize = this.undergroundMode ? 3 : 8;
+        const base = 10;
+        const stepSize = 8;
 
         this.cameraZoom = base + (this.zoomLevel * stepSize);
         this.updateCameraTransform();
@@ -497,6 +489,16 @@ export class IsoCameraSystem {
 
     public getZoom(): number {
         return this.cameraZoom;
+    }
+
+    /**
+     * Instantly jumps the camera to a specific world position
+     */
+    public jumpTo(worldX: number, worldZ: number): void {
+        this.cameraFocus.set(worldX, this.cameraFocus.y, worldZ);
+        this.targetFocusY = this.cameraFocus.y;
+        this.currentFocusY = this.cameraFocus.y;
+        this.updateCameraTransform();
     }
 
     /**

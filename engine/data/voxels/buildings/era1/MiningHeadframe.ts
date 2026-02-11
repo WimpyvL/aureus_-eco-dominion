@@ -140,12 +140,12 @@ function buildLevel3(opts?: FactoryOptions) {
     g.add(voxel(0.05, 7.0, 0.05, mats.metalLight, -0.35, 3.85, 0));
 
     // Ore chute and conveyor
-    g.add(voxel(0.9, 2.5, 0.9, mats.metal, 1.3, 1.6, 1.3));
-    g.add(voxel(2.2, 0.25, 0.7, mats.hazard, 2.3, 2.35, 1.3));
+    g.add(voxel(0.9, 2.5, 0.9, mats.metal, 1.1, 1.6, 1.1));
+    g.add(voxel(1.2, 0.25, 0.7, mats.hazard, 1.6, 2.35, 1.1));
 
     // Control shack
-    g.add(voxel(1.1, 1.1, 1.1, mats.metalLight, -1.6, 0.35, 1.1));
-    g.add(voxel(0.7, 0.5, 0.08, isPowered ? mats.glass : mats.darkPipe, -1.6, 0.7, 1.7));
+    g.add(voxel(1.1, 1.1, 1.1, mats.metalLight, -1.2, 0.35, 1.1));
+    g.add(voxel(0.7, 0.5, 0.08, isPowered ? mats.glass : mats.darkPipe, -1.2, 0.7, 1.7));
 
     // Warning light
     if (!opts?.isUnderConstruction) {
@@ -179,8 +179,8 @@ function buildLevel4(opts?: FactoryOptions) {
     g.add(voxel(1.8, 0.8, 0.2, mats.hazard, 0, 9.4, 0));
 
     // Automated conveyor system
-    g.add(voxel(1.2, 3.0, 1.2, mats.blueMetal, 1.8, 1.9, 1.5));
-    g.add(voxel(3.0, 0.3, 1.0, mats.metalLight, 3.0, 3.0, 1.5));
+    g.add(voxel(1.0, 3.0, 1.0, mats.blueMetal, 1.4, 1.9, 1.4));
+    g.add(voxel(1.2, 0.3, 0.8, mats.metalLight, 1.8, 3.0, 1.4));
 
     // Control building
     g.add(voxel(1.4, 1.4, 1.4, mats.concreteLight, -1.8, 0.4, 1.2));

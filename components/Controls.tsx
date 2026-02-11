@@ -12,34 +12,26 @@ interface ControlsProps {
     selectedBuilding: BuildingType | null;
     dispatch: React.Dispatch<Action>;
     setSidebarOpen: (mode: 'NONE' | 'OPS' | 'SHOP' | 'TRADE' | 'CREW' | 'TECH') => void;
-    viewMode: string;
     playSfx: (type: any) => void;
     step: GameStep;
     debugMode: boolean;
-    interactionMode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG' | 'TEST_DESTRUCT';
+    interactionMode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'TEST_DESTRUCT';
 }
 
-export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding, dispatch, setSidebarOpen, viewMode, playSfx, step, debugMode, interactionMode }) => {
+export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding, dispatch, setSidebarOpen, playSfx, step, debugMode, interactionMode }) => {
     // ... (keep existing render logic for selectedBuilding)
-    if (selectedBuilding || interactionMode === 'DIG') {
+    if (selectedBuilding) {
         return (
             <div className="absolute bottom-20 sm:bottom-12 left-4 right-4 z-50 animate-in slide-in-from-bottom-4 pointer-events-auto flex flex-col gap-2 max-w-sm mx-auto items-center">
-                <div className={`
-                    px-4 py-2.5 rounded-[4px] border-2 shadow-[4px_4px_0_0_rgba(0,0,0,0.4)] font-bold flex items-center justify-center gap-2 text-xs
-                    ${interactionMode === 'DIG' ? 'bg-amber-600 text-amber-950 border-amber-900' : 'bg-amber-500 text-amber-950 border-amber-800'}
-                `}>
-                    {interactionMode === 'DIG' ? <Pickaxe size={16} className="animate-pulse" /> : <Hammer size={16} className="animate-pulse" />}
+                <div className="px-4 py-2.5 rounded-[4px] border-2 shadow-[4px_4px_0_0_rgba(0,0,0,0.4)] font-bold flex items-center justify-center gap-2 text-xs bg-amber-500 text-amber-950 border-amber-800">
+                    <Hammer size={16} className="animate-pulse" />
                     <span className="font-['Rajdhani'] uppercase tracking-wider">
-                        {interactionMode === 'DIG' ? 'Excavation Mode: Click Tile to Dig' : `Deploy: ${BUILDINGS[selectedBuilding!].name}`}
+                        {`Deploy: ${BUILDINGS[selectedBuilding!].name}`}
                     </span>
                 </div>
                 <button
                     onClick={() => {
-                        if (interactionMode === 'DIG') {
-                            dispatch({ type: 'SET_INTERACTION_MODE', payload: 'INSPECT' });
-                        } else {
-                            dispatch({ type: 'SELECT_BUILDING_TO_PLACE', payload: null });
-                        }
+                        dispatch({ type: 'SELECT_BUILDING_TO_PLACE', payload: null });
                         playSfx('UI_CLICK');
                     }}
                     className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-[4px] border-2 border-b-4 border-slate-950 font-bold text-xs flex items-center justify-center gap-2 active:border-b-2 active:translate-y-0.5 transition-all shadow-lg"
@@ -92,22 +84,7 @@ export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding,
                 >
                     <Activity size={18} className={debugMode ? 'text-white' : 'text-slate-400'} />
                 </button>
-                <button
-                    onClick={() => {
-                        dispatch({ type: 'TOGGLE_VIEW' });
-                        playSfx('UI_CLICK');
-                    }}
-                    className={`
-                    w-12 h-12 rounded-[4px] flex items-center justify-center transition-all
-                    border-2 border-b-[4px] 
-                    ${viewMode === 'UNDERGROUND'
-                            ? 'bg-purple-600 border-purple-900 border-b-2 translate-y-[2px]'
-                            : 'bg-slate-800 border-slate-950 hover:-translate-y-0.5'
-                        }
-                    `}
-                >
-                    <Layers size={20} className={viewMode === 'UNDERGROUND' ? 'text-white' : 'text-slate-400'} />
-                </button>
+
                 <button
                     onClick={() => {
                         setSidebarOpen('TRADE');
@@ -120,19 +97,7 @@ export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding,
                 >
                     <TrendingUp size={20} className="text-blue-400" />
                 </button>
-                <button
-                    onClick={() => {
-                        dispatch({ type: 'SET_INTERACTION_MODE', payload: 'DIG' });
-                        playSfx('UI_CLICK');
-                    }}
-                    className={`
-                    w-12 h-12 rounded-[4px] flex items-center justify-center transition-all
-                    border-2 border-b-[4px] 
-                    bg-slate-800 border-slate-950 hover:-translate-y-0.5
-                    `}
-                >
-                    <Pickaxe size={20} className="text-slate-400" />
-                </button>
+
             </div>
 
             {/* Build Button (Right) */}

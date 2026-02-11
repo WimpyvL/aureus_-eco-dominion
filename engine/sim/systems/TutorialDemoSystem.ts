@@ -12,6 +12,37 @@ export class TutorialDemoSystem extends BaseSimSystem {
     readonly id = 'tutorial-demo';
     readonly priority = -10;
 
+    handleCommand(cmd: any, ctx: any, state: GameState): any {
+        if (cmd.type === 'ADVANCE_TUTORIAL') {
+            const steps = [
+                GameStep.INTRO, GameStep.TUTORIAL_NAV, GameStep.TUTORIAL_MINE,
+                GameStep.TUTORIAL_SELL, GameStep.TUTORIAL_BUY, GameStep.TUTORIAL_PLACE,
+                GameStep.TUTORIAL_NEEDS, GameStep.TUTORIAL_POWER, GameStep.TUTORIAL_UNDERGROUND,
+                GameStep.TUTORIAL_RESEARCH, GameStep.TUTORIAL_ERA, GameStep.DEMO,
+                GameStep.PLAYING
+            ];
+            const idx = steps.indexOf(state.step);
+            if (idx !== -1 && idx < steps.length - 1) {
+                state.step = steps[idx + 1];
+                state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
+                return { ok: true };
+            }
+            return { ok: false, reason: 'Already at end' };
+        }
+
+        if (cmd.type === 'START_DEMO') {
+            state.step = GameStep.DEMO;
+            return { ok: true };
+        }
+
+        if (cmd.type === 'DISMISS_POPUP') {
+            state.eraUnlockedPopup = null;
+            return { ok: true };
+        }
+
+        return null;
+    }
+
     private stateInitialized = false;
     private timer = 0;
     private taskIndex = 0;
@@ -56,8 +87,8 @@ export class TutorialDemoSystem extends BaseSimSystem {
         state.currentEra = Era.SETTLEMENT;
         state.unlockedEras = [Era.SETTLEMENT];
 
-        const cx = 0;
-        const cz = 0;
+        const cx = state.spawnX || 0;
+        const cz = state.spawnZ || 0;
         this.tasks = [];
 
         const pos = (dx: number, dz: number) => ({ x: cx + dx, z: cz + dz });

@@ -1,13 +1,13 @@
 /**
  * Engine Pathfinding Algorithm (A*)
+ * Surface-only 2D implementation.
  */
 
 import { GridTile, BuildingType, Chunk } from '../../../types';
 import { ChunkStore } from '../../space/ChunkStore';
 import { BinaryHeap } from '../../utils/BinaryHeap';
+import { CHUNK_SIZE, worldToChunk, worldToLocal } from '../../utils/coords';
 
-
-// Costs for different terrains
 // Costs for different terrains
 export const COST = {
     ROAD: 0.5,
@@ -20,54 +20,46 @@ export const COST = {
 interface PathNode {
     x: number;
     z: number;
-    layer: number;
     f: number;
 }
 
-const getDistance3D = (ax: number, az: number, al: number, bx: number, bz: number, bl: number) => {
-    // Chebyshev distance + vertical difference
-    return Math.max(Math.abs(ax - bx), Math.abs(az - bz)) + Math.abs(al - bl);
+const getDistance2D = (ax: number, az: number, bx: number, bz: number) => {
+    // Chebyshev distance for 8-way movement
+    return Math.max(Math.abs(ax - bx), Math.abs(az - bz));
 };
 
-const getTileCostAtLayer = (tile: GridTile, layer: number): number => {
-    if (layer === 0) {
-        if (tile.buildingType === BuildingType.ROAD) return COST.ROAD;
-        if (tile.buildingType !== BuildingType.EMPTY && !tile.isUnderConstruction && tile.buildingType !== BuildingType.POND) return 1.0; // Indoors
+const getTileCost = (tile: GridTile): number => {
+    if (tile.buildingType === BuildingType.ROAD) return COST.ROAD;
+    if (tile.buildingType !== BuildingType.EMPTY && !tile.isUnderConstruction && tile.buildingType !== BuildingType.POND) return 1.0; // Indoors
 
-        switch (tile.biome) {
-            case 'SAND': return COST.OBSTACLE;
-            case 'SNOW': return COST.OBSTACLE;
-            case 'STONE': return COST.ROUGH;
-            default: return COST.BASE;
-        }
-    } else {
-        // Underground is always "Rough" stone unless we add paths
-        const strata = tile.underground?.[layer];
-        if (!strata || !strata.excavated) return Infinity; // impassable
-        return COST.ROUGH;
+    switch (tile.biome) {
+        case 'SAND': return COST.OBSTACLE;
+        case 'SNOW': return COST.OBSTACLE;
+        case 'STONE': return COST.ROUGH;
+        default: return COST.BASE;
     }
 };
 
 /**
- * A* Pathfinding (3D Layer Aware)
- * Returns array of { x, z, layer } steps
+ * A* Pathfinding (Surface 2D)
+ * Returns array of { x, z } steps
  */
-export function findPath3D(
-    startX: number, startZ: number, startLayer: number,
-    endX: number, endZ: number, endLayer: number,
+export function findPath(
+    startX: number, startZ: number,
+    endX: number, endZ: number,
     chunks: Record<string, Chunk>
-): { x: number, z: number, layer: number }[] | null {
-    if (startX === endX && startZ === endZ && startLayer === endLayer) {
-        return [{ x: endX, z: endZ, layer: endLayer }];
+): { x: number, z: number }[] | null {
+    if (startX === endX && startZ === endZ) {
+        return [{ x: endX, z: endZ }];
     }
 
     const openSet = new BinaryHeap<PathNode>((a, b) => a.f - b.f);
-    openSet.push({ x: startX, z: startZ, layer: startLayer, f: getDistance3D(startX, startZ, startLayer, endX, endZ, endLayer) });
+    openSet.push({ x: startX, z: startZ, f: getDistance2D(startX, startZ, endX, endZ) });
 
-    const cameFrom = new Map<string, { x: number, z: number, layer: number }>();
+    const cameFrom = new Map<string, { x: number, z: number }>();
     const gScore = new Map<string, number>();
 
-    const startKey = `${startX},${startZ},${startLayer}`;
+    const startKey = `${startX},${startZ}`;
     gScore.set(startKey, 0);
 
     const visited = new Set<string>();
@@ -80,17 +72,17 @@ export function findPath3D(
         if (iterations > MAX_ITERATIONS) return null;
 
         const current = openSet.pop()!;
-        const { x: cx, z: cz, layer: cL } = current;
-        const currentKey = `${cx},${cz},${cL}`;
+        const { x: cx, z: cz } = current;
+        const currentKey = `${cx},${cz}`;
 
-        if (cx === endX && cz === endZ && cL === endLayer) {
+        if (cx === endX && cz === endZ) {
             // Reconstruct
-            const path = [{ x: cx, z: cz, layer: cL }];
+            const path = [{ x: cx, z: cz }];
             let currKey = currentKey;
             while (cameFrom.has(currKey)) {
                 const prev = cameFrom.get(currKey)!;
                 path.unshift(prev);
-                currKey = `${prev.x},${prev.z},${prev.layer}`;
+                currKey = `${prev.x},${prev.z}`;
             }
             return path.slice(1);
         }
@@ -98,71 +90,43 @@ export function findPath3D(
         if (visited.has(currentKey)) continue;
         visited.add(currentKey);
 
-        const currentTile = ChunkStore.getTile(chunks, cx, cz);
-        if (!currentTile) continue;
-
-        // --- 1. Lateral Neighbors (Same Layer) ---
+        // --- Lateral Neighbors ---
         for (let dz = -1; dz <= 1; dz++) {
             for (let dx = -1; dx <= 1; dx++) {
                 if (dx === 0 && dz === 0) continue;
 
                 const nx = cx + dx, nz = cz + dz;
-                const nKey = `${nx},${nz},${cL}`;
+                const nKey = `${nx},${nz}`;
                 if (visited.has(nKey)) continue;
 
-                const neighborTile = ChunkStore.getTile(chunks, nx, nz);
+                const { cx: ncx, cz: ncz } = worldToChunk(nx, nz, CHUNK_SIZE);
+                const nChunk = chunks[`${ncx},${ncz}`];
+                if (!nChunk) continue;
+
+                const { lx, lz } = worldToLocal(nx, nz, CHUNK_SIZE);
+                const neighborTile = nChunk.tiles[lx + lz * CHUNK_SIZE];
                 if (!neighborTile || neighborTile.locked) continue;
 
-                const cost = getTileCostAtLayer(neighborTile, cL);
-                if (cost === Infinity) continue;
+                let cost = getTileCost(neighborTile);
+
+                // Special case: Allow reaching the destination even if it's technically impassable (e.g. for construction)
+                if (cost === Infinity) {
+                    if (nx === endX && nz === endZ) {
+                        cost = COST.OBSTACLE;
+                    } else {
+                        continue;
+                    }
+                }
 
                 const tentativeG = (gScore.get(currentKey) ?? Infinity) + cost;
                 if (tentativeG < (gScore.get(nKey) ?? Infinity)) {
-                    cameFrom.set(nKey, { x: cx, z: cz, layer: cL });
+                    cameFrom.set(nKey, { x: cx, z: cz });
                     gScore.set(nKey, tentativeG);
-                    openSet.push({ x: nx, z: nz, layer: cL, f: tentativeG + getDistance3D(nx, nz, cL, endX, endZ, endLayer) });
-                }
-            }
-        }
-
-        // --- 2. Vertical Neighbors (Shafts/Entrances) ---
-        // Potential layers to check: cL-1 and cL+1
-        const layers = [cL - 1, cL + 1];
-        for (const nL of layers) {
-            if (nL < -10 || nL > 0) continue;
-
-            const nKey = `${cx},${cz},${nL}`;
-            if (visited.has(nKey)) continue;
-
-            // Transition Logic
-            let canTransition = false;
-            if (cL === 0 && nL === -1) {
-                if (currentTile.hasEntrance) canTransition = true;
-            } else if (cL === -1 && nL === 0) {
-                if (currentTile.hasEntrance) canTransition = true;
-            } else {
-                // Between -1 and -10
-                const strataAbove = currentTile.underground?.[Math.max(cL, nL)];
-                const strataBelow = currentTile.underground?.[Math.min(cL, nL)];
-                if (strataAbove?.excavated && strataBelow?.excavated) canTransition = true;
-            }
-
-            if (canTransition) {
-                const tentativeG = (gScore.get(currentKey) ?? Infinity) + 1.0; // Vertical move cost
-                if (tentativeG < (gScore.get(nKey) ?? Infinity)) {
-                    cameFrom.set(nKey, { x: cx, z: cz, layer: cL });
-                    gScore.set(nKey, tentativeG);
-                    openSet.push({ x: cx, z: cz, layer: nL, f: tentativeG + getDistance3D(cx, cz, nL, endX, endZ, endLayer) });
+                    openSet.push({ x: nx, z: nz, f: tentativeG + getDistance2D(nx, nz, endX, endZ) });
                 }
             }
         }
     }
 
     return null;
-}
-
-/** Legacy wrapper for surface-only pathfinding */
-export function findPath(startX: number, startZ: number, endX: number, endZ: number, chunks: Record<string, Chunk>): { x: number, z: number }[] | null {
-    const path3d = findPath3D(startX, startZ, 0, endX, endZ, 0, chunks);
-    return path3d ? path3d.map(p => ({ x: p.x, z: p.z })) : null;
 }

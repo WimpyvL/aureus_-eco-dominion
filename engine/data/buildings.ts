@@ -37,7 +37,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
         buildTime: 5,
         maintenance: 0.5,
         pollution: 0,
-        era: Era.SETTLEMENT
+        era: Era.SETTLEMENT,
+        waterPlaceable: true,
     },
     [BuildingType.POWER_LINE]: {
         type: BuildingType.POWER_LINE,
@@ -107,6 +108,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
         pollution: -0.1,
         era: Era.INDUSTRY,
         water: { produces: 5 },
+        waterPlaceable: true,
     },
     [BuildingType.RESERVOIR]: {
         type: BuildingType.RESERVOIR,
@@ -125,6 +127,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
         era: Era.SUSTAINABILITY,
         power: { consumes: 2 },
         water: { produces: 50 },
+        waterPlaceable: true,
     },
     [BuildingType.STAFF_QUARTERS]: {
         type: BuildingType.STAFF_QUARTERS,
@@ -525,6 +528,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
         productionType: 'TRUST',
         era: Era.SETTLEMENT,
         water: { produces: 10 },
+        waterPlaceable: true,
         upgrades: [
             {
                 level: 2,
@@ -888,96 +892,6 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
             }
         ]
     },
-    [BuildingType.STORAGE_EXTENSION]: {
-        type: BuildingType.STORAGE_EXTENSION,
-        name: 'Storage Extension',
-        cost: 300,
-        desc: 'Expands adjacent storage capacity.',
-        ecoReq: 0,
-        stats: '+250 Storage',
-        width: 2,
-        depth: 1,
-        buildTime: 15,
-        dependency: BuildingType.STORAGE_DEPOT,
-        maintenance: 0.5,
-        pollution: 0.1,
-        era: Era.SETTLEMENT,
-        upgrades: [
-            {
-                level: 2,
-                name: 'Industrial Rack Ext.',
-                description: 'Metal racks for vertical storage.',
-                statsDiff: '+600 Storage',
-                costs: { agt: 500, stone: 100, wood: 100 },
-                era: Era.GROWTH,
-                maintenance: 1.0
-            },
-            {
-                level: 3,
-                name: 'Container Bay Ext.',
-                description: 'Enclosed industrial storage containers.',
-                statsDiff: '+1500 Storage',
-                costs: { agt: 2000, minerals: 200 },
-                era: Era.INDUSTRY,
-                maintenance: 2.5
-            },
-            {
-                level: 4,
-                name: 'Compressed Vault Ext.',
-                description: 'High-density nanotech extension.',
-                statsDiff: '+4000 Storage',
-                costs: { agt: 10000, gems: 10 },
-                era: Era.SUSTAINABILITY,
-                maintenance: 6.0
-            }
-        ]
-    },
-    [BuildingType.STOCKPILE]: {
-        type: BuildingType.STOCKPILE,
-        name: 'Logistics Stockpile',
-        cost: 3500,
-        desc: 'Massive resource capacity booster.',
-        ecoReq: 0,
-        stats: '+2000 Capacity',
-        width: 3,
-        depth: 3,
-        buildTime: 60,
-        maintenance: 5,
-        pollution: 0.5,
-        costs: { agt: 1500, wood: 400, stone: 300 },
-        era: Era.GROWTH,
-        upgrades: [
-            {
-                level: 2,
-                name: 'Enclosed Stockpile',
-                description: 'Weather-proof industrial storage bins.',
-                statsDiff: '+5000 Capacity',
-                costs: { agt: 6000, stone: 800, minerals: 200 },
-                era: Era.GROWTH,
-                maintenance: 10
-            },
-            {
-                level: 3,
-                name: 'Automated Silos',
-                description: 'Computer-controlled vertical storage.',
-                statsDiff: '+12000 Capacity',
-                costs: { agt: 20000, minerals: 800, gems: 10 },
-                era: Era.INDUSTRY,
-                maintenance: 25,
-                power: { consumes: 5 }
-            },
-            {
-                level: 4,
-                name: 'Nanotech Vault',
-                description: 'Super-dense nanostructure storage.',
-                statsDiff: '+50000 Capacity',
-                costs: { agt: 80000, minerals: 2000, gems: 50 },
-                era: Era.SUSTAINABILITY,
-                maintenance: 60,
-                power: { consumes: 15 }
-            }
-        ]
-    },
     [BuildingType.WORKSHOP]: {
         type: BuildingType.WORKSHOP,
         name: 'Workshop',
@@ -1275,164 +1189,4 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
         era: Era.PROSPERITY,
         power: { consumes: 100 },
     },
-    [BuildingType.SUPPORT_PILLAR]: {
-        type: BuildingType.SUPPORT_PILLAR,
-        name: 'Support Pillar',
-        cost: 150,
-        desc: 'Reinforces tunnels.',
-        ecoReq: 0,
-        stats: 'Structural',
-        buildTime: 10,
-        maintenance: 0.2,
-        pollution: 0,
-        era: Era.SETTLEMENT,
-    },
-    [BuildingType.MINING_DRILL]: {
-        type: BuildingType.MINING_DRILL,
-        name: 'Auto-Drill',
-        cost: 2500,
-        desc: 'Automated subterranean extraction.',
-        ecoReq: 0,
-        stats: '+15 Minerals/s',
-        buildTime: 60,
-        maintenance: 12,
-        pollution: 5.0,
-        production: 15,
-        productionType: 'MINERALS',
-        era: Era.SETTLEMENT,
-        power: { consumes: 8 },
-        upgrades: [
-            {
-                level: 2,
-                name: 'Industrial Fixed Drill',
-                description: 'Heavy metal motor with rotating cutters.',
-                statsDiff: '+30 Min/s',
-                costs: { agt: 1500, stone: 200, minerals: 50 },
-                era: Era.GROWTH,
-                power: { consumes: 12 },
-                maintenance: 18,
-                production: 30
-            },
-            {
-                level: 3,
-                name: 'Dual-Head Auto-Drill',
-                description: 'Advanced dual-rotor automated extraction.',
-                statsDiff: '+60 Min/s',
-                costs: { agt: 5000, stone: 600, minerals: 200 },
-                era: Era.INDUSTRY,
-                power: { consumes: 20 },
-                maintenance: 30,
-                production: 60
-            },
-            {
-                level: 4,
-                name: 'Thermal-Lance Borer',
-                description: 'Clean high-energy thermal extraction.',
-                statsDiff: '+120 Min/s, -Poll.',
-                costs: { agt: 20000, minerals: 600, gems: 40 },
-                era: Era.SUSTAINABILITY,
-                power: { consumes: 35 },
-                maintenance: 50,
-                production: 120,
-                pollution: 1.0
-            }
-        ]
-    },
-    [BuildingType.UNDERGROUND_FANS]: {
-        type: BuildingType.UNDERGROUND_FANS,
-        name: 'Ventilation Fans',
-        cost: 1200,
-        desc: 'Improves air quality and agent comfort.',
-        ecoReq: 5,
-        stats: '+Mood',
-        buildTime: 30,
-        maintenance: 5,
-        pollution: 0.1,
-        era: Era.SETTLEMENT,
-        power: { consumes: 4 },
-        upgrades: [
-            {
-                level: 2,
-                name: 'Industrial Fan Unit',
-                description: 'Metal-encased high-flow ventilation.',
-                statsDiff: 'Higher Mood boost',
-                costs: { agt: 800, wood: 200, stone: 100 },
-                era: Era.GROWTH,
-                maintenance: 8,
-                power: { consumes: 6 }
-            },
-            {
-                level: 3,
-                name: 'High-Pressure Rotors',
-                description: 'Dual-rotor industrial air handling.',
-                statsDiff: 'Rapid health recovery',
-                costs: { agt: 3000, stone: 400, minerals: 100 },
-                era: Era.INDUSTRY,
-                maintenance: 15,
-                power: { consumes: 12 }
-            },
-            {
-                level: 4,
-                name: 'Atmospheric Scrubber',
-                description: 'Modern high-tech air filtration.',
-                statsDiff: 'Max Mood, +Eco benefit',
-                costs: { agt: 10000, minerals: 400, gems: 20 },
-                era: Era.SUSTAINABILITY,
-                maintenance: 25,
-                power: { consumes: 20 },
-                pollution: -1.0
-            }
-        ]
-    },
-    [BuildingType.ORE_EXTRACTOR]: {
-        type: BuildingType.ORE_EXTRACTOR,
-        name: 'Ore Extractor',
-        cost: 4500,
-        desc: 'Advanced subterranean resource extraction.',
-        ecoReq: 0,
-        stats: 'High Volume Minerals',
-        buildTime: 80,
-        maintenance: 25,
-        pollution: 8.0,
-        production: 30,
-        productionType: 'MINERALS',
-        era: Era.GROWTH,
-        power: { consumes: 20 },
-        upgrades: [
-            {
-                level: 2,
-                name: 'Industrial Boring Rig',
-                description: 'Reinforced metal extractor cylinder.',
-                statsDiff: '+60 Minerals/s',
-                costs: { agt: 8000, stone: 800, minerals: 400 },
-                era: Era.GROWTH,
-                power: { consumes: 30 },
-                maintenance: 40,
-                production: 60
-            },
-            {
-                level: 3,
-                name: 'Dual-Bore Rig',
-                description: 'Simultaneous drilling in multiple vectors.',
-                statsDiff: '+120 Minerals/s',
-                costs: { agt: 20000, stone: 1200, minerals: 800 },
-                era: Era.INDUSTRY,
-                power: { consumes: 50 },
-                maintenance: 70,
-                production: 120
-            },
-            {
-                level: 4,
-                name: 'Plasma-Bore Complex',
-                description: 'Clean plasma extraction with peak yield.',
-                statsDiff: '+250 Minerals/s, -Pol.',
-                costs: { agt: 60000, minerals: 2000, gems: 80 },
-                era: Era.SUSTAINABILITY,
-                power: { consumes: 100 },
-                maintenance: 120,
-                production: 250,
-                pollution: 4.0
-            }
-        ]
-    }
 };

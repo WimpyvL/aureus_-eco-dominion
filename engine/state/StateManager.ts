@@ -11,6 +11,7 @@ import {
 import { INITIAL_RESOURCES } from '../data/VoxelConstants';
 import { ChunkStore } from '../space/ChunkStore';
 import { CHUNK_SIZE } from '../space/ChunkStore';
+import { worldToChunk } from '../utils/coords';
 
 import { Random } from '../kernel/Random';
 
@@ -33,12 +34,18 @@ export class StateManager {
         const chunks: Record<string, Chunk> = {};
         const seed = overrides?.seed || Math.floor(Math.random() * 1000000);
 
-        // Generate initial chunk at 0,0
-        ChunkStore.ensureChunk(chunks, 0, 0, seed);
+        // Derive a random spawn offset from the seed
+        // This gives each new game a unique starting position in the world
+        const spawnX = overrides?.spawnX ?? Math.floor(Math.sin(seed * 0.7123) * 200);
+        const spawnZ = overrides?.spawnZ ?? Math.floor(Math.cos(seed * 0.3456) * 200);
+
+        // Generate initial chunk at the spawn location
+        const { cx: spawnCX, cz: spawnCZ } = worldToChunk(spawnX, spawnZ, CHUNK_SIZE);
+        ChunkStore.ensureChunk(chunks, spawnCX, spawnCZ, seed);
 
         return {
             chunks,
-            agents: this.createInitialAgents(),
+            agents: this.createInitialAgents(spawnX, spawnZ),
             jobs: [],
             commandQueue: [],
 
@@ -58,7 +65,7 @@ export class StateManager {
             selectedBuilding: null,
             selectedAgentId: null,
             interactionMode: 'BUILD',
-            viewMode: 'SURFACE',
+
             step: GameStep.INTRO,
             gameOver: false,
             debugMode: false,
@@ -66,6 +73,8 @@ export class StateManager {
             tickCount: 0,
             idCounter: 0,
             seed: overrides?.seed || Math.floor(Math.random() * 1000000),
+            spawnX,
+            spawnZ,
 
             market: {
                 minerals: {
@@ -111,7 +120,7 @@ export class StateManager {
             },
 
             activeEvents: [],
-            currentUndergroundLayer: -1,
+
             newsFeed: [],
             activeGoal: null,
 
@@ -160,22 +169,29 @@ export class StateManager {
             isLoading: false,
             loadingMessage: '',
 
+            // Command Pipeline
+            debug: {
+                commandTrace: []
+            },
+            ui: {
+                lastCommandResult: null
+            },
+
             ...overrides,
         } as GameState;
     }
 
-    private createInitialAgents(): Agent[] {
-        const center = 8; // Local center of chunk 0,0
+    private createInitialAgents(spawnX: number, spawnZ: number): Agent[] {
         const names = ['Marcus', 'Elena', 'Kofi'];
 
         return names.map((name, i): Agent => ({
             id: `agent_${i}`,
             name,
             type: 'WORKER',
-            x: center + (i - 1),
-            z: center,
-            visualX: center + (i - 1),
-            visualZ: center,
+            x: spawnX + (i - 1),
+            z: spawnZ,
+            visualX: spawnX + (i - 1),
+            visualZ: spawnZ,
             state: 'IDLE',
             energy: 80 + Math.random() * 20,
             hunger: 80 + Math.random() * 20,
@@ -190,7 +206,7 @@ export class StateManager {
             targetX: null,
             targetZ: null,
             path: null,
-            layer: 0,
+
             inventory: { type: null, amount: 0, capacity: 10 }
         }));
     }
@@ -232,6 +248,8 @@ export class StateManager {
             this.dirtyKeys.add(key as keyof GameState);
         }
     }
+
+
 
     setMutableContext(context: "simTick" | "none"): void {
         this.mutableContext = context;

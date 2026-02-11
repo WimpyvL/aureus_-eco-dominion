@@ -112,6 +112,7 @@ export class FoliageRenderSystem {
 
                 mesh.castShadow = true;
                 mesh.receiveShadow = true;
+                mesh.frustumCulled = false; // CRITICAL: This is a global pool across all chunks
                 // Allow updates
                 mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 

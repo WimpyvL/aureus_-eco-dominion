@@ -1,7 +1,7 @@
 
 export type AgentRole = 'WORKER' | 'MINER' | 'BOTANIST' | 'ENGINEER' | 'SECURITY' | 'ILLEGAL_MINER';
 
-export type JobType = 'BUILD' | 'MINE' | 'DIG' | 'REINFORCE' | 'RESCUE' | 'FARM' | 'REPAIR' | 'RESEARCH' | 'SLEEP' | 'IDLE' | 'MOVE' | 'REHABILITATE' | 'EAT' | 'SOCIALIZE' | 'PATROL' | 'DEPOSIT_RESOURCES';
+export type JobType = 'BUILD' | 'MINE' | 'RESCUE' | 'FARM' | 'REPAIR' | 'RESEARCH' | 'SLEEP' | 'IDLE' | 'MOVE' | 'REHABILITATE' | 'EAT' | 'SOCIALIZE' | 'PATROL' | 'DEPOSIT_RESOURCES';
 
 export interface Job {
     id: string;
@@ -11,7 +11,7 @@ export interface Job {
     priority: number; // 1-5
     assignedAgentId: string | null;
     progress?: number;
-    layer?: number; // 0 for surface, -1 to -10 for underground
+
 }
 
 export interface ColonistStats {
@@ -75,7 +75,6 @@ export interface AgentRequest {
 export interface PathStep {
     x: number;
     z: number;
-    layer: number;
 }
 
 export interface AgentInventory {
@@ -93,7 +92,7 @@ export interface Agent {
     targetX: number | null;
     targetZ: number | null;
     path: PathStep[] | null;
-    layer: number; // Current vertical layer
+
     // Visual position for smooth rendering
     visualX?: number;
     visualZ?: number;
@@ -131,4 +130,5 @@ export interface Agent {
 
     // Pathfinding failsafe
     lastAbandonedJobId?: string | null;
+    unreachableCooldowns?: Record<string, number>; // TargetKey (x,z) -> expirationTick
 }

@@ -95,14 +95,6 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ step, dispatch
             buttonText: "MASTER UTILITIES",
             action: () => dispatch({ type: 'ADVANCE_TUTORIAL' })
         },
-        [GameStep.TUTORIAL_UNDERGROUND]: {
-            title: "PHASE 7: DEPTHS",
-            subtitle: "Subterranean Expansion",
-            text: "Build a Mine Entrance to access the underground. Use Layer Navigator to descend. Beware of collapse risks—use Support Pillars.",
-            tasks: ["Construct Mine Entrance", "Explore underground layers"],
-            buttonText: "DIG DEEPER",
-            action: () => dispatch({ type: 'ADVANCE_TUTORIAL' })
-        },
         [GameStep.TUTORIAL_RESEARCH]: {
             title: "PHASE 8: INNOVATION",
             subtitle: "Tech R&D",
@@ -363,59 +355,6 @@ export const ConstructionModal: React.FC<{
     return null;
 };
 
-export const UndergroundOverlay: React.FC<{
-    viewMode: string;
-    trust: number;
-    cheatsEnabled: boolean;
-    dispatch: React.Dispatch<Action>;
-    playSfx: (type: any) => void;
-}> = ({ viewMode, trust, cheatsEnabled, dispatch, playSfx }) => {
-    if (viewMode !== 'UNDERGROUND') return null;
-
-    const isLocked = trust < 50 && !cheatsEnabled;
-    if (!isLocked) return null;
-
-    return (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-auto bg-slate-950/80 backdrop-blur-sm">
-            <div className="text-center space-y-3 max-w-xs px-6">
-                <h2 className="text-4xl font-bold text-slate-700 tracking-[0.2em] uppercase opacity-30 font-['Rajdhani'] select-none">Sector B1</h2>
-
-                {isLocked ? (
-                    <div className="bg-slate-900 border-2 border-rose-500 p-6 shadow-[8px_8px_0_0_rgba(0,0,0,0.5)] animate-in zoom-in-95">
-                        <div className="w-12 h-12 bg-rose-950 border-2 border-rose-500 mx-auto mb-3 flex items-center justify-center">
-                            <Lock className="w-6 h-6 text-rose-500" />
-                        </div>
-                        <h3 className="text-sm font-black text-rose-500 uppercase tracking-widest mb-2 font-['Rajdhani']">Restricted Area</h3>
-                        <p className="text-slate-400 text-[10px] mb-4 font-mono">
-                            Subterranean expansion requires trust level 50.
-                        </p>
-
-                        <button
-                            onClick={() => {
-                                playSfx('UI_CLICK');
-                                dispatch({ type: 'TOGGLE_VIEW' });
-                            }}
-                            className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2 px-4 border-b-4 border-slate-950 active:border-b-0 active:translate-y-1 transition-all text-xs flex items-center justify-center gap-2 w-full uppercase tracking-wider"
-                        >
-                            <ArrowUp size={12} /> Return to Surface
-                        </button>
-                    </div>
-                ) : (
-                    <div className="bg-emerald-950/80 border-2 border-emerald-500 p-4 shadow-[4px_4px_0_0_rgba(16,185,129,0.2)] animate-in fade-in slide-in-from-bottom-4">
-                        <div className="flex items-center justify-center gap-2 mb-1">
-                            <CheckCircle2 size={16} className="text-emerald-400" />
-                            <h3 className="text-sm font-black text-emerald-400 uppercase tracking-widest font-['Rajdhani']">Access Granted</h3>
-                        </div>
-                        <p className="text-emerald-200/50 text-[10px] font-mono">
-                            Subterranean expansion zone active.
-                            {trust < 50 && <span className="text-amber-500 block mt-1 opacity-80">[DEVELOPER BYPASS ACTIVE]</span>}
-                        </p>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-}
 
 export const BuildingInspectorModal: React.FC<{
     selectedTile: { x: number, z: number } | null;

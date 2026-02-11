@@ -10,7 +10,7 @@ import { GameState, GridTile, BuildingType, SfxType, Chunk, GameCommand } from '
 import { BUILDINGS } from '../../data/VoxelConstants';
 import { updateWaterConnectivity } from '../../utils/GameUtils';
 import { ChunkStore } from '../../space/ChunkStore';
-import { worldToChunk, CHUNK_SIZE } from '../../utils/coords';
+import { worldToChunk, worldToLocal, CHUNK_SIZE } from '../../utils/coords';
 
 export class ConstructionSystem extends BaseSimSystem {
     readonly id = 'construction';
@@ -39,18 +39,12 @@ export class ConstructionSystem extends BaseSimSystem {
         switch (cmd.type) {
             case 'PLACE_BUILDING':
                 return this.placeBuilding(cmd.payload.x, cmd.payload.z, cmd.payload.buildingType, state, cmd.payload.isInstant);
-            case 'PLACE_SUB_BUILDING':
-                return this.placeSubBuilding(cmd.payload.x, cmd.payload.z, cmd.payload.buildingType, cmd.payload.layer, state, cmd.payload.isInstant);
-            case 'BULLDOZE':
-                return this.bulldozeBuilding(cmd.payload.x, cmd.payload.z, state);
-            case 'BULLDOZE_SUB':
-                return this.bulldozeSubBuilding(cmd.payload.x, cmd.payload.z, cmd.payload.layer, state);
             case 'SPEED_UP':
                 return this.speedUpConstruction(cmd.payload.x, cmd.payload.z, state);
             case 'REHABILITATE':
                 return this.rehabilitateTile(ctx, cmd.payload.x, cmd.payload.z, state);
             case 'UPGRADE_BUILDING':
-                return this.handleUpgradeBuilding(cmd.payload.buildingId, state);
+                return this.upgradeBuilding(ctx, cmd.payload.x, cmd.payload.z, state);
             case 'MARK_HARVEST':
                 return this.handleMarkHarvest(cmd.payload.x, cmd.payload.z, state);
             default:
@@ -133,18 +127,8 @@ export class ConstructionSystem extends BaseSimSystem {
                         pTile.structureHeadZ = hz;
                     }
 
-                    if (pTile.digState) {
-                        for (const layer in pTile.digState) {
-                            if (pTile.digState[layer] === 1) pTile.digState[layer] = 2;
-                        }
-                    }
+                    // Synchronous UI/Sim state cleanup (No longer using redundant DigState)
 
-                    if (headTile.buildingType === BuildingType.MINING_HEADFRAME) {
-                        if (!pTile.digState) pTile.digState = {};
-                        if (!pTile.underground?.[-1]?.excavated) {
-                            pTile.digState[-1] = 4;
-                        }
-                    }
 
                     const { cx, cz } = worldToChunk(tx, tz, CHUNK_SIZE);
                     affectedChunks.add(`${cx},${cz}`);
@@ -157,6 +141,8 @@ export class ConstructionSystem extends BaseSimSystem {
             const [cx, cz] = key.split(',').map(Number);
             const chunk = state.chunks[key];
             if (chunk) {
+                chunk.meshDirty = true;
+                chunk.simDirty = true;
                 state.pendingEffects.push({ type: 'CHUNK_UPDATE', cx, cz, updates: chunk.tiles.filter(t => (t.structureHeadX === hx && t.structureHeadZ === hz)) });
             }
         }
@@ -177,34 +163,42 @@ export class ConstructionSystem extends BaseSimSystem {
             for (let dx = 0; dx < w; dx++) {
                 const tx = x + dx;
                 const tz = z + dz;
+                const { cx, cz } = worldToChunk(tx, tz, CHUNK_SIZE);
+                ChunkStore.ensureChunk(state.chunks, cx, cz, state.seed);
                 const tile = ChunkStore.getTile(state.chunks, tx, tz);
-                if (!tile) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: `Tile at (${tx}, ${tz}) not found` };
+                if (!tile) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: `Tile at (${tx}, ${tz}) not found despite generation` };
 
                 if (tile.buildingType !== BuildingType.EMPTY && tile.buildingType !== BuildingType.POND) {
                     return { ok: false, code: CommandErrorCode.TILE_OCCUPIED, reason: `Tile at (${tx}, ${tz}) is already occupied` };
                 }
 
-                if (tile) {
-                    Object.assign(tile, {
-                        buildingType,
-                        isUnderConstruction: !isInstant,
-                        constructionTimeLeft: isInstant ? 0 : def.buildTime,
-                        structureHeadX: x,
-                        structureHeadZ: z,
-                        explored: true,
-                        level: 1,
-                        hasEntrance: buildingType === BuildingType.MINING_HEADFRAME
-                    });
-                    updates.push(tile);
-                    const { cx, cz } = worldToChunk(tx, tz, CHUNK_SIZE);
-                    affectedChunks.add(`${cx},${cz}`);
+                // Water placement guard: only waterPlaceable buildings can go on water tiles
+                if (tile.buildingType === BuildingType.POND && !def.waterPlaceable) {
+                    return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: `Cannot build ${def.name} on water` };
                 }
+
+                Object.assign(tile, {
+                    buildingType,
+                    isUnderConstruction: !isInstant,
+                    constructionTimeLeft: isInstant ? 0 : def.buildTime,
+                    structureHeadX: x,
+                    structureHeadZ: z,
+                    explored: true,
+                    level: 1
+                });
+                updates.push(tile);
+                affectedChunks.add(`${cx},${cz}`);
             }
         }
 
         updateWaterConnectivity(state.chunks);
         for (const key of affectedChunks) {
             const [cx, cz] = key.split(',').map(Number);
+            const chunk = state.chunks[`${cx},${cz}`];
+            if (chunk) {
+                chunk.meshDirty = true;
+                chunk.simDirty = true;
+            }
             state.pendingEffects.push({
                 type: 'CHUNK_UPDATE', cx, cz, updates: updates.filter(t => {
                     const c = worldToChunk(t.x, t.z, CHUNK_SIZE);
@@ -213,6 +207,7 @@ export class ConstructionSystem extends BaseSimSystem {
             });
         }
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BUILD_START });
+        return { ok: true };
     }
 
     /**
@@ -220,6 +215,8 @@ export class ConstructionSystem extends BaseSimSystem {
      * Handles multi-tile cleanup.
      */
     public bulldozeBuilding(x: number, z: number, state: GameState): CommandResult {
+        const { cx, cz } = worldToChunk(x, z, CHUNK_SIZE);
+        ChunkStore.ensureChunk(state.chunks, cx, cz, state.seed);
         const tile = ChunkStore.getTile(state.chunks, x, z);
         if (!tile) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: 'Tile not found' };
 
@@ -252,7 +249,6 @@ export class ConstructionSystem extends BaseSimSystem {
                                 structureHeadX: undefined,
                                 structureHeadZ: undefined,
                                 constructionTimeLeft: 0,
-                                hasEntrance: false
                             });
                             updates.push(pTile);
                             const { cx, cz } = worldToChunk(tx, tz, CHUNK_SIZE);
@@ -274,6 +270,11 @@ export class ConstructionSystem extends BaseSimSystem {
         updateWaterConnectivity(state.chunks);
         for (const key of affectedChunks) {
             const [cx, cz] = key.split(',').map(Number);
+            const chunk = state.chunks[`${cx},${cz}`];
+            if (chunk) {
+                chunk.meshDirty = true;
+                chunk.simDirty = true;
+            }
             state.pendingEffects.push({
                 type: 'CHUNK_UPDATE', cx, cz, updates: updates.filter(t => {
                     const c = worldToChunk(t.x, t.z, CHUNK_SIZE);
@@ -282,6 +283,7 @@ export class ConstructionSystem extends BaseSimSystem {
             });
         }
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BULLDOZE });
+        return { ok: true };
     }
 
     /**
@@ -342,52 +344,6 @@ export class ConstructionSystem extends BaseSimSystem {
         }
     }
 
-    public placeSubBuilding(x: number, z: number, buildingType: BuildingType, layer: number, state: GameState, isInstant: boolean = false): CommandResult {
-        const tile = ChunkStore.getTile(state.chunks, x, z);
-        if (!tile) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: 'Tile not found' };
-
-        const def = BUILDINGS[buildingType];
-        if (!def) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: `Unknown sub-building type: ${buildingType}` };
-
-        if (!tile.subBuildings) tile.subBuildings = {};
-        if (!tile.digState) tile.digState = {};
-
-        tile.subBuildings[layer] = buildingType;
-        tile.isUnderConstruction = !isInstant;
-        tile.constructionTimeLeft = isInstant ? 0 : def.buildTime;
-        tile.structureHeadX = x;
-        tile.structureHeadZ = z;
-
-        if (layer === -1) {
-            tile.digState[layer] = 1; // Trench
-        }
-
-        updateWaterConnectivity(state.chunks);
-        const { cx, cz } = worldToChunk(x, z, CHUNK_SIZE);
-        state.pendingEffects.push({ type: 'CHUNK_UPDATE', cx, cz, updates: [tile] });
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BUILD_START });
-        return { ok: true };
-    }
-
-    public bulldozeSubBuilding(x: number, z: number, layer: number, state: GameState): CommandResult {
-        const tile = ChunkStore.getTile(state.chunks, x, z);
-        if (!tile || !tile.subBuildings) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: 'Tile or sub-buildings not found' };
-
-        if (tile.subBuildings[layer]) {
-            delete tile.subBuildings[layer];
-            if (Object.keys(tile.subBuildings).length === 0) {
-                if (tile.digState) tile.digState[layer] = 0; // Filled
-            }
-        } else {
-            return { ok: false, code: CommandErrorCode.INVALID_STATE, reason: `No sub-building on layer ${layer}` };
-        }
-
-        updateWaterConnectivity(state.chunks);
-        const { cx, cz } = worldToChunk(x, z, CHUNK_SIZE);
-        state.pendingEffects.push({ type: 'CHUNK_UPDATE', cx, cz, updates: [tile] });
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BULLDOZE });
-        return { ok: true };
-    }
 
     /**
      * Ensures all tiles of a multi-tile building are in the same state.
@@ -497,6 +453,11 @@ export class ConstructionSystem extends BaseSimSystem {
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BUILD_START });
         for (const key of affectedChunks) {
             const [cx, cz] = key.split(',').map(Number);
+            const chunk = state.chunks[key];
+            if (chunk) {
+                chunk.meshDirty = true;
+                chunk.simDirty = true;
+            }
             state.pendingEffects.push({
                 type: 'CHUNK_UPDATE', cx, cz, updates: updates.filter(t => {
                     const c = worldToChunk(t.x, t.z, CHUNK_SIZE);
@@ -524,14 +485,4 @@ export class ConstructionSystem extends BaseSimSystem {
         return { ok: true };
     }
 
-    private handleUpgradeBuilding(id: string, state: GameState): CommandResult {
-        // Find building by ID
-        for (const chunk of Object.values(state.chunks)) {
-            const tile = chunk.tiles.find(t => t.id.toString() === id || (t.buildingType !== BuildingType.EMPTY && t.x + '_' + t.z === id));
-            if (tile) {
-                return this.upgradeBuilding({ time: 0, delta: 0, fixedDt: 0, stepIndex: 0 } as any, tile.x, tile.z, state);
-            }
-        }
-        return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: `Building ${id} not found` };
-    }
 }

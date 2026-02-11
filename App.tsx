@@ -24,7 +24,7 @@ import {
 import { HUD } from './components/HUD';
 import { OpsDrawer } from './components/OpsDrawer';
 import { SupplySidebar } from './components/SupplySidebar';
-import { TutorialOverlay, GameOverScreen, ConstructionModal, BuildingInspectorModal, UndergroundOverlay } from './components/Modals';
+import { TutorialOverlay, GameOverScreen, ConstructionModal, BuildingInspectorModal } from './components/Modals';
 import { Controls } from './components/Controls';
 import { NewsTicker } from './components/NewsTicker';
 import { GoalWidget } from './components/GoalWidget';
@@ -37,8 +37,7 @@ import { HomePage } from './components/HomePage';
 import { TradeTerminal } from './components/TradeTerminal';
 import { WeatherOverlay } from './components/WeatherOverlay';
 import { MobileBuildingConfirmation } from './components/MobileBuildingConfirmation';
-import { DigConfirmPopup } from './components/DigConfirmPopup';
-import { LayerNavigator } from './components/LayerNavigator';
+
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { EraUnlockedModal } from './components/EraUnlockedModal';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
@@ -170,7 +169,7 @@ const App: React.FC = () => {
     const showHomePage = location.pathname === '/';
     const [hasSave, setHasSave] = useState(false);
     const [hoverTilePos, setHoverTilePos] = useState<{ x: number, z: number } | null>(null);
-    const [digPromptPos, setDigPromptPos] = useState<{ x: number, z: number } | null>(null);
+
 
     // Container state - set after mount so engine hook can initialize
     const [container, setContainer] = useState<HTMLElement | null>(null);
@@ -197,10 +196,7 @@ const App: React.FC = () => {
                     playSfx(SfxType.UI_CLICK);
                 }
             }
-            else if (state?.interactionMode === 'DIG') {
-                setDigPromptPos({ x, z });
-                playSfx(SfxType.UI_CLICK);
-            }
+
             else if (state?.interactionMode === 'INSPECT' || (state?.interactionMode === 'BUILD' && !state?.selectedBuilding)) {
                 if (state) {
                     const tile = ChunkStore.getTile(state.chunks, x, z);
@@ -394,19 +390,7 @@ const App: React.FC = () => {
             case 'DELIVER_CONTRACT':
                 world.deliverContract(action.payload);
                 break;
-            case 'CHANGE_LAYER':
-                world.changeUndergroundLayer(action.payload.delta);
-                break;
-            case 'ADVANCE_TUTORIAL':
-                world.advanceTutorial();
-                break;
-            case 'TOGGLE_VIEW':
-                world.toggleViewMode();
-                break;
-            case 'QUEUE_DIG':
-                world.queueDig(action.payload.x, action.payload.z, action.payload.layer);
-                playSfx(SfxType.UI_CLICK);
-                break;
+
             case 'UPGRADE_BUILDING':
                 world.upgradeBuilding(action.payload.x, action.payload.z);
                 playSfx(SfxType.UI_CLICK);
@@ -534,7 +518,6 @@ const App: React.FC = () => {
                             <Minimap
                                 chunks={state.chunks}
                                 agents={state.agents}
-                                viewMode={state.viewMode}
                                 onOpenMap={() => { setShowWorldMap(true); playSfx(SfxType.UI_OPEN); }}
                             />
 
@@ -587,20 +570,13 @@ const App: React.FC = () => {
                                 selectedBuilding={state.selectedBuilding}
                                 dispatch={dispatch}
                                 setSidebarOpen={handleSidebarOpen}
-                                viewMode={state.viewMode}
                                 playSfx={playSfx}
                                 step={state.step}
                                 debugMode={state.debugMode}
                                 interactionMode={state.interactionMode}
                             />
 
-                            {state.viewMode === 'UNDERGROUND' && (
-                                <LayerNavigator
-                                    currentLayer={state.currentUndergroundLayer}
-                                    dispatch={dispatch}
-                                    playSfx={playSfx}
-                                />
-                            )}
+
 
                             <OpsDrawer
                                 isOpen={sidebarOpen === 'OPS'}
@@ -629,13 +605,7 @@ const App: React.FC = () => {
                                 playSfx={playSfx}
                             />
 
-                            <UndergroundOverlay
-                                viewMode={state.viewMode}
-                                trust={state.resources.trust}
-                                cheatsEnabled={state.cheatsEnabled}
-                                dispatch={dispatch}
-                                playSfx={playSfx}
-                            />
+
 
                             <ConstructionModal
                                 selectedTile={selectedTilePos}
@@ -678,19 +648,7 @@ const App: React.FC = () => {
                                 playSfx={playSfx}
                             />
 
-                            {digPromptPos !== null && (
-                                <DigConfirmPopup
-                                    tilePos={digPromptPos}
-                                    chunks={state.chunks}
-                                    viewMode={state.viewMode}
-                                    currentUndergroundLayer={state.currentUndergroundLayer}
-                                    onConfirm={(layer) => {
-                                        dispatch({ type: 'QUEUE_DIG', payload: { x: digPromptPos.x, z: digPromptPos.z, layer } });
-                                        setDigPromptPos(null);
-                                    }}
-                                    onCancel={() => setDigPromptPos(null)}
-                                />
-                            )}
+
 
                             {state.debugMode && (
                                 <>

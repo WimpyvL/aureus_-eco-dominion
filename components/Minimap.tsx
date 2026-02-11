@@ -12,7 +12,6 @@ import { Map, Maximize, ChevronUp } from 'lucide-react';
 interface MinimapProps {
     chunks: Record<string, Chunk>;
     agents: GameState['agents'];
-    viewMode: string;
     onOpenMap: () => void;
 }
 
@@ -20,7 +19,7 @@ const TILE_SIZE = 3;
 const MAP_DISPLAY_SIZE = 48; // Fixed display size in tiles for the minimap preview
 const MAP_CANVAS_SIZE = MAP_DISPLAY_SIZE * TILE_SIZE;
 
-export const Minimap: React.FC<MinimapProps> = React.memo(({ chunks, agents, viewMode, onOpenMap }) => {
+export const Minimap: React.FC<MinimapProps> = React.memo(({ chunks, agents, onOpenMap }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isCollapsed, setIsCollapsed] = useState(true);
     const lastDrawTime = useRef<number>(0);
@@ -119,7 +118,7 @@ export const Minimap: React.FC<MinimapProps> = React.memo(({ chunks, agents, vie
         frameId.current = requestAnimationFrame(draw);
 
         return () => cancelAnimationFrame(frameId.current);
-    }, [chunks, agents, viewMode, isCollapsed]);
+    }, [chunks, agents, isCollapsed]);
 
     if (isCollapsed) {
         return (

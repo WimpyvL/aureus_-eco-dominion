@@ -8,7 +8,8 @@
 import { GridTile, Chunk } from '../../types';
 import { getBiomeAt as getBiomeAtImpl, getFoliageAt as getFoliageAtImpl } from '../worldgen/Core';
 import { Job, PathfindJob, PathfindResult, MeshChunkJob, MeshChunkResult, ENGINE_SCHEMA_VERSION } from './jobs.types';
-import { findPath3D } from '../sim/algorithms/Pathfinding';
+import { findPath } from '../sim/algorithms/Pathfinding';
+import { worldToChunk, worldToLocal } from '../utils/coords';
 
 let localChunks: Record<string, Chunk> = {};
 
@@ -35,24 +36,20 @@ const PALETTE: Record<string, number[]> = {
     'gold': [1.0, 0.84, 0.0]
 };
 
-const LAYER_PALETTE: number[][] = [
-    [0.2, 0.3, 0.5], // Layer 1 (Blue-ish)
-    [0.2, 0.5, 0.5], // Layer 2 (Teal-ish)
-    [0.2, 0.5, 0.3], // Layer 3 (Green-ish)
-    [0.4, 0.5, 0.2], // Layer 4 (Lime-ish)
-    [0.5, 0.5, 0.2], // Layer 5 (Yellow-ish)
-    [0.5, 0.4, 0.2], // Layer 6 (Orange-ish)
-    [0.5, 0.3, 0.2], // Layer 7 (Rust-ish)
-    [0.5, 0.2, 0.3], // Layer 8 (Pink-ish)
-    [0.4, 0.2, 0.5], // Layer 9 (Purple-ish)
-    [0.2, 0.2, 0.5], // Layer 10 (Deep Blue)
-];
+
 
 self.onmessage = (e: MessageEvent) => {
     const msg = e.data;
 
     if (msg.type === 'SYNC_CHUNKS') {
         localChunks = msg.payload; // Record<string, Chunk>
+        return;
+    }
+
+    if (msg.type === 'UPDATE_CHUNK') {
+        const { key, chunk } = msg.payload;
+        // console.log('[Worker] Updating chunk', key);
+        localChunks[key] = chunk;
         return;
     }
 
@@ -78,6 +75,7 @@ self.onmessage = (e: MessageEvent) => {
                 const transfer: Transferable[] = [];
                 if (result.solid) transfer.push(result.solid.p.buffer, result.solid.n.buffer, result.solid.c.buffer, result.solid.u.buffer);
                 if (result.water) transfer.push(result.water.p.buffer, result.water.n.buffer, result.water.c.buffer, result.water.u.buffer);
+                if (result.ghost) transfer.push(result.ghost.p.buffer, result.ghost.n.buffer, result.ghost.c.buffer, result.ghost.u.buffer);
                 (self as unknown as Worker).postMessage(result, transfer);
             } else {
                 self.postMessage(result);
@@ -97,12 +95,25 @@ self.onmessage = (e: MessageEvent) => {
 };
 
 function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
-    const { cx, cz, tiles, viewMode = 'SURFACE', lod = 1 } = job.payload;
+    const { cx, cz, tiles, lod = 1 } = job.payload;
     const CHUNK_SIZE = 16;
-    const isUnderground = viewMode === 'UNDERGROUND';
 
     const startX = cx * CHUNK_SIZE;
     const startZ = cz * CHUNK_SIZE;
+
+    // FIX: Update localChunks with this fresh data so neighbors can see it later
+    const chunkKey = `${cx},${cz}`;
+    if (!localChunks[chunkKey]) {
+        localChunks[chunkKey] = {
+            id: job.payload.chunkId,
+            x: cx,
+            z: cz,
+            tiles: tiles || [], // Ensure tiles is array
+            buildings: {}, // Placeholder if needed
+        } as any;
+    } else {
+        localChunks[chunkKey].tiles = tiles || [];
+    }
 
     const foliageItems: any[] = [];
     const solid = { p: [] as number[], n: [] as number[], c: [] as number[], u: [] as number[] };
@@ -110,7 +121,7 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
     const ghost = { p: [] as number[], n: [] as number[], c: [] as number[], u: [] as number[] };
 
     const tileMap = new Map<string, GridTile>();
-    if (tiles) tiles.forEach(t => tileMap.set(`${t.x},${t.y}`, t));
+    if (tiles) tiles.forEach(t => tileMap.set(`${t.x},${t.z}`, t));
 
     function pRand(x: number, z: number) {
         return Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
@@ -150,7 +161,7 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
         // Fallback to localChunks
         const chunkX = Math.floor(gx / CHUNK_SIZE);
         const chunkZ = Math.floor(gz / CHUNK_SIZE);
-        const chunkKey = `${chunkX},0,${chunkZ}`;
+        const chunkKey = `${chunkX},${chunkZ}`;
         const chunk = localChunks[chunkKey];
         if (chunk) {
             return chunk.tiles.find(t => t.x === gx && t.z === gz) || null;
@@ -175,96 +186,15 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
             const data = getData(worldX, worldZ);
             const tile = getTile(worldX, worldZ);
 
-            // Underground meshing: 10 levels deep + ghost surface
-            if (isUnderground) {
-                const surfaceY = data.h * 0.5;
-                const floorColor = PALETTE['stone'];
-                const ceilingColor = PALETTE['dirt'];
-                const ghostColor = PALETTE[data.b] || PALETTE['grass'];
-
-                // Render Underground Layers (-1 to -10) with Neighbor Culling
-                for (let layer = -1; layer >= -10; layer--) {
-                    try {
-                        // FIX: Use 2.0 depth scaling to match logic & camera
-                        // Surface is at surfaceY. Layer -1 is from surfaceY to surfaceY-2. Center is surfaceY-1.
-                        const layerY = surfaceY + (layer * 2.0) + 1.0;
-                        const layerH = 1.0; // 2.0 units tall, so half-height is 1.0
-
-                        const myU = tile?.underground;
-                        const amISolid = !myU || !myU[layer] || !myU[layer].excavated;
-
-                        if (amISolid) {
-                            const myStrata = myU ? myU[layer] : null;
-                            const ore = myStrata?.oreVisible ? myStrata.oreType : null;
-
-                            // Use layer palette for visual distinctiveness
-                            const layerIndex = Math.abs(layer) - 1;
-                            let color = LAYER_PALETTE[layerIndex % 10];
-
-                            // Blend with ore color if present
-                            if (ore === 'GOLD') color = [color[0] * 0.5 + 0.5, color[1] * 0.5 + 0.42, color[2] * 0.5];
-                            else if (ore === 'GEM') color = [color[0] * 0.5 + 0.2, color[1] * 0.5 + 0.5, color[2] * 0.5 + 0.5];
-                            else if (ore === 'IRON') color = [color[0] * 0.5 + 0.3, color[1] * 0.5 + 0.2, color[2] * 0.5 + 0.15];
-                            else if (ore === 'COAL') color = [color[0] * 0.2, color[1] * 0.2, color[2] * 0.2];
-
-                            // Check 6 neighbors
-                            const isNeighborSolid = (nx: number, nz: number, nLayer: number) => {
-                                // Bedrock is solid
-                                if (nLayer < -10) return true;
-
-                                // Surface transition (Layer 0)
-                                if (nLayer === 0) {
-                                    const nTile = getTile(nx, nz);
-                                    // If the tile has an entrance (hole), it's open (not solid)
-                                    // Otherwise it's the solid surface of the world
-                                    return !nTile?.hasEntrance;
-                                }
-
-                                const nTile = getTile(nx, nz);
-                                if (nTile && nTile.underground && nTile.underground[nLayer]) {
-                                    return !nTile.underground[nLayer].excavated;
-                                }
-                                // Outside map or uninitialized = solid earth
-                                return true;
-                            };
-
-                            // Top (2) - Only if neighbor above is NOT solid (excavated)
-                            if (!isNeighborSolid(worldX, worldZ, layer + 1)) addFace(solid, x, layerY, z, 2, color, layerH);
-                            // Bottom (3)
-                            if (!isNeighborSolid(worldX, worldZ, layer - 1)) addFace(solid, x, layerY, z, 3, color, layerH);
-                            // +X (0)
-                            if (!isNeighborSolid(worldX + 1, worldZ, layer)) addFace(solid, x, layerY, z, 0, color, layerH);
-                            // -X (1)
-                            if (!isNeighborSolid(worldX - 1, worldZ, layer)) addFace(solid, x, layerY, z, 1, color, layerH);
-                            // +Z (4)
-                            if (!isNeighborSolid(worldX, worldZ + 1, layer)) addFace(solid, x, layerY, z, 4, color, layerH);
-                            // -Z (5)
-                            if (!isNeighborSolid(worldX, worldZ - 1, layer)) addFace(solid, x, layerY, z, 5, color, layerH);
-                        } else {
-                            // I am excavated. Render rubble?
-                            if (myU && myU[layer] && myU[layer].collapsed) {
-                                const rubbleColor = [0.3, 0.2, 0.1];
-                                addFace(solid, x, layerY - 0.9, z, 2, rubbleColor, 0.1); // Small rubble
-                            }
-                        }
-                    } catch (err) {
-                        console.warn(`Worker: Error meshing underground layer ${layer} at ${worldX},${worldZ}:`, err);
-                    }
-                }
-                continue;
-            }
-
-            // --- Surface Logic (only if not underground) ---
             // Foliage Logic (Infinite)
             let fType = data.f;
 
             // Try procedural generation if no explicit foliage
-            // This runs for both existing tiles (that are empty) and procedural chunks
             if ((!fType || fType === 'NONE') && data.bt === 'EMPTY' && data.h > 0) {
                 const bd = getBiomeAtImpl(worldX, worldZ);
                 fType = getFoliageAtImpl(worldX, worldZ, data.b, data.h, bd.detail);
 
-                // Do not spawn gold outside playable area (can't mine it)
+                // Do not spawn gold outside playable area
                 if (fType === 'GOLD_VEIN') {
                     fType = 'NONE';
                 }
@@ -272,11 +202,6 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
 
             if (fType && fType !== 'NONE' && fType !== 'GOLD_VEIN') {
                 foliageItems.push({ x: worldX, y: data.h * 0.5, z: worldZ, type: fType, marked: data.marked });
-            }
-
-            // Hole Visibility on Surface
-            if (tile?.hasEntrance) {
-                foliageItems.push({ x: worldX, y: data.h * 0.5, z: worldZ, type: 'MINE_HOLE' });
             }
 
             let matKey = data.b.toLowerCase();
@@ -292,9 +217,7 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
             else if (!data.in && data.h === 0) topY = -2;
 
             // Surface
-            if (!tile?.hasEntrance) {
-                addFace(solid, x, topY, z, 2, color);
-            }
+            addFace(solid, x, topY, z, 2, color);
 
             // Sides (cliff edges)
             [[1, 0, 0], [-1, 0, 1], [0, 1, 4], [0, -1, 5]].forEach(([dx, dz, type]) => {
@@ -343,7 +266,7 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
 }
 
 function processPathfind(job: PathfindJob): PathfindResult {
-    const path = findPath3D(job.startX, job.startZ, 0, job.endX, job.endZ, 0, localChunks);
+    const path = findPath(job.startX, job.startZ, job.endX, job.endZ, localChunks);
     return {
         jobId: job.id,
         kind: 'PATHFIND',

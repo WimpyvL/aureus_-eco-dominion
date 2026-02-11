@@ -6,7 +6,6 @@
 export { BuildingManager } from './BuildingManager';
 export { AgentManager } from './AgentManager';
 export { EconomyManager } from './EconomyManager';
-export { UndergroundManager } from './UndergroundManager';
 export { ContractManager } from './ContractManager';
 export { ResearchManager } from './ResearchManager';
 export { GameStateManager } from './GameStateManager';

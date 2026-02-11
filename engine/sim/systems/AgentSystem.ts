@@ -7,7 +7,7 @@
 import { BaseSimSystem } from '../Simulation';
 import { FixedContext } from '../../kernel';
 import { Agent, GameState, GridTile, BuildingType, SfxType, PathStep, Chunk } from '../../../types';
-import { findPath3D } from '../algorithms/Pathfinding';
+import { findPath } from '../algorithms/Pathfinding';
 import { JobSystem, PathfindResult } from '../../jobs';
 import { ConstructionSystem } from './ConstructionSystem';
 import { PathPool } from '../../utils/PathPool';
@@ -17,8 +17,8 @@ import { worldToChunk, CHUNK_SIZE } from '../../utils/coords';
 
 // Configuration
 const CONFIG = {
-    SPEED: 4.8,            // Increased from 3.5 for better efficiency
-    THINK_INTERVAL: 15,    // Much faster AI decisions (0.25s at 60Hz)
+    SPEED: 3.2,            // Reduced from 4.8 for more natural, relaxed movement
+    THINK_INTERVAL: 20,    // Slightly slower AI decision cycle
     NEED_CRITICAL: 30,     // Threshold to seek help
     NEED_SATISFIED: 95,    // Threshold to stop seeking help
 };
@@ -41,10 +41,30 @@ export class AgentSystem extends BaseSimSystem {
         // Simple mode uses synchronous pathfinding
     }
 
+    handleCommand(cmd: any, ctx: any, state: GameState): any {
+        if (cmd.type === 'COMMAND_AGENT') {
+            const { agentId, x, z } = cmd.payload;
+            const agent = state.agents.find(a => a.id === agentId);
+            if (!agent) return { ok: false, reason: 'Agent not found' };
+
+            // Manual command overrides current activity
+            agent.state = 'MOVING';
+            agent.targetX = x;
+            agent.targetZ = z;
+            agent.currentJobId = null;
+            if (agent.path) {
+                PathPool.release(agent.path);
+                agent.path = null;
+            }
+            return { ok: true };
+        }
+        return null;
+    }
+
     tick(ctx: FixedContext, state: GameState): void {
         this.tickCounter++;
-        const { agents, chunks } = state;
-        if (!agents || !chunks) return;
+        const { agents } = state;
+        if (!agents) return;
 
         for (let i = 0; i < agents.length; i++) {
             const agent = agents[i];
@@ -55,6 +75,14 @@ export class AgentSystem extends BaseSimSystem {
 
             // 1. Update Needs (Decay)
             this.updateNeeds(agent, ctx.fixedDt);
+
+            // 1b. Clear pathfinding cooldowns
+            if (!agent.unreachableCooldowns) agent.unreachableCooldowns = {};
+            for (const key in agent.unreachableCooldowns) {
+                if (state.tickCount >= agent.unreachableCooldowns[key]) {
+                    delete agent.unreachableCooldowns[key];
+                }
+            }
 
             // 2. Decide what to do (AI)
             // Faster thinking for better responsiveness
@@ -94,24 +122,23 @@ export class AgentSystem extends BaseSimSystem {
         this.updateAI(ctx, agent, state);
     }
 
-    private goTo(agent: Agent, targetX: number, targetZ: number, targetLayer: number, jobId: string, state: GameState): void {
+    private goTo(agent: Agent, targetX: number, targetZ: number, jobId: string, state: GameState): void {
         const chunks = state.chunks;
         const ax = Math.floor(agent.x);
         const az = Math.floor(agent.z);
-        const startLayer = agent.layer || 0;
 
-        // If we're already there (horizontally and vertically), start the action immediately
-        if (ax === targetX && az === targetZ && startLayer === targetLayer) {
+        // If we're already there, start the action immediately
+        if (ax === targetX && az === targetZ) {
             agent.currentJobId = jobId;
             if (jobId === 'sys_sleep') agent.state = 'SLEEPING';
             else if (jobId === 'sys_eat') agent.state = 'EATING';
-            else if (jobId.startsWith('build_') || jobId.startsWith('dig_') || jobId.includes('mine')) agent.state = 'WORKING';
+            else if (jobId.startsWith('build_') || jobId.includes('mine')) agent.state = 'WORKING';
             else agent.state = 'IDLE';
             return;
         }
 
         try {
-            const path = findPath3D(ax, az, startLayer, targetX, targetZ, targetLayer, chunks);
+            const path = findPath(ax, az, targetX, targetZ, chunks);
             if (path && path.length > 0) {
                 PathPool.release(agent.path);
                 agent.path = path;
@@ -120,11 +147,17 @@ export class AgentSystem extends BaseSimSystem {
                 agent.targetX = targetX;
                 agent.targetZ = targetZ;
             } else {
-                console.warn(`[Agent ${agent.name}] Pathfinding failed to (${targetX}, ${targetZ}). Staying IDLE.`);
+                const targetKey = `${targetX},${targetZ}`;
+                console.warn(`[Agent ${agent.name}] Pathfinding failed from (${ax},${az}) to (${targetX}, ${targetZ}). Job: ${jobId}. Cooldown started.`);
+
+                // Set cooldown
+                if (!agent.unreachableCooldowns) agent.unreachableCooldowns = {};
+                agent.unreachableCooldowns[targetKey] = state.tickCount + 600;
+
                 PathPool.release(agent.path);
                 agent.path = null;
                 agent.state = 'IDLE';
-                // Release job so others can try (or we try again later)
+                // Release job
                 if (agent.currentJobId) {
                     const job = state.jobs.find(j => j.id === jobId);
                     if (job) job.assignedAgentId = null;
@@ -163,7 +196,7 @@ export class AgentSystem extends BaseSimSystem {
         const az = Math.floor(agent.z);
 
         // Valid storage buildings
-        const storageTypes = [BuildingType.STORAGE_DEPOT, BuildingType.STOCKPILE, BuildingType.MINING_HEADFRAME, BuildingType.STAFF_QUARTERS];
+        const storageTypes = [BuildingType.STORAGE_DEPOT, BuildingType.MINING_HEADFRAME, BuildingType.STAFF_QUARTERS];
 
         for (const chunk of Object.values(chunks)) {
             for (const tile of (chunk as any).tiles) {
@@ -202,9 +235,10 @@ export class AgentSystem extends BaseSimSystem {
         // --- PRIORITY 0: Night Time Sleep (Mandatory) ---
         if (isNight) {
             // If already sleeping, we handled above. If idle/wandering, go to bed.
-            const bed = this.findNearest(agent, BuildingType.STAFF_QUARTERS, state.chunks);
+            const chunks = state.chunks;
+            const bed = this.findNearest(agent, BuildingType.STAFF_QUARTERS, chunks);
             if (bed !== null) {
-                this.goTo(agent, bed.x, bed.z, 0, 'sys_sleep', state);
+                this.goTo(agent, bed.x, bed.z, 'sys_sleep', state);
                 return;
             } else {
                 // No bed? Just sleep on the floor where you are?
@@ -226,9 +260,10 @@ export class AgentSystem extends BaseSimSystem {
             // If full OR if we are idle and holding stuff (finish up logic)
             // But NOT if it's night (already handled above, but for safety)
             if (!isNight && (agent.inventory.amount >= agent.inventory.capacity || agent.state === 'IDLE')) {
-                const storage = this.findNearestStorage(agent, state.chunks);
+                const chunks = state.chunks;
+                const storage = this.findNearestStorage(agent, chunks);
                 if (storage !== null) {
-                    this.goTo(agent, storage.x, storage.z, 0, 'sys_deposit', state);
+                    this.goTo(agent, storage.x, storage.z, 'sys_deposit', state);
                     return;
                 }
             }
@@ -242,17 +277,18 @@ export class AgentSystem extends BaseSimSystem {
         // --- PRIORITY 3: Critical Needs (Daytime) ---
         // At night, we sleep regardless of energy level
         if (!isNight) {
+            const chunks = state.chunks;
             if (agent.energy < CONFIG.NEED_CRITICAL) {
-                const bed = this.findNearest(agent, BuildingType.STAFF_QUARTERS, state.chunks);
+                const bed = this.findNearest(agent, BuildingType.STAFF_QUARTERS, chunks);
                 if (bed !== null) {
-                    this.goTo(agent, bed.x, bed.z, 0, 'sys_sleep', state);
+                    this.goTo(agent, bed.x, bed.z, 'sys_sleep', state);
                     return;
                 }
             }
             if (agent.hunger < CONFIG.NEED_CRITICAL) {
-                const food = this.findNearest(agent, BuildingType.CANTEEN, state.chunks);
+                const food = this.findNearest(agent, BuildingType.CANTEEN, chunks);
                 if (food !== null) {
-                    this.goTo(agent, food.x, food.z, 0, 'sys_eat', state);
+                    this.goTo(agent, food.x, food.z, 'sys_eat', state);
                     return;
                 }
             }
@@ -263,13 +299,20 @@ export class AgentSystem extends BaseSimSystem {
         if (!isNight) {
             // Find highest priority available job
             const availableJob = state.jobs
-                .filter(j => !j.assignedAgentId || j.assignedAgentId === agent.id)
+                .filter(j => {
+                    const isUnassigned = !j.assignedAgentId || j.assignedAgentId === agent.id;
+                    if (!isUnassigned) return false;
+
+                    const targetKey = `${j.targetX},${j.targetZ}`;
+                    const isOnCooldown = agent.unreachableCooldowns?.[targetKey] && state.tickCount < agent.unreachableCooldowns[targetKey];
+                    return !isOnCooldown;
+                })
                 .sort((a, b) => b.priority - a.priority)[0];
 
             if (availableJob) {
                 // CLAIM JOB
                 availableJob.assignedAgentId = agent.id;
-                this.goTo(agent, availableJob.targetX, availableJob.targetZ, availableJob.layer || 0, availableJob.id, state);
+                this.goTo(agent, availableJob.targetX, availableJob.targetZ, availableJob.id, state);
                 return;
             }
         }
@@ -277,7 +320,7 @@ export class AgentSystem extends BaseSimSystem {
         // --- PRIORITY 5: Idleness / Wander ---
         if (agent.state === 'IDLE' && (ctx.random?.next() ?? Math.random()) < 0.2) {
             const wanderTarget = this.getRandomNearby(ctx, agent);
-            this.goTo(agent, wanderTarget.x, wanderTarget.z, agent.layer || 0, 'sys_wander', state);
+            this.goTo(agent, wanderTarget.x, wanderTarget.z, 'sys_wander', state);
         }
     }
 
@@ -319,7 +362,7 @@ export class AgentSystem extends BaseSimSystem {
             if (agent.currentJobId === 'sys_sleep') agent.state = 'SLEEPING';
             else if (agent.currentJobId === 'sys_eat') agent.state = 'EATING';
             else if (agent.currentJobId === 'sys_deposit') agent.state = 'DEPOSITING';
-            else if (agent.currentJobId?.includes('build_') || agent.currentJobId?.includes('dig_') || agent.currentJobId?.includes('mine') || agent.currentJobId?.includes('rehab')) {
+            else if (agent.currentJobId?.includes('build_') || agent.currentJobId?.includes('mine') || agent.currentJobId?.includes('rehab')) {
                 agent.state = 'WORKING';
             }
             else {
@@ -331,7 +374,6 @@ export class AgentSystem extends BaseSimSystem {
         const next = agent.path[0];
         const tx = next.x;
         const tz = next.z;
-        const tL = next.layer;
 
         const dx = tx - agent.x;
         const dz = tz - agent.z;
@@ -343,7 +385,6 @@ export class AgentSystem extends BaseSimSystem {
             // Snap to node and pop it
             agent.x = tx;
             agent.z = tz;
-            agent.layer = tL; // Update vertical layer
             agent.path.shift();
 
             if (agent.path.length === 0) {
@@ -394,53 +435,14 @@ export class AgentSystem extends BaseSimSystem {
         }
 
         const job = state.jobs[jobIdx];
-        const tile = ChunkStore.getTile(state.chunks, job.targetX, job.targetZ);
+        const chunks = state.chunks;
+        const tile = ChunkStore.getTile(chunks, job.targetX, job.targetZ);
         if (!tile) {
             this.finishActivity(ctx, agent, state);
             return;
         }
 
-        // Check Inventory Capacity First for Gathering Jobs
-        if (job.type === 'MINE') {
-            if (agent.inventory.amount >= agent.inventory.capacity) {
-                // Inventory Full! Stop working and deposit.
-                // We do NOT cancel the job, we just stop working on it for now.
-                // Reset assignment so someone else can take it or we come back later.
-                job.assignedAgentId = null;
-                this.finishActivity(ctx, agent, state);
-                return;
-            }
-        }
-
-        if (job.type === 'DIG') {
-            // Extract layer from jobID (dig_ID_LAYER)
-            const parts = job.id.split('_');
-            const layer = parseInt(parts[2]);
-
-            // Execute dig (Instant for now, or add progress logic)
-            // Progress logic:
-            if (!job.progress) job.progress = 0;
-            job.progress += 20 * (1 + agent.skills.mining / 5); // Dig speed based on mining skill
-
-            // Visual feedback
-            if ((ctx.random?.next() ?? Math.random()) < 0.1) {
-                state.pendingEffects.push({ type: 'FX', fxType: 'MINING', x: job.targetX, z: job.targetZ });
-                state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.MINING_HIT });
-            }
-
-            if (job.progress >= 100) {
-                // Done!
-                if (tile.digState && (tile.digState[layer] === 1 || tile.digState[layer] === 4)) {
-                    tile.digState[layer] = tile.digState[layer] === 4 ? 5 : 2; // 2 = Finished Tunnel, 5 = Finished Entrance
-                    // Also trigger effects
-                    state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.CAMP_BUILD });
-                }
-
-                state.jobs.splice(jobIdx, 1);
-                this.finishActivity(ctx, agent, state);
-            }
-
-        } else if (tile.isUnderConstruction) {
+        if (tile.isUnderConstruction) {
             // Use specialized system to handle multi-tile buildings
             const amount = (1 + agent.skills.construction / 10) * dt;
             const finished = this.constructionSystem.progressConstruction(job.targetX, job.targetZ, amount, state);
@@ -450,76 +452,52 @@ export class AgentSystem extends BaseSimSystem {
                 this.finishActivity(ctx, agent, state);
             }
         } else if (job.type === 'MINE') {
-            const workAmount = dt * (1 + agent.skills.mining / 5); // Base work speed
-            // Yield per second roughly correlates to work amount
+            const workAmount = dt * (1 + agent.skills.mining / 5);
             const yieldAmt = 20 * workAmount;
 
-            if (job.layer !== undefined && job.layer < 0) {
-                // Underground Mining
-                agent.inventory.type = 'minerals';
+            // Surface Mining/Harvesting
+            const foliage = tile.foliage as any;
+            let resType: 'minerals' | 'stone' | 'wood' | null = null;
+
+            if (foliage === 'GOLD_VEIN') resType = 'minerals';
+            else if (HARVESTABLE_ROCKS.includes(foliage)) resType = 'stone';
+            else if (HARVESTABLE_TREES.includes(foliage)) resType = 'wood';
+
+            if (resType) {
+                if (agent.inventory.type && agent.inventory.type !== resType && agent.inventory.amount > 0) {
+                    job.assignedAgentId = null;
+                    this.finishActivity(ctx, agent, state);
+                    return;
+                }
+
+                if (!job.progress) job.progress = 0;
+                job.progress += 20 * (1 + agent.skills.mining / 5);
+
+                agent.inventory.type = resType;
                 agent.inventory.amount = Math.min(agent.inventory.capacity, agent.inventory.amount + yieldAmt);
 
-                const strata = tile.underground?.[job.layer];
-                if (strata) {
-                    strata.excavated = true;
+                state.pendingEffects.push({ type: 'FX', fxType: resType === 'wood' ? 'FARM' : 'MINING', x: job.targetX, z: job.targetZ });
+
+                if (job.progress >= 100) {
+                    tile.foliage = 'NONE' as any;
+                    tile.markedForHarvest = false;
                     const { cx, cz } = worldToChunk(job.targetX, job.targetZ, CHUNK_SIZE);
+                    const chunk = state.chunks[`${cx},${cz}`];
+                    if (chunk) {
+                        chunk.meshDirty = true;
+                        chunk.simDirty = true;
+                    }
                     state.pendingEffects.push({ type: 'CHUNK_UPDATE', cx, cz, updates: [tile] });
-                }
-                state.pendingEffects.push({ type: 'FX', fxType: 'MINING', x: job.targetX, z: job.targetZ });
-                state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.MINING_HIT });
-            } else {
-                // Surface Mining/Harvesting
-                const foliage = tile.foliage as any;
-                let resType: 'minerals' | 'stone' | 'wood' | null = null;
 
-                if (foliage === 'GOLD_VEIN') resType = 'minerals';
-                else if (HARVESTABLE_ROCKS.includes(foliage)) resType = 'stone';
-                else if (HARVESTABLE_TREES.includes(foliage)) resType = 'wood';
-
-                if (resType) {
-                    // Check if we are mixing types (not allowed, simple inventory)
-                    if (agent.inventory.type && agent.inventory.type !== resType && agent.inventory.amount > 0) {
-                        // Stop to deposit first
-                        job.assignedAgentId = null;
-                        this.finishActivity(ctx, agent, state);
-                        return;
-                    }
-
-                    // 1. Initialize Progress
-                    if (!job.progress) job.progress = 0;
-
-                    // 2. Add Progress
-                    job.progress += 20 * (1 + agent.skills.mining / 5);
-
-                    // 3. Add to Inventory partial amount
-                    agent.inventory.type = resType;
-                    agent.inventory.amount = Math.min(agent.inventory.capacity, agent.inventory.amount + yieldAmt);
-
-                    // Feedback
-                    state.pendingEffects.push({ type: 'FX', fxType: resType === 'wood' ? 'FARM' : 'MINING', x: job.targetX, z: job.targetZ });
-
-                    // 4. Check Completion
-                    if (job.progress >= 100) {
-                        tile.foliage = 'NONE' as any;
-                        tile.markedForHarvest = false;
-                        const { cx, cz } = worldToChunk(job.targetX, job.targetZ, CHUNK_SIZE);
-                        state.pendingEffects.push({ type: 'CHUNK_UPDATE', cx, cz, updates: [tile] });
-
-                        // Skill XP
-                        agent.skills.mining += 0.5;
-
-                        state.jobs.splice(jobIdx, 1);
-                        this.finishActivity(ctx, agent, state);
-                    }
-                } else {
-                    // Invalid target (foliage gone?), abort
+                    agent.skills.mining += 0.5;
                     state.jobs.splice(jobIdx, 1);
                     this.finishActivity(ctx, agent, state);
                 }
+            } else {
+                state.jobs.splice(jobIdx, 1);
+                this.finishActivity(ctx, agent, state);
             }
-        }
-        else {
-            // Already finished or site removed
+        } else {
             state.jobs.splice(jobIdx, 1);
             this.finishActivity(ctx, agent, state);
         }

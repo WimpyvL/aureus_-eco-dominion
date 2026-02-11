@@ -38,7 +38,7 @@ export function updateWaterConnectivity(chunks: Record<string, Chunk>): Record<s
         }
     }
 
-    // 2. BFS Flood Fill through layer -1 (Underground Network)
+    // 2. BFS Flood Fill through Surface Network (Pipes, Wells, Ponds)
     while (queue.length > 0) {
         const curr = queue.shift()!;
 
@@ -57,8 +57,8 @@ export function updateWaterConnectivity(chunks: Record<string, Chunk>): Record<s
             const tile = ChunkStore.getTile(chunks, n.x, n.z);
             if (!tile) continue;
 
-            // Propagation happens via pipes at layer -1
-            const hasPipe = tile.subBuildings?.[-1] === BuildingType.PIPE;
+            // Propagation happens via pipes
+            const hasPipe = tile.buildingType === BuildingType.PIPE;
             // Also sources themselves act as nodes in the network
             const isSource = tile.buildingType === BuildingType.WATER_WELL || tile.buildingType === BuildingType.POND;
 
@@ -75,7 +75,7 @@ export function updateWaterConnectivity(chunks: Record<string, Chunk>): Record<s
             const tile = chunk.tiles[i];
             const isNetworked = connectedCoords.has(`${tile.x},${tile.z}`);
 
-            if (tile.buildingType !== BuildingType.EMPTY || tile.subBuildings?.[-1] === BuildingType.PIPE) {
+            if (tile.buildingType !== BuildingType.EMPTY) {
                 const newStatus = isNetworked ? 'CONNECTED' : 'DISCONNECTED';
                 if (tile.waterStatus !== newStatus) {
                     chunk.tiles[i] = { ...tile, waterStatus: newStatus };
@@ -116,7 +116,7 @@ export function isConnectedToWater(chunks: Record<string, Chunk>, startX: number
                 return true;
             }
 
-            if (tile.subBuildings?.[-1] === BuildingType.PIPE) {
+            if (tile.buildingType === BuildingType.PIPE) {
                 visited.add(key);
                 queue.push(n);
             }

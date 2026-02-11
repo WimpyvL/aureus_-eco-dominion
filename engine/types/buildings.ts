@@ -46,13 +46,6 @@ export enum BuildingType {
     // Era 5: Prosperity
     MONUMENT = 'MONUMENT',
     SPACEPORT = 'SPACEPORT',
-    // Underground Specific
-    SUPPORT_PILLAR = 'SUPPORT_PILLAR',
-    MINING_DRILL = 'MINING_DRILL',
-    ORE_EXTRACTOR = 'ORE_EXTRACTOR',
-    UNDERGROUND_FANS = 'UNDERGROUND_FANS',
-    STOCKPILE = 'STOCKPILE',
-    STORAGE_EXTENSION = 'STORAGE_EXTENSION',
 }
 
 export interface PowerConfig {
@@ -100,4 +93,5 @@ export interface BuildingDef {
     power?: PowerConfig;
     water?: WaterConfig;
     upgrades?: BuildingUpgrade[];
+    waterPlaceable?: boolean; // If true, this building can be placed on water tiles (POND)
 }
