@@ -954,6 +954,21 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
             }
         ]
     },
+    [BuildingType.MINE_SHAFT]: {
+        type: BuildingType.MINE_SHAFT,
+        name: 'Mine Shaft',
+        cost: 2500,
+        desc: 'Unlocks access to the underground dungeon. Extract rare resources from below.',
+        ecoReq: 0,
+        stats: 'Unlocks Dungeon',
+        width: 2,
+        depth: 2,
+        buildTime: 80,
+        maintenance: 5,
+        pollution: 1.5,
+        costs: { agt: 2500, wood: 300, stone: 500 },
+        era: Era.SETTLEMENT
+    },
     [BuildingType.MEDICAL_BAY]: {
         type: BuildingType.MEDICAL_BAY,
         name: 'Medical Bay',

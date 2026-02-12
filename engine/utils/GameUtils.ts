@@ -132,7 +132,7 @@ export function getEcoMultiplier(eco: number): number {
 
 // Helper: Count buildings for Scaling Costs
 export function calculateBuildingCost(type: BuildingType | null, chunks: Record<string, Chunk>): number {
-    if (!type) return 0;
+    if (!type || !BUILDINGS[type]) return 0;
 
     const base = BUILDINGS[type].cost;
 

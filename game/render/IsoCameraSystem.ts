@@ -13,7 +13,8 @@ import { ThreeRenderAdapter } from '../../engine/render/ThreeRenderAdapter';
 export class IsoCameraSystem {
     private camera: THREE.OrthographicCamera;
     private domElement: HTMLElement;
-    private enabled = true;
+    public enabled = false;
+    private adapter: ThreeRenderAdapter;
 
     // Camera State - Public for read access
     public cameraZoom: number;
@@ -55,6 +56,7 @@ export class IsoCameraSystem {
     private boundTouchEnd: (e: TouchEvent) => void;
 
     constructor(adapter: ThreeRenderAdapter) {
+        this.adapter = adapter;
         this.camera = adapter.getCamera() as THREE.OrthographicCamera;
         this.cameraZoom = 15 + (this.zoomLevel * 10);
         this.domElement = adapter.getCanvas();
@@ -76,6 +78,7 @@ export class IsoCameraSystem {
     public setEnabled(enabled: boolean): void {
         this.enabled = enabled;
         if (enabled) {
+            this.adapter.setCamera(this.camera);
             this.bindEvents();
         } else {
             this.unbindEvents();

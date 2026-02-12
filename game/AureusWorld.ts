@@ -24,9 +24,12 @@ import {
     TutorialDemoSystem, CommandDispatcher,
     ResearchSystem
 } from '../engine/sim/systems';
+import { DungeonMinerSystem } from '../engine/sim/systems/DungeonMinerSystem';
+import { DungeonStabilitySystem } from '../engine/sim/systems/DungeonStabilitySystem';
 import { PersistenceManager } from '../engine/sim/PersistenceManager';
+import { DungeonEngine } from '../engine/dungeon/DungeonEngine';
 
-import { GameState, GameStep, Agent, GridTile, BuildingType, SfxType, TechId, Chunk } from '../types';
+import { GameState, GameStep, Agent, GridTile, BuildingType, SfxType, TechId, Chunk, Action } from '../types';
 import { getEcoMultiplier, isHarvestable } from '../engine/utils/GameUtils';
 import { BUILDINGS, TECHNOLOGIES } from '../engine/data/VoxelConstants';
 import { TerrainRenderSystem } from './render/systems/TerrainRenderSystem';
@@ -34,7 +37,10 @@ import { FoliageRenderSystem } from './render/systems/FoliageRenderSystem';
 import { BuildingRenderSystem } from './render/systems/BuildingRenderSystem';
 import { AgentRenderSystem } from './render/systems/AgentRenderSystem';
 import { EnvironmentRenderSystem } from './render/systems/EnvironmentRenderSystem';
+import { DungeonRenderSystem } from './render/systems/DungeonRenderSystem';
 import { IsoCameraSystem } from './render/IsoCameraSystem';
+import { DungeonCameraSystem } from './render/DungeonCameraSystem';
+import { DungeonInputHandler } from './dungeon/DungeonInputHandler';
 import { InputSystem } from '../engine/input/InputSystem';
 import { StateManager, StateListener } from '../engine/state/StateManager';
 import {
@@ -78,6 +84,9 @@ export class AureusWorld extends BaseWorld {
     private buildingRenderSystem: BuildingRenderSystem;
     private environmentRenderSystem: EnvironmentRenderSystem;
     private cameraSystem: IsoCameraSystem;
+    private dungeonCameraSystem: DungeonCameraSystem;
+    private dungeonRenderSystem: DungeonRenderSystem;
+    private dungeonInputHandler: DungeonInputHandler;
 
     private persistenceManager: PersistenceManager;
 
@@ -142,6 +151,9 @@ export class AureusWorld extends BaseWorld {
         const tutorialDemo = new TutorialDemoSystem();
         this.sim.addSystem(tutorialDemo);
 
+        this.sim.addSystem(new DungeonMinerSystem());
+        this.sim.addSystem(new DungeonStabilitySystem());
+
 
 
         this.agentSystem = new AgentSystem(this.jobs, this.constructionSystem);
@@ -184,7 +196,10 @@ export class AureusWorld extends BaseWorld {
         this.foliageRenderSystem = new FoliageRenderSystem(this.render.getScene());
         this.buildingRenderSystem = new BuildingRenderSystem(this.render.getScene());
         this.environmentRenderSystem = new EnvironmentRenderSystem(this.render);
+        this.dungeonRenderSystem = new DungeonRenderSystem(this.render.getScene());
         this.cameraSystem = new IsoCameraSystem(this.render);
+        this.dungeonCameraSystem = new DungeonCameraSystem(this.render);
+        this.dungeonInputHandler = new DungeonInputHandler(this.stateManager, this.render.getScene());
 
         // Wire Terrain -> Foliage
         this.terrainRenderSystem.onFoliageUpdate = (key: string, items: any[]) => {
@@ -445,16 +460,16 @@ export class AureusWorld extends BaseWorld {
 
         this.inputSystem = new InputSystem(this.render, this.getTerrainHeight);
 
-        this.inputSystem.onTileClick = (x, z, isTouch) => {
-            this.handleSurfaceInteraction(x, z, 'click', isTouch);
+        this.inputSystem.onTileClick = (x, z, isTouch, clientX, clientY) => {
+            this.handleSurfaceInteraction(x, z, 'click', isTouch, clientX, clientY);
         };
 
-        this.inputSystem.onTileRightClick = (x, z, isTouch) => {
-            this.handleSurfaceInteraction(x, z, 'right-click', isTouch);
+        this.inputSystem.onTileRightClick = (x, z, isTouch, clientX, clientY) => {
+            this.handleSurfaceInteraction(x, z, 'right-click', isTouch, clientX, clientY);
         };
 
-        this.inputSystem.onTileHover = (x, z) => {
-            this.handleSurfaceInteraction(x || 0, z || 0, 'hover');
+        this.inputSystem.onTileHover = (x, z, clientX, clientY) => {
+            this.handleSurfaceInteraction(x || 0, z || 0, 'hover', false, clientX, clientY);
             if (this.config?.onTileHover) this.config.onTileHover(x, z);
         };
 
@@ -648,14 +663,36 @@ export class AureusWorld extends BaseWorld {
             state.pendingEffects.length = 0;
         }
 
-        // Update render systems
-        this.cameraSystem.update(ctx.dt);
-        this.agentRenderSystem.setSelectedAgent(state.selectedAgentId);
-        const zoomLevel = this.cameraSystem.cameraZoom;
-        this.agentRenderSystem.update(ctx.dt, ctx.time, state.agents, zoomLevel);
+        // Update render systems based on active view
+        if (state.activeView === 'DUNGEON') {
+            // Dungeon View
+            this.dungeonRenderSystem.setVisible(true);
+            this.dungeonRenderSystem.update(state.dungeon);
 
-        this.terrainRenderSystem.update(this.cameraSystem.cameraFocus, this.render.getCamera());
-        this.buildingRenderSystem.update(ctx.dt, ctx.time, state.chunks, this.stateManager.getDirtyKeys());
+            // Switch to dungeon camera
+            if (!this.dungeonCameraSystem.enabled) this.dungeonCameraSystem.setEnabled(true);
+            if (this.cameraSystem.enabled) this.cameraSystem.setEnabled(false);
+
+            this.dungeonInputHandler.setCamera(this.render.getCamera());
+            this.dungeonInputHandler.setMeshGroup(this.dungeonRenderSystem.getMeshGroup());
+            this.dungeonInputHandler.setDungeonEngine(new DungeonEngine(state.dungeon)); // Ensure it has the engine instance
+
+        } else {
+            // Surface View
+            this.dungeonRenderSystem.setVisible(false);
+
+            // Switch to surface camera
+            if (!this.cameraSystem.enabled) this.cameraSystem.setEnabled(true);
+            if (this.dungeonCameraSystem.enabled) this.dungeonCameraSystem.setEnabled(false);
+
+            this.cameraSystem.update(ctx.dt);
+            this.agentRenderSystem.setSelectedAgent(state.selectedAgentId);
+            const zoomLevel = this.cameraSystem.cameraZoom;
+            this.agentRenderSystem.update(ctx.dt, ctx.time, state.agents, zoomLevel);
+
+            this.terrainRenderSystem.update(this.cameraSystem.cameraFocus, this.render.getCamera());
+            this.buildingRenderSystem.update(ctx.dt, ctx.time, state.chunks, this.stateManager.getDirtyKeys());
+        }
 
         const cursor = this.inputSystem?.getCurrentCursor() || null;
         if (cursor) {
@@ -699,9 +736,17 @@ export class AureusWorld extends BaseWorld {
     // INTERACTION STATES
     // ═══════════════════════════════════════════════════════════════
 
-    private handleSurfaceInteraction(x: number, z: number, type: 'click' | 'right-click' | 'hover', isTouch: boolean = false) {
+    private handleSurfaceInteraction(x: number, z: number, type: 'click' | 'right-click' | 'hover', isTouch: boolean = false, clientX?: number, clientY?: number) {
         const state = this.stateManager.getState();
         const config = this.config!;
+
+        if (state.activeView === 'DUNGEON') {
+            if (clientX !== undefined && clientY !== undefined) {
+                if (type === 'click') this.dungeonInputHandler.handleClick(clientX, clientY);
+                else if (type === 'hover') this.dungeonInputHandler.handleHover(clientX, clientY);
+            }
+            return;
+        }
 
         if (type === 'hover') {
             config.onTileHover?.(x, z);
@@ -768,6 +813,97 @@ export class AureusWorld extends BaseWorld {
 
     setGhostBuilding(type: BuildingType | null): void {
         this.buildingRenderSystem.setGhostBuilding(type);
+    }
+
+    /**
+     * Toggle between surface and dungeon views
+     */
+    toggleView(): void {
+        const state = this.stateManager.getState();
+        if (!state.dungeon.unlocked) return;
+
+        state.activeView = state.activeView === 'SURFACE' ? 'DUNGEON' : 'SURFACE';
+    }
+
+    /**
+     * Dispatch an engine action (compatibility with legacy Redux-style UI)
+     */
+    dispatch(action: Action): void {
+        console.log(`[AureusWorld] Dispatching: ${action.type}`, (action as any).payload);
+
+        switch (action.type) {
+            case 'PLACE_BUILDING':
+                this.placeBuilding(action.payload.x, action.payload.z);
+                break;
+            case 'BULLDOZE_TILE':
+                this.bulldozeTile(action.payload.x, action.payload.z);
+                break;
+            case 'SELECT_BUILDING_TO_PLACE':
+                this.selectBuilding(action.payload);
+                break;
+            case 'SELECT_AGENT':
+                this.selectAgent(action.payload);
+                break;
+            case 'COMMAND_AGENT':
+                this.commandAgent(action.payload.agentId, action.payload.x, action.payload.z);
+                break;
+            case 'SET_INTERACTION_MODE':
+                this.setInteractionMode(action.payload as any);
+                break;
+            case 'SELL_MINERALS':
+                this.sellMinerals();
+                break;
+            case 'BUY_RESOURCE':
+                this.buyResource(action.payload.resource, action.payload.amount);
+                break;
+            case 'BUY_BUILDING':
+                this.buyBuilding(action.payload.type, action.payload.cost);
+                this.selectBuilding(action.payload.type);
+                break;
+            case 'UPDATE_LOGISTICS':
+                if (action.payload.autoSell !== undefined) {
+                    this.setAutoSell(action.payload.autoSell, action.payload.sellThreshold || 100);
+                }
+                break;
+            case 'UNLOCK_TECH':
+                this.researchTech(action.payload);
+                break;
+            case 'TOGGLE_DEBUG':
+                this.toggleDebug();
+                break;
+            case 'TOGGLE_CHEATS':
+                this.toggleCheats();
+                break;
+            case 'SAVE_GAME':
+                this.saveGame();
+                break;
+            case 'LOAD_GAME':
+                this.loadState(action.payload);
+                break;
+            case 'ADVANCE_TUTORIAL':
+                this.advanceTutorial();
+                break;
+            case 'START_DEMO':
+                this.startDemo();
+                break;
+            case 'DISMISS_NEWS':
+                // news system handles this via stateManager
+                break;
+            default:
+                console.warn(`[AureusWorld] Unhandled action type: ${(action as any).type}`);
+        }
+    }
+
+    private loadState(saved: any) {
+        this.stateManager.loadState(saved);
+    }
+
+    /**
+     * Check if a save exists
+     */
+    hasSave(): boolean {
+        // Implementation for checking local storage or database
+        return !!localStorage.getItem('aureus-game-state');
     }
 
     getDebugStats() {

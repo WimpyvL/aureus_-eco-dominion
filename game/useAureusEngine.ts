@@ -61,6 +61,9 @@ export interface AureusEngineHandle {
 
     /** Get debug stats */
     getDebugStats: () => any;
+
+    /** Dispatch action */
+    dispatch: (action: any) => void;
 }
 
 /**
@@ -339,7 +342,10 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                 ...worldStats,
                 cpuTime
             };
-        }, [world, runtime])
+        }, [world, runtime]),
+        dispatch: useCallback((action: any) => {
+            world?.dispatch(action);
+        }, [world])
     };
 }
 

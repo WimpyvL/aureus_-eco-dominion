@@ -4,9 +4,10 @@
 */
 
 import React from 'react';
-import { Menu, Layers, Hammer, X, Activity, TrendingUp, Pickaxe } from 'lucide-react';
+import { Menu, Layers, Hammer, X, Activity, TrendingUp, Pickaxe, ArrowUp, ArrowDown } from 'lucide-react';
 import { BuildingType, Action, GameStep } from '../types';
 import { BUILDINGS } from '../engine/data/VoxelConstants';
+import '../components/ViewSwitchButton.css';
 
 interface ControlsProps {
     selectedBuilding: BuildingType | null;
@@ -16,9 +17,15 @@ interface ControlsProps {
     step: GameStep;
     debugMode: boolean;
     interactionMode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'TEST_DESTRUCT';
+    dungeonUnlocked: boolean;
+    activeView: 'SURFACE' | 'DUNGEON';
+    onToggleView: () => void;
 }
 
-export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding, dispatch, setSidebarOpen, playSfx, step, debugMode, interactionMode }) => {
+export const Controls: React.FC<ControlsProps> = React.memo(({
+    selectedBuilding, dispatch, setSidebarOpen, playSfx, step,
+    debugMode, interactionMode, dungeonUnlocked, activeView, onToggleView
+}) => {
     // ... (keep existing render logic for selectedBuilding)
     if (selectedBuilding) {
         return (
@@ -98,6 +105,15 @@ export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding,
                     <TrendingUp size={20} className="text-blue-400" />
                 </button>
 
+                {dungeonUnlocked && (
+                    <button
+                        onClick={onToggleView}
+                        className={`view-switch-button ${activeView === 'DUNGEON' ? 'is-dungeon' : 'is-surface'} w-12 h-12 !p-0`}
+                        title={activeView === 'DUNGEON' ? 'Return to Surface (U)' : 'Enter Dungeon (U)'}
+                    >
+                        {activeView === 'DUNGEON' ? <ArrowUp size={20} /> : <ArrowDown size={20} />}
+                    </button>
+                )}
             </div>
 
             {/* Build Button (Right) */}

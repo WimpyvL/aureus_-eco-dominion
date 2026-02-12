@@ -11,6 +11,7 @@ import { BUILDINGS } from '../../data/VoxelConstants';
 import { updateWaterConnectivity } from '../../utils/GameUtils';
 import { ChunkStore } from '../../space/ChunkStore';
 import { worldToChunk, worldToLocal, CHUNK_SIZE } from '../../utils/coords';
+import { DungeonEngine } from '../../dungeon/DungeonEngine';
 
 export class ConstructionSystem extends BaseSimSystem {
     readonly id = 'construction';
@@ -147,11 +148,31 @@ export class ConstructionSystem extends BaseSimSystem {
             }
         }
         updateWaterConnectivity(state.chunks);
+
+        // UNLOCK DUNGEON: If this is a MINE_SHAFT, initialize the dungeon
+        if (headTile.buildingType === BuildingType.MINE_SHAFT && !state.dungeon.unlocked) {
+            state.dungeon.unlocked = true;
+
+            // Initialize dungeon voxel data if not already done
+            if (!state.dungeon.voxelData) {
+                // DungeonEngine constructor automatically initializes voxel data
+                new DungeonEngine(state.dungeon);
+            }
+
+            state.dungeon.logs.push('Mine Shaft complete! The underground is now accessible.');
+        }
     }
 
     public placeBuilding(x: number, z: number, buildingType: BuildingType, state: GameState, isInstant: boolean = false): CommandResult {
         const def = BUILDINGS[buildingType];
         if (!def) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: `Unknown building type: ${buildingType}` };
+
+        // Inventory gate: require a stored unit unless cheats are enabled
+        const available = state.inventory?.[buildingType] || 0;
+        if (!state.cheatsEnabled && available <= 0) {
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+            return { ok: false, code: CommandErrorCode.INVALID_STATE, reason: `No ${def.name} in inventory` };
+        }
 
         const w = def.width || 1;
         const d = def.depth || 1;
@@ -207,6 +228,16 @@ export class ConstructionSystem extends BaseSimSystem {
             });
         }
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BUILD_START });
+
+        // Consume inventory and clear selection when depleted
+        if (!state.cheatsEnabled) {
+            const remaining = Math.max(0, (state.inventory?.[buildingType] || 0) - 1);
+            state.inventory[buildingType] = remaining;
+            if (remaining === 0 && state.selectedBuilding === buildingType) {
+                state.selectedBuilding = null;
+                state.interactionMode = 'INSPECT';
+            }
+        }
         return { ok: true };
     }
 

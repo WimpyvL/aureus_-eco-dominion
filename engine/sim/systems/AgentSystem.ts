@@ -138,6 +138,17 @@ export class AgentSystem extends BaseSimSystem {
         }
 
         try {
+            // DIAGNOSTIC: Check if start and target chunks exist
+            const { cx: scx, cz: scz } = worldToChunk(ax, az, CHUNK_SIZE);
+            const { cx: tcx, cz: tcz } = worldToChunk(targetX, targetZ, CHUNK_SIZE);
+
+            if (!chunks[`${scx},${scz}`]) {
+                console.warn(`[Agent ${agent.name}] START chunk (${scx}, ${scz}) is missing! Pathfinding will likely fail.`);
+            }
+            if (!chunks[`${tcx},${tcz}`]) {
+                console.warn(`[Agent ${agent.name}] TARGET chunk (${tcx}, ${tcz}) is missing! Pathfinding will likely fail.`);
+            }
+
             const path = findPath(ax, az, targetX, targetZ, chunks);
             if (path && path.length > 0) {
                 PathPool.release(agent.path);
@@ -320,6 +331,13 @@ export class AgentSystem extends BaseSimSystem {
         // --- PRIORITY 5: Idleness / Wander ---
         if (agent.state === 'IDLE' && (ctx.random?.next() ?? Math.random()) < 0.2) {
             const wanderTarget = this.getRandomNearby(ctx, agent);
+
+            // DIAGNOSTIC: Log if we are wandering into an unloaded chunk
+            const { cx, cz } = worldToChunk(wanderTarget.x, wanderTarget.z, CHUNK_SIZE);
+            if (!state.chunks[`${cx},${cz}`]) {
+                console.log(`[Agent ${agent.name}] Attempting to wander into UNLOADED chunk (${cx}, ${cz}). Destination: (${wanderTarget.x}, ${wanderTarget.z})`);
+            }
+
             this.goTo(agent, wanderTarget.x, wanderTarget.z, 'sys_wander', state);
         }
     }

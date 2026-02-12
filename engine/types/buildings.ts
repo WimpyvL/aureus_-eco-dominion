@@ -31,6 +31,7 @@ export enum BuildingType {
     STORAGE_DEPOT = 'STORAGE_DEPOT',
     WORKSHOP = 'WORKSHOP',
     GENERATOR = 'GENERATOR',
+    MINE_SHAFT = 'MINE_SHAFT',
     // Era 2: Growth
     MEDICAL_BAY = 'MEDICAL_BAY',
     TRAINING_CENTER = 'TRAINING_CENTER',
@@ -46,6 +47,12 @@ export enum BuildingType {
     // Era 5: Prosperity
     MONUMENT = 'MONUMENT',
     SPACEPORT = 'SPACEPORT',
+    // Underground Specials
+    D_MINE = 'D_MINE',
+    D_SUPPORT = 'D_SUPPORT',
+    D_RECHARGER = 'D_RECHARGER',
+    D_HIRE = 'D_HIRE',
+    D_DEPOSIT = 'D_DEPOSIT'
 }
 
 export interface PowerConfig {

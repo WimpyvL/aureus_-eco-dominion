@@ -13,6 +13,7 @@ import { SawmillFactory } from './Sawmill';
 import { StoneQuarryFactory } from './StoneQuarry';
 import { StorageDepotFactory } from './StorageDepot';
 import { WorkshopFactory } from './Workshop';
+import { MineShaftFactory } from './MineShaft';
 
 export const Era1Buildings = {
     [BuildingType.ROAD]: RoadFactory,
@@ -27,5 +28,6 @@ export const Era1Buildings = {
     [BuildingType.SAWMILL]: SawmillFactory,
     [BuildingType.STONE_QUARRY]: StoneQuarryFactory,
     [BuildingType.STORAGE_DEPOT]: StorageDepotFactory,
-    [BuildingType.WORKSHOP]: WorkshopFactory
+    [BuildingType.WORKSHOP]: WorkshopFactory,
+    [BuildingType.MINE_SHAFT]: MineShaftFactory
 };

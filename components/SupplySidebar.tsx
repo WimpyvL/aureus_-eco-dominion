@@ -17,12 +17,13 @@ import { calculateBuildingCost } from '../engine/utils/GameUtils';
 interface SupplySidebarProps {
     isOpen: boolean;
     state: GameState;
+    world: any;
     dispatch: React.Dispatch<Action>;
     onClose: () => void;
     playSfx: (type: any) => void;
 }
 
-type CategoryType = 'ALL' | 'BASICS' | 'PRODUCTION' | 'UTILITIES' | 'ADVANCED';
+type CategoryType = 'ALL' | 'BASICS' | 'PRODUCTION' | 'UTILITIES' | 'ADVANCED' | 'UNDERGROUND';
 
 export const getBuildingIcon = (type: BuildingType) => {
     switch (type) {
@@ -64,6 +65,7 @@ export const getBuildingIcon = (type: BuildingType) => {
         // Era 5: Prosperity
         case BuildingType.MONUMENT: return <Trophy size={18} />;
         case BuildingType.SPACEPORT: return <Rocket size={18} />;
+        case BuildingType.MINE_SHAFT: return <Pickaxe size={18} />;
         default: return <X size={18} />;
     }
 };
@@ -84,7 +86,8 @@ const CATEGORIES: { id: CategoryType, icon: any, label: string }[] = [
     { id: 'BASICS', icon: <Hammer size={16} />, label: 'Basics' },
     { id: 'PRODUCTION', icon: <Zap size={16} />, label: 'Industry' },
     { id: 'UTILITIES', icon: <Droplet size={16} />, label: 'Resources' },
-    { id: 'ADVANCED', icon: <Sprout size={16} />, label: 'Advanced' }
+    { id: 'ADVANCED', icon: <Sprout size={16} />, label: 'Advanced' },
+    { id: 'UNDERGROUND', icon: <Pickaxe size={16} />, label: 'Underground' }
 ];
 
 const ITEM_CATEGORIES: Record<BuildingType, CategoryType> = {
@@ -129,22 +132,38 @@ const ITEM_CATEGORIES: Record<BuildingType, CategoryType> = {
     [BuildingType.POWER_LINE]: 'BASICS',
     [BuildingType.EMPTY]: 'ALL',
     [BuildingType.SAWMILL]: 'PRODUCTION',
-    [BuildingType.STONE_QUARRY]: 'PRODUCTION'
+    [BuildingType.STONE_QUARRY]: 'PRODUCTION',
+    [BuildingType.MINE_SHAFT]: 'PRODUCTION',
+    [BuildingType.D_MINE]: 'UNDERGROUND',
+    [BuildingType.D_SUPPORT]: 'UNDERGROUND',
+    [BuildingType.D_RECHARGER]: 'UNDERGROUND',
+    [BuildingType.D_HIRE]: 'UNDERGROUND',
+    [BuildingType.D_DEPOSIT]: 'UNDERGROUND'
 };
 
-export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dispatch, onClose, playSfx }) => {
+export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, world, dispatch, onClose, playSfx }) => {
     // New interaction: Select item first, then buy.
     const [selectedItem, setSelectedItem] = useState<BuildingType | null>(null);
     const [activeCategory, setActiveCategory] = useState<CategoryType>('ALL');
     const [searchQuery, setSearchQuery] = useState('');
 
     const shopItems = useMemo(() => {
+        if (state.activeView === 'DUNGEON') {
+            return [
+                'D_MINE' as BuildingType,
+                'D_SUPPORT' as BuildingType,
+                'D_RECHARGER' as BuildingType,
+                'D_HIRE' as BuildingType,
+                'D_DEPOSIT' as BuildingType
+            ];
+        }
+
         const all = [
             // Era 1: Settlement
             BuildingType.ROAD, BuildingType.PIPE, BuildingType.FENCE,
             BuildingType.STAFF_QUARTERS, BuildingType.CANTEEN, BuildingType.WORKSHOP,
             BuildingType.WASH_PLANT, BuildingType.SOLAR_ARRAY, BuildingType.WATER_WELL, BuildingType.STORAGE_DEPOT,
-            BuildingType.MINING_HEADFRAME,
+            BuildingType.MINING_HEADFRAME, BuildingType.MINE_SHAFT,
             // Era 2: Growth
             BuildingType.MEDICAL_BAY, BuildingType.TRAINING_CENTER, BuildingType.GENERATOR,
             BuildingType.SOCIAL_HUB, BuildingType.SECURITY_POST, BuildingType.COMMUNITY_GARDEN, BuildingType.WIND_TURBINE,
@@ -156,18 +175,16 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
             BuildingType.NATURE_RESERVE, BuildingType.HYDROPONICS, BuildingType.GEOTHERMAL_PLANT,
             // Era 5: Prosperity
             BuildingType.SAFARI_LODGE, BuildingType.GREEN_TECH_LAB,
-            // Era 5: Prosperity
-            BuildingType.SAFARI_LODGE, BuildingType.GREEN_TECH_LAB,
             BuildingType.MONUMENT, BuildingType.SPACEPORT
         ];
 
         return all.filter(type => {
             const matchesCategory = activeCategory === 'ALL' || ITEM_CATEGORIES[type] === activeCategory;
-            const matchesSearch = BUILDINGS[type].name.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesSearch = BUILDINGS[type] ? BUILDINGS[type].name.toLowerCase().includes(searchQuery.toLowerCase()) : false;
 
             return matchesCategory && matchesSearch;
         });
-    }, [activeCategory, searchQuery]);
+    }, [activeCategory, searchQuery, state.activeView]);
 
     const sidebarRef = React.useRef<HTMLDivElement>(null);
 
@@ -203,6 +220,42 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
 
     const handlePurchase = () => {
         if (!selectedItem) return;
+
+        // Custom Underground Handling
+        if (state.activeView === 'DUNGEON') {
+            if (selectedItem === BuildingType.D_HIRE) {
+                if (state.resources.agt >= 500) {
+                    const dungeon = state.dungeon;
+                    const newMiner = {
+                        id: `miner_${Date.now()}`,
+                        type: 'driller' as const,
+                        position: { x: Math.floor(dungeon.gridSize.x / 2), y: 1, z: Math.floor(dungeon.gridSize.z / 2) },
+                        state: 'idle' as const, energy: 100, miningProgress: 0
+                    };
+                    dungeon.miners.push(newMiner);
+                    state.resources.agt -= 500;
+                    playSfx('SELL');
+                } else playSfx('ERROR');
+            } else if (selectedItem === BuildingType.D_DEPOSIT) {
+                state.resources.agt += state.dungeon.gold;
+                state.resources.gems += state.dungeon.gems;
+                state.dungeon.gold = 0;
+                state.dungeon.gems = 0;
+                playSfx('SELL');
+            } else if (selectedItem === BuildingType.D_MINE) {
+                (world as any)?.dungeonInputHandler?.setMode('mine');
+                onClose();
+            } else if (selectedItem === BuildingType.D_SUPPORT) {
+                (world as any)?.dungeonInputHandler?.setMode('build_support');
+                onClose();
+            } else if (selectedItem === BuildingType.D_RECHARGER) {
+                (world as any)?.dungeonInputHandler?.setMode('build_recharger');
+                onClose();
+            }
+            setSelectedItem(null);
+            return;
+        }
+
         const scaledCost = calculateBuildingCost(selectedItem, state.chunks);
         if (state.cheatsEnabled || state.resources.agt >= scaledCost) {
             dispatch({ type: 'BUY_BUILDING', payload: { type: selectedItem, cost: state.cheatsEnabled ? 0 : scaledCost } });
@@ -235,14 +288,45 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                     <div className="p-4 border-b border-white/5 bg-slate-900/50">
                         <div className="flex justify-between items-end mb-4">
                             <div>
-                                <h2 className="text-white font-black uppercase tracking-widest text-xl font-['Rajdhani'] leading-none">Supply Command</h2>
-                                <p className="text-slate-500 text-[10px] uppercase font-mono mt-1 tracking-tighter">Authorized Assets & Infrastructure</p>
+                                <h2 className="text-white font-black uppercase tracking-widest text-xl font-['Rajdhani'] leading-none">
+                                    {state.activeView === 'DUNGEON' ? 'Dungeon Ops' : 'Supply Command'}
+                                </h2>
+                                <p className="text-slate-500 text-[10px] uppercase font-mono mt-1 tracking-tighter">
+                                    {state.activeView === 'DUNGEON' ? 'Subterranean Logistics & Mining' : 'Authorized Assets & Infrastructure'}
+                                </p>
                             </div>
                             <div className="flex flex-col items-end">
                                 <span className="text-amber-500 font-mono text-lg font-black leading-none">{Math.floor(state.resources.agt).toLocaleString()}</span>
                                 <span className="text-[9px] text-slate-600 font-mono uppercase">Credits Available</span>
                             </div>
                         </div>
+
+                        {/* Underground Treasury Section - Only when underground */}
+                        {state.activeView === 'DUNGEON' && (
+                            <div className="flex gap-4 mb-4 p-2 bg-amber-950/20 border border-amber-500/10 rounded-sm">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                                    <div>
+                                        <div className="text-[10px] text-slate-500 font-mono leading-none">GOLD IN SHAFT</div>
+                                        <div className="text-sm font-black text-amber-500 font-mono">{state.dungeon.gold} oz</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+                                    <div>
+                                        <div className="text-[10px] text-slate-500 font-mono leading-none">GEMS HELD</div>
+                                        <div className="text-sm font-black text-purple-400 font-mono">{state.dungeon.gems} ct</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                                    <div>
+                                        <div className="text-[10px] text-slate-500 font-mono leading-none">MINER CREW</div>
+                                        <div className="text-sm font-black text-blue-400 font-mono">{state.dungeon.miners.length} ACTIVE</div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Search & Category Tabs */}
                         <div className="flex gap-2 mb-3">
@@ -303,14 +387,21 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                                     </div>
                                 ) : (
                                     shopItems.map((type) => {
-                                        const b = BUILDINGS[type];
-                                        const cost = calculateBuildingCost(type, state.chunks);
-                                        const isEcoLocked = state.resources.eco < b.ecoReq;
+                                        const b = BUILDINGS[type] || {
+                                            name: type === 'D_MINE' ? 'Mining Mode' :
+                                                type === 'D_SUPPORT' ? 'Support Structure' :
+                                                    type === 'D_RECHARGER' ? 'Recharger Station' :
+                                                        type === 'D_HIRE' ? 'Hire Miner' : 'Deposit Resources',
+                                            era: 'UNDERGROUND' as any,
+                                            cost: type === 'D_HIRE' ? 500 : 0
+                                        };
+                                        const cost = b.cost || (BUILDINGS[type] ? calculateBuildingCost(type, state.chunks) : 0);
+                                        const isEcoLocked = (b as any).ecoReq ? state.resources.eco < (b as any).ecoReq : false;
                                         let dependencyMet = true;
-                                        if (b.dependency) {
-                                            dependencyMet = Object.values(state.chunks).flatMap(c => c.tiles).some(t => t.buildingType === b.dependency && !t.isUnderConstruction);
+                                        if ((b as any).dependency) {
+                                            dependencyMet = Object.values(state.chunks).flatMap(c => c.tiles).some(t => t.buildingType === (b as any).dependency && !t.isUnderConstruction);
                                         }
-                                        const isEraLocked = !state.unlockedEras.includes(b.era);
+                                        const isEraLocked = b.era && b.era !== 'UNDERGROUND' && !state.unlockedEras.includes(b.era);
                                         const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet || isEraLocked);
                                         const canAfford = state.cheatsEnabled || state.resources.agt >= cost;
                                         const isSelected = selectedItem === type;
@@ -329,9 +420,14 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                                                 <div className={`
                                                 w-12 h-12 shrink-0 rounded flex items-center justify-center text-white transition-all
                                                 ${isSelected ? 'scale-110 shadow-lg' : ''}
-                                                ${isLocked ? 'bg-slate-800' : getCategoryColor(type).replace('border-', 'border-opacity-0 border-')}
+                                                ${isLocked ? 'bg-slate-800' : (BUILDINGS[type] ? getCategoryColor(type).replace('border-', 'border-opacity-0 border-') : 'bg-amber-600')}
                                             `} style={{ background: isLocked ? undefined : 'linear-gradient(135deg, rgba(255,255,255,0.1), transparent)' }}>
-                                                    {getBuildingIcon(type)}
+                                                    {BUILDINGS[type] ? getBuildingIcon(type) : (
+                                                        type === 'D_MINE' ? <Pickaxe size={18} /> :
+                                                            type === 'D_SUPPORT' ? <Package size={18} /> :
+                                                                type === 'D_RECHARGER' ? <Zap size={18} /> :
+                                                                    type === 'D_HIRE' ? <Plus size={18} /> : <Archive size={18} />
+                                                    )}
                                                 </div>
 
                                                 {/* Info Section */}
@@ -384,16 +480,23 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                     >
                         <div className="bg-slate-900 border-t-4 border-amber-500 rounded-lg shadow-2xl w-full max-w-[400px] overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-5 duration-300">
                             {(() => {
-                                const b = BUILDINGS[selectedItem];
-                                const scaledCost = calculateBuildingCost(selectedItem, state.chunks);
+                                const b = BUILDINGS[selectedItem] || {
+                                    name: selectedItem === BuildingType.D_MINE ? 'Mining Mode' :
+                                        selectedItem === BuildingType.D_SUPPORT ? 'Support Structure' :
+                                            selectedItem === BuildingType.D_RECHARGER ? 'Recharger Station' :
+                                                selectedItem === BuildingType.D_HIRE ? 'Hire Miner' : 'Deposit Resources',
+                                    era: 'UNDERGROUND' as any,
+                                    cost: selectedItem === BuildingType.D_HIRE ? 500 : 0
+                                };
+                                const scaledCost = (BUILDINGS[selectedItem] ? calculateBuildingCost(selectedItem, state.chunks) : (b as any).cost) || 0;
 
                                 // NEW: Multi-resource affordance check
                                 let canAfford = state.cheatsEnabled || state.resources.agt >= scaledCost;
                                 const missingResources: string[] = [];
 
-                                if (!state.cheatsEnabled && b.costs) {
-                                    Object.entries(b.costs).forEach(([res, amt]) => {
-                                        if (amt && (state.resources as any)[res] < amt) {
+                                if (!state.cheatsEnabled && (b as any).costs) {
+                                    Object.entries((b as any).costs).forEach(([res, amt]) => {
+                                        if (amt && (state.resources as any)[res] < (amt as number)) {
                                             canAfford = false;
                                             missingResources.push(`${amt} ${res.toUpperCase()}`);
                                         }
@@ -402,12 +505,12 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                                     missingResources.push(`${Math.ceil(scaledCost - state.resources.agt)} AGT`);
                                 }
 
-                                const isEcoLocked = state.resources.eco < b.ecoReq;
+                                const isEcoLocked = (b as any).ecoReq ? state.resources.eco < (b as any).ecoReq : false;
                                 let dependencyMet = true;
-                                if (b.dependency) {
-                                    dependencyMet = Object.values(state.chunks).flatMap(c => c.tiles).some(t => t.buildingType === b.dependency && !t.isUnderConstruction);
+                                if ((b as any).dependency) {
+                                    dependencyMet = Object.values(state.chunks).flatMap(c => c.tiles).some(t => t.buildingType === (b as any).dependency && !t.isUnderConstruction);
                                 }
-                                const isEraLocked = !state.unlockedEras.includes(b.era);
+                                const isEraLocked = b.era && b.era !== 'UNDERGROUND' && !state.unlockedEras.includes(b.era);
                                 const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet || isEraLocked);
 
                                 return (
@@ -416,16 +519,18 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                                         <div className="p-6 bg-slate-950 flex flex-col gap-4 relative overflow-hidden">
                                             {/* Background Decoration */}
                                             <div className="absolute top-0 right-0 p-8 opacity-5">
-                                                {getBuildingIcon(selectedItem)}
+                                                {BUILDINGS[selectedItem] ? getBuildingIcon(selectedItem) : <Pickaxe size={48} />}
                                             </div>
 
                                             <div className="flex justify-between items-start z-10">
                                                 <div className="flex items-center gap-4">
-                                                    <div className={`p-4 rounded-xl border border-white/5 shadow-2xl ${getCategoryColor(selectedItem)}`}>
-                                                        {getBuildingIcon(selectedItem)}
+                                                    <div className={`p-4 rounded-xl border border-white/5 shadow-2xl ${BUILDINGS[selectedItem] ? getCategoryColor(selectedItem) : 'bg-amber-600'}`}>
+                                                        {BUILDINGS[selectedItem] ? getBuildingIcon(selectedItem) : <Pickaxe size={24} />}
                                                     </div>
                                                     <div>
-                                                        <h3 className="font-black text-2xl uppercase font-['Rajdhani'] tracking-tighter text-white leading-none">{b.name}</h3>
+                                                        <h3 className="font-black text-2xl uppercase font-['Rajdhani'] tracking-tighter text-white leading-none">
+                                                            {b.name}
+                                                        </h3>
                                                         <div className="bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[9px] font-black tracking-widest px-2 py-0.5 mt-2 rounded-sm inline-block">{b.era} ASSET</div>
                                                     </div>
                                                 </div>
@@ -438,7 +543,7 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                                             </div>
 
                                             <p className="text-sm text-slate-400 font-medium leading-relaxed z-10">
-                                                {b.desc}
+                                                {(b as any).desc || `Control and expand your underground operations using ${b.name}.`}
                                             </p>
                                         </div>
 
@@ -447,11 +552,11 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div className="p-3 bg-black/30 border border-white/5 rounded-lg">
                                                     <span className="text-[9px] text-slate-500 uppercase font-black block mb-1">Upkeep Cost</span>
-                                                    <div className="text-white font-mono text-sm">{b.maintenance} <span className="text-[10px] opacity-50 uppercase">AGT / Tick</span></div>
+                                                    <div className="text-white font-mono text-sm">{(b as any).maintenance || 0} <span className="text-[10px] opacity-50 uppercase">AGT / Tick</span></div>
                                                 </div>
                                                 <div className="p-3 bg-black/30 border border-white/5 rounded-lg">
                                                     <span className="text-[9px] text-slate-500 uppercase font-black block mb-1">Production</span>
-                                                    <div className="text-emerald-400 font-mono text-sm">+{b.production || 0} <span className="text-[10px] opacity-50 uppercase">{b.productionType}</span></div>
+                                                    <div className="text-emerald-400 font-mono text-sm">+{(b as any).production || 0} <span className="text-[10px] opacity-50 uppercase">{(b as any).productionType || 'N/A'}</span></div>
                                                 </div>
                                             </div>
 
@@ -462,7 +567,7 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
                                                     <div className="flex-1">
                                                         <p className="text-[10px] font-black text-rose-500 uppercase">Requirement Failed</p>
                                                         <p className="text-xs text-rose-200">
-                                                            {isEraLocked ? `Unavailable in Era: ${b.era}` : isEcoLocked ? `Requires Ecological Index ${b.ecoReq}` : `Requires Active ${BUILDINGS[b.dependency!].name}`}
+                                                            {isEraLocked ? `Unavailable in Era: ${b.era}` : isEcoLocked ? `Requires Ecological Index ${(b as any).ecoReq}` : `Requires Active ${BUILDINGS[(b as any).dependency!]?.name || 'Prerequisite'}`}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -504,8 +609,8 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, dis
 
                                         {/* Footer / Meta */}
                                         <div className="px-6 py-3 bg-slate-950 border-t border-white/5 flex justify-between items-center text-[9px] font-mono text-slate-600 uppercase">
-                                            <span>Build Window: {b.buildTime}s</span>
-                                            <span>Eco Req: {b.ecoReq}</span>
+                                            <span>Build Window: {(b as any).buildTime || 0}s</span>
+                                            <span>Eco Req: {(b as any).ecoReq || 0}</span>
                                         </div>
                                     </div>
                                 );

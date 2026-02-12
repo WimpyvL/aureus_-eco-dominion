@@ -77,8 +77,10 @@ export class EconomySystem extends BaseSimSystem {
 
     handleCommand(cmd: GameCommand, ctx: CommandContext, state: GameState): CommandResult | null {
         switch (cmd.type) {
-            case 'BUY_BUILDING':
-                return this.handleBuyBuilding(cmd.payload.buildingType, cmd.payload.cost, state);
+            case 'BUY_BUILDING': {
+                const bType = cmd.payload.buildingType ?? cmd.payload.type;
+                return this.handleBuyBuilding(bType, cmd.payload.cost, state);
+            }
             case 'SELL_RESOURCE':
                 return this.handleSellResource(cmd.payload.resource, cmd.payload.address, state);
             case 'BUY_RESOURCE':
@@ -92,9 +94,11 @@ export class EconomySystem extends BaseSimSystem {
         }
     }
 
-    private handleBuyBuilding(buildingType: string, cost: number, state: GameState): CommandResult {
-        const def = BUILDINGS[buildingType as BuildingType];
-        if (!def) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: `Unknown building type: ${buildingType}` };
+    private handleBuyBuilding(buildingTypeInput: string, cost: number, state: GameState): CommandResult {
+        if (!buildingTypeInput) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: 'Missing building type' };
+        const buildingType = (buildingTypeInput as BuildingType);
+        const def = BUILDINGS[buildingType];
+        if (!def) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: `Unknown building type: ${buildingTypeInput}` };
 
         if (def.costs) {
             // Check resources first
@@ -119,8 +123,8 @@ export class EconomySystem extends BaseSimSystem {
             state.resources.agt -= cost;
         }
 
-        const bType = buildingType as BuildingType;
-        state.inventory[bType] = (state.inventory[bType] || 0) + 1;
+        // Ensure inventory map exists and add the purchased unit
+        state.inventory[buildingType] = (state.inventory?.[buildingType] || 0) + 1;
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
         state.newsFeed.unshift({
             id: `buy_bld_${Date.now()}`,

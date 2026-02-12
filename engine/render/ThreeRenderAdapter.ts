@@ -239,6 +239,10 @@ export class ThreeRenderAdapter implements RenderAdapter {
         return this.camera;
     }
 
+    setCamera(camera: THREE.Camera): void {
+        this.camera = camera as any;
+    }
+
     /** Get the renderer */
     getRenderer(): THREE.WebGLRenderer {
         return this.renderer;

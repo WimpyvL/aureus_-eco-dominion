@@ -1,0 +1,175 @@
+.dungeon-hud {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    background: rgba(20, 20, 30, 0.95);
+    border: 2px solid #4a4a6a;
+    border-radius: 8px;
+    padding: 16px;
+    min-width: 280px;
+    max-width: 320px;
+    color: #e0e0e0;
+    font-family: 'Courier New', monospace;
+    z-index: 100;
+}
+
+.dungeon-resources {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #4a4a6a;
+}
+
+.resource-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.resource-icon {
+    font-size: 20px;
+}
+
+.resource-value {
+    font-size: 16px;
+    font-weight: bold;
+    color: #ffd700;
+}
+
+.miner-list {
+    margin-bottom: 16px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.miner-list h3 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    color: #a0a0c0;
+}
+
+.miner-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 8px;
+    background: rgba(60, 60, 80, 0.5);
+    margin-bottom: 4px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.miner-id {
+    flex: 1;
+    color: #c0c0d0;
+}
+
+.miner-state {
+    flex: 1;
+    text-align: center;
+    color: #90d090;
+    text-transform: capitalize;
+}
+
+.miner-energy {
+    flex: 0 0 60px;
+    text-align: right;
+    color: #ffa500;
+}
+
+.dungeon-commands {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.mode-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.mode-selector button {
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+    text-align: left;
+    background: rgba(40, 40, 60, 0.6) !important;
+}
+
+.mode-selector button.active {
+    background: #4a90e2 !important;
+    border-color: #61afef !important;
+    color: white;
+}
+
+.dungeon-commands hr {
+    border: none;
+    border-top: 1px solid #4a4a6a;
+    margin: 8px 0;
+}
+
+.dungeon-commands button {
+    padding: 10px 16px;
+    background: linear-gradient(135deg, #5a5a7a, #4a4a6a);
+    border: 1px solid #6a6a8a;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.dungeon-commands button:hover:not(:disabled) {
+    background: linear-gradient(135deg, #6a6a8a, #5a5a7a);
+    border-color: #7a7a9a;
+    transform: translateY(-1px);
+}
+
+.dungeon-commands button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.dungeon-logs {
+    padding-top: 12px;
+    border-top: 1px solid #4a4a6a;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.log-entry {
+    font-size: 11px;
+    padding: 4px 0;
+    color: #b0b0c0;
+    line-height: 1.4;
+}
+
+.log-entry:first-child {
+    color: #d0d0e0;
+    font-weight: bold;
+}
+
+/* Scrollbar styling */
+.miner-list::-webkit-scrollbar,
+.dungeon-logs::-webkit-scrollbar {
+    width: 6px;
+}
+
+.miner-list::-webkit-scrollbar-track,
+.dungeon-logs::-webkit-scrollbar-track {
+    background: rgba(40, 40, 50, 0.5);
+    border-radius: 3px;
+}
+
+.miner-list::-webkit-scrollbar-thumb,
+.dungeon-logs::-webkit-scrollbar-thumb {
+    background: #6a6a8a;
+    border-radius: 3px;
+}
+
+.miner-list::-webkit-scrollbar-thumb:hover,
+.dungeon-logs::-webkit-scrollbar-thumb:hover {
+    background: #7a7a9a;
+}

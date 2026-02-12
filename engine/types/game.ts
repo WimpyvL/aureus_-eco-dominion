@@ -3,6 +3,7 @@ import { BuildingType } from './buildings';
 import { Agent, AgentRequest, Job } from './agents';
 import { GridTile, WeatherState, Chunk } from './world';
 import { GameResources, MarketState, Contract } from './economy';
+import { DungeonState } from '../dungeon/DungeonTypes';
 
 export enum Era {
     SETTLEMENT = 'SETTLEMENT',
@@ -162,6 +163,10 @@ export interface GameState {
     // Environmental System
     weather: WeatherState;
 
+    // View State
+    activeView: 'SURFACE' | 'DUNGEON';
+    dungeon: DungeonState;
+
     // Day/Night Cycle (1 game day = 24000 ticks = ~80 real minutes at 200ms/tick)
     dayNightCycle: {
         timeOfDay: number;      // 0-24000 (0 = midnight, 12000 = noon)
@@ -250,6 +255,7 @@ export type Action =
     | { type: 'REHABILITATE_TILE', payload: { x: number, z: number } }
     | { type: 'UPGRADE_BUILDING', payload: { x: number, z: number } }
     | { type: 'ADVANCE_TUTORIAL' }
+    | { type: 'START_DEMO' }
     | { type: 'SKIP_TUTORIAL' }
     | { type: 'RESET_GAME' }
     | { type: 'TOGGLE_DEBUG' }

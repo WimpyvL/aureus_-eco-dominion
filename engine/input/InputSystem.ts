@@ -26,9 +26,9 @@ export class InputSystem {
 
     // Callbacks provided by AureusWorld to dispatch to Redux/Engine
     // In a pure engine, we would dispatch actions directly, but we are bridging.
-    public onTileClick?: (x: number, z: number, isTouch: boolean) => void;
-    public onTileRightClick?: (x: number, z: number, isTouch: boolean) => void;
-    public onTileHover?: (x: number | null, z: number | null) => void;
+    public onTileClick?: (x: number, z: number, isTouch: boolean, clientX: number, clientY: number) => void;
+    public onTileRightClick?: (x: number, z: number, isTouch: boolean, clientX: number, clientY: number) => void;
+    public onTileHover?: (x: number | null, z: number | null, clientX: number, clientY: number) => void;
 
     constructor(renderAdapter: ThreeRenderAdapter, getTerrainHeight: (worldX: number, worldZ: number) => number) {
         this.renderAdapter = renderAdapter;
@@ -202,9 +202,9 @@ export class InputSystem {
         const hit = this.getIntersection(x, y);
         if (hit) {
             if (isRight) {
-                this.onTileRightClick?.(hit.x, hit.z, isTouch);
+                this.onTileRightClick?.(hit.x, hit.z, isTouch, x, y);
             } else {
-                this.onTileClick?.(hit.x, hit.z, isTouch);
+                this.onTileClick?.(hit.x, hit.z, isTouch, x, y);
             }
         }
     }
@@ -212,9 +212,9 @@ export class InputSystem {
     private checkHover(x: number, y: number) {
         const hit = this.getIntersection(x, y);
         if (hit) {
-            this.onTileHover?.(hit.x, hit.z);
+            this.onTileHover?.(hit.x, hit.z, x, y);
         } else {
-            this.onTileHover?.(null, null);
+            this.onTileHover?.(null, null, x, y);
         }
     }
 }

@@ -39,9 +39,14 @@ export class StateManager {
         const spawnX = overrides?.spawnX ?? Math.floor(Math.sin(seed * 0.7123) * 200);
         const spawnZ = overrides?.spawnZ ?? Math.floor(Math.cos(seed * 0.3456) * 200);
 
-        // Generate initial chunk at the spawn location
+        // Generate initial chunks around the spawn location (3x3 area)
+        // This ensures agents have enough space to wander without hitting unloaded boundary immediately
         const { cx: spawnCX, cz: spawnCZ } = worldToChunk(spawnX, spawnZ, CHUNK_SIZE);
-        ChunkStore.ensureChunk(chunks, spawnCX, spawnCZ, seed);
+        for (let dz = -1; dz <= 1; dz++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                ChunkStore.ensureChunk(chunks, spawnCX + dx, spawnCZ + dz, seed);
+            }
+        }
 
         return {
             chunks,
@@ -67,6 +72,21 @@ export class StateManager {
             interactionMode: 'BUILD',
 
             step: GameStep.INTRO,
+
+            activeView: 'SURFACE',
+            dungeon: {
+                unlocked: false,
+                miners: [],
+                buildings: [],
+                gold: 0,
+                gems: 0,
+                mana: 0,
+                logs: [],
+                voxelData: null,
+                revealedData: null,
+                gridSize: { x: 32, y: 8, z: 32 }
+            },
+
             gameOver: false,
             debugMode: false,
             cheatsEnabled: false, // DEV: Creative mode disabled
