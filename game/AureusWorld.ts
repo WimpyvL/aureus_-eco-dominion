@@ -22,7 +22,7 @@ import {
     ProductionSystem, ConstructionSystem, EraSystem,
     PowerGridSystem, WaterNetworkSystem,
     TutorialDemoSystem, CommandDispatcher,
-    ResearchSystem
+    ResearchSystem, EmploymentSystem
 } from '../engine/sim/systems';
 import { DungeonMinerSystem } from '../engine/sim/systems/DungeonMinerSystem';
 import { DungeonStabilitySystem } from '../engine/sim/systems/DungeonStabilitySystem';
@@ -159,6 +159,7 @@ export class AureusWorld extends BaseWorld {
 
 
 
+        this.sim.addSystem(new EmploymentSystem());
         this.agentSystem = new AgentSystem(this.jobs, this.constructionSystem);
         this.sim.addSystem(this.agentSystem);
 
@@ -399,6 +400,13 @@ export class AureusWorld extends BaseWorld {
     }
 
     exitFPS(): void {
+        const state = this.stateManager.getMutableState();
+        if (state.selectedAgentId) {
+            const agent = state.agents.find(a => a.id === state.selectedAgentId);
+            if (agent && agent.state === 'MANUAL') {
+                agent.state = 'IDLE';
+            }
+        }
         this.fpsCameraSystem.setEnabled(false);
         this.stateManager.update({ isFPS: false });
     }
@@ -503,7 +511,41 @@ export class AureusWorld extends BaseWorld {
             if (this.config?.onTileHover) this.config.onTileHover(x, z);
         };
 
+        this.fpsCameraSystem.onLeftClick = () => {
+            const hit = this.getFPSIntersection();
+            if (hit) this.handleSurfaceInteraction(hit.x, hit.z, 'click');
+        };
+
+        this.fpsCameraSystem.onRightClick = () => {
+            const hit = this.getFPSIntersection();
+            if (hit) this.handleSurfaceInteraction(hit.x, hit.z, 'right-click');
+        };
+
         this.inputSystem.init();
+    }
+
+    private getFPSIntersection(): { x: number, z: number } | null {
+        const camera = this.render.getPerspectiveCamera();
+        const raycaster = new THREE.Raycaster();
+        const direction = new THREE.Vector3();
+        camera.getWorldDirection(direction);
+        raycaster.set(camera.position, direction);
+
+        const target = new THREE.Vector3();
+        let currentPlaneHeight = 0;
+
+        for (let iter = 0; iter < 4; iter++) {
+            const iterPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -currentPlaneHeight);
+            const hit = raycaster.ray.intersectPlane(iterPlane, target);
+            if (!hit) return null;
+            const terrainHeight = this.getTerrainHeight(hit.x, hit.z);
+            if (Math.abs(terrainHeight - currentPlaneHeight) < 0.1) {
+                return { x: Math.round(hit.x), z: Math.round(hit.z) };
+            }
+            currentPlaneHeight = terrainHeight;
+        }
+
+        return { x: Math.round(target.x), z: Math.round(target.z) };
     }
 
     protected async onInit(): Promise<void> {
@@ -655,6 +697,22 @@ export class AureusWorld extends BaseWorld {
 
         // Increment tick counter
         state.tickCount++;
+
+        // FPS Movement Handling
+        if (state.isFPS && state.selectedAgentId) {
+            const move = this.fpsCameraSystem.getMovement();
+            if (move.length() > 0) {
+                const speed = 4.0;
+                const dx = move.x * speed * ctx.fixedDt;
+                const dz = move.z * speed * ctx.fixedDt;
+
+                this.stateManager.pushCommand('MANUAL_MOVE_AGENT', {
+                    agentId: state.selectedAgentId,
+                    dx,
+                    dz
+                });
+            }
+        }
 
         // Run simulation systems
         this.sim.tick(ctx, state);

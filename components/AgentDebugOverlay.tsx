@@ -35,7 +35,10 @@ const ROLE_ICONS: Record<string, React.ReactNode> = {
     'BOTANIST': <TreeDeciduous size={10} />,
     'ENGINEER': <Briefcase size={10} />,
     'SECURITY': <Target size={10} />,
-    'ILLEGAL_MINER': <AlertTriangle size={10} />
+    'ILLEGAL_MINER': <AlertTriangle size={10} />,
+    'LUMBERJACK': <TreeDeciduous size={10} />,
+    'QUARRYMAN': <Pickaxe size={10} />,
+    'UNEMPLOYED': <Users size={10} />
 };
 
 export const AgentDebugOverlay: React.FC<AgentDebugOverlayProps> = ({ agents, jobs, tickCount }) => {
@@ -176,6 +179,28 @@ export const AgentDebugOverlay: React.FC<AgentDebugOverlayProps> = ({ agents, jo
                                                     <span className="font-mono text-emerald-400 truncate max-w-[120px]">
                                                         {agent.currentJobId}
                                                     </span>
+                                                </div>
+                                            )}
+
+                                            {/* Profession & Workplace */}
+                                            {agent.profession && (
+                                                <div className="flex flex-col gap-0.5 mt-1 border-y border-slate-700/50 py-1">
+                                                    <div className="flex items-center gap-1 text-[8px]">
+                                                        <Briefcase size={10} className="text-cyan-500" />
+                                                        <span className="text-slate-400">Role:</span>
+                                                        <span className="font-bold text-cyan-300 uppercase tracking-tighter italic">
+                                                            {agent.profession}
+                                                        </span>
+                                                    </div>
+                                                    {agent.workPlaceX !== null && (
+                                                        <div className="flex items-center gap-1 text-[8px]">
+                                                            <MapPin size={10} className="text-rose-500" />
+                                                            <span className="text-slate-400">WorkPlace:</span>
+                                                            <span className="font-mono text-rose-300">
+                                                                ({agent.workPlaceX}, {agent.workPlaceZ})
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
 

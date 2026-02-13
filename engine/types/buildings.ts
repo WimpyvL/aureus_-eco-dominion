@@ -29,6 +29,7 @@ export enum BuildingType {
     ROAD = 'ROAD',
     FENCE = 'FENCE',
     STORAGE_DEPOT = 'STORAGE_DEPOT',
+    STOCKPILE = 'STOCKPILE',
     WORKSHOP = 'WORKSHOP',
     GENERATOR = 'GENERATOR',
     MINE_SHAFT = 'MINE_SHAFT',

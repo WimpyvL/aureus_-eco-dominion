@@ -58,6 +58,27 @@ export class AgentSystem extends BaseSimSystem {
             }
             return { ok: true };
         }
+
+        if (cmd.type === 'MANUAL_MOVE_AGENT') {
+            const { agentId, dx, dz } = cmd.payload;
+            const agent = state.agents.find(a => a.id === agentId);
+            if (!agent) return { ok: false, reason: 'Agent not found' };
+
+            // Update position immediately
+            agent.x += dx;
+            agent.z += dz;
+            agent.visualX = agent.x;
+            agent.visualZ = agent.z;
+
+            // Set state to MANUAL to prevent AI takeover
+            agent.state = 'MANUAL';
+            agent.currentJobId = null;
+            if (agent.path) {
+                PathPool.release(agent.path);
+                agent.path = null;
+            }
+            return { ok: true };
+        }
         return null;
     }
 
@@ -207,7 +228,15 @@ export class AgentSystem extends BaseSimSystem {
         const az = Math.floor(agent.z);
 
         // Valid storage buildings
-        const storageTypes = [BuildingType.STORAGE_DEPOT, BuildingType.MINING_HEADFRAME, BuildingType.STAFF_QUARTERS];
+        // Valid storage buildings
+        const storageTypes = [
+            BuildingType.STORAGE_DEPOT,
+            BuildingType.MINING_HEADFRAME,
+            BuildingType.STAFF_QUARTERS,
+            BuildingType.SAWMILL,
+            BuildingType.STONE_QUARRY,
+            BuildingType.WASH_PLANT
+        ];
 
         for (const chunk of Object.values(chunks)) {
             for (const tile of (chunk as any).tiles) {
@@ -239,7 +268,7 @@ export class AgentSystem extends BaseSimSystem {
     private updateAI(ctx: FixedContext, agent: Agent, state: GameState): void {
         // Don't interrupt persistent actions (work/eat/sleep) until they are done
         // Unless it's a MOVING state to a job that was stolen or cancelled
-        if (['SLEEPING', 'EATING', 'WORKING', 'DEPOSITING'].includes(agent.state)) return;
+        if (['SLEEPING', 'EATING', 'WORKING', 'DEPOSITING', 'MANUAL'].includes(agent.state)) return;
 
         const isNight = !state.dayNightCycle.isDaytime;
 
@@ -308,6 +337,8 @@ export class AgentSystem extends BaseSimSystem {
         // --- PRIORITY 4: Work (Construction, Digging, Mining) ---
         // Only work during the day
         if (!isNight) {
+            const hasProfession = agent.profession && agent.profession !== 'UNEMPLOYED';
+
             // Find highest priority available job
             const availableJob = state.jobs
                 .filter(j => {
@@ -316,15 +347,55 @@ export class AgentSystem extends BaseSimSystem {
 
                     const targetKey = `${j.targetX},${j.targetZ}`;
                     const isOnCooldown = agent.unreachableCooldowns?.[targetKey] && state.tickCount < agent.unreachableCooldowns[targetKey];
-                    return !isOnCooldown;
+                    if (isOnCooldown) return false;
+
+                    // PROFESSIONAL FILTER: If assigned to a workplace, prioritize nearby jobs
+                    if (hasProfession && agent.workPlaceX !== null && agent.workPlaceX !== undefined) {
+                        const distToWork = Math.abs(j.targetX - agent.workPlaceX) + Math.abs(j.targetZ - agent.workPlaceZ!);
+
+                        // Professionals only take jobs within a 15-tile radius of their workplace
+                        // and only jobs that match their skills
+                        if (distToWork > 15) return false;
+
+                        if (agent.profession === 'LUMBERJACK') {
+                            // Only chop trees
+                            const tile = ChunkStore.getTile(state.chunks, j.targetX, j.targetZ);
+                            if (tile && !HARVESTABLE_TREES.includes(tile.foliage as any)) return false;
+                        } else if (agent.profession === 'QUARRYMAN') {
+                            // Only mine rocks
+                            const tile = ChunkStore.getTile(state.chunks, j.targetX, j.targetZ);
+                            if (tile && !HARVESTABLE_ROCKS.includes(tile.foliage as any)) return false;
+                        }
+                    } else if (hasProfession) {
+                        // If they have a profession but NO workplace (maybe error state), they act as generalists for now
+                    }
+
+                    return true;
                 })
-                .sort((a, b) => b.priority - a.priority)[0];
+                .sort((a, b) => {
+                    // Professionals prioritize jobs CLOSER to their workplace
+                    if (hasProfession && agent.workPlaceX !== null) {
+                        const distA = Math.abs(a.targetX - agent.workPlaceX) + Math.abs(a.targetZ - agent.workPlaceZ!);
+                        const distB = Math.abs(b.targetX - agent.workPlaceX) + Math.abs(b.targetZ - agent.workPlaceZ!);
+                        if (distA !== distB) return distA - distB;
+                    }
+                    return b.priority - a.priority;
+                })[0];
 
             if (availableJob) {
                 // CLAIM JOB
                 availableJob.assignedAgentId = agent.id;
                 this.goTo(agent, availableJob.targetX, availableJob.targetZ, availableJob.id, state);
                 return;
+            }
+
+            // If a professional has NO tasks near their workplace, they go wait AT the workplace
+            if (hasProfession && agent.workPlaceX !== null) {
+                const distToBuilding = Math.abs(agent.x - agent.workPlaceX) + Math.abs(agent.z - agent.workPlaceZ!);
+                if (distToBuilding > 2) {
+                    this.goTo(agent, agent.workPlaceX, agent.workPlaceZ!, 'sys_wait_at_work', state);
+                    return;
+                }
             }
         }
 

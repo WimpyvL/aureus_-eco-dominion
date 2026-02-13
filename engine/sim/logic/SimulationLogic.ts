@@ -175,6 +175,11 @@ export function createColonist(x: number, z: number, role: AgentRole = 'WORKER',
             type: null,
             amount: 0,
             capacity: 20 // Small capacity as requested
-        }
+        },
+
+        // Employment System
+        profession: role === 'WORKER' ? 'UNEMPLOYED' : role,
+        workPlaceX: null,
+        workPlaceZ: null
     };
 }

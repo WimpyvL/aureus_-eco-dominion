@@ -18,6 +18,8 @@ export class FPSCameraSystem {
     private moveBackward = false;
     private moveLeft = false;
     private moveRight = false;
+    private moveSprint = false;
+    private moveJump = false;
 
     // Look state
     private pitch = 0;
@@ -43,7 +45,12 @@ export class FPSCameraSystem {
         this.boundKeyUp = this.onKeyUp.bind(this);
         this.boundMouseMove = this.onMouseMove.bind(this);
         this.boundPointerLockChange = this.onPointerLockChange.bind(this);
+        this.boundMouseDown = this.onMouseDown.bind(this);
     }
+
+    private boundMouseDown: (e: MouseEvent) => void;
+    public onLeftClick?: () => void;
+    public onRightClick?: () => void;
 
     public setEnabled(enabled: boolean): void {
         if (this.enabled === enabled) return;
@@ -79,6 +86,7 @@ export class FPSCameraSystem {
         window.addEventListener('keydown', this.boundKeyDown);
         window.addEventListener('keyup', this.boundKeyUp);
         window.addEventListener('mousemove', this.boundMouseMove);
+        window.addEventListener('mousedown', this.boundMouseDown);
         document.addEventListener('pointerlockchange', this.boundPointerLockChange);
     }
 
@@ -86,7 +94,18 @@ export class FPSCameraSystem {
         window.removeEventListener('keydown', this.boundKeyDown);
         window.removeEventListener('keyup', this.boundKeyUp);
         window.removeEventListener('mousemove', this.boundMouseMove);
+        window.removeEventListener('mousedown', this.boundMouseDown);
         document.removeEventListener('pointerlockchange', this.boundPointerLockChange);
+    }
+
+    private onMouseDown(e: MouseEvent): void {
+        if (!this.enabled || document.pointerLockElement !== this.domElement) return;
+
+        if (e.button === 0) {
+            this.onLeftClick?.();
+        } else if (e.button === 2) {
+            this.onRightClick?.();
+        }
     }
 
     private onKeyDown(e: KeyboardEvent): void {
@@ -99,6 +118,9 @@ export class FPSCameraSystem {
             case 'KeyS': this.moveBackward = true; break;
             case 'ArrowRight':
             case 'KeyD': this.moveRight = true; break;
+            case 'ShiftLeft':
+            case 'ShiftRight': this.moveSprint = true; break;
+            case 'Space': this.moveJump = true; break;
             case 'Escape':
                 this.setEnabled(false);
                 this.onExit?.();
@@ -116,6 +138,9 @@ export class FPSCameraSystem {
             case 'KeyS': this.moveBackward = false; break;
             case 'ArrowRight':
             case 'KeyD': this.moveRight = false; break;
+            case 'ShiftLeft':
+            case 'ShiftRight': this.moveSprint = false; break;
+            case 'Space': this.moveJump = false; break;
         }
     }
 
@@ -171,6 +196,28 @@ export class FPSCameraSystem {
 
         // Optional: If we want to ALLOW movement, we'd need to send commands back to the engine.
         // For a simple FPV "viewer", we just follow the agent.
+    }
+
+    public getMovement(): THREE.Vector3 {
+        const move = new THREE.Vector3();
+        if (!this.enabled) return move;
+
+        if (this.moveForward) move.z -= 1;
+        if (this.moveBackward) move.z += 1;
+        if (this.moveLeft) move.x -= 1;
+        if (this.moveRight) move.x += 1;
+
+        move.normalize();
+        if (this.moveSprint) move.multiplyScalar(2.0); // 2x speed for sprint
+
+        move.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
+        return move;
+    }
+
+    public isJumping(): boolean {
+        const jumping = this.moveJump;
+        // Optional: consume jump or handle cooldown if needed
+        return jumping;
     }
 
     public getYaw(): number {

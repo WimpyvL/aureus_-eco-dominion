@@ -39,7 +39,7 @@ export class ConstructionSystem extends BaseSimSystem {
     handleCommand(cmd: GameCommand, ctx: CommandContext, state: GameState): CommandResult | null {
         switch (cmd.type) {
             case 'PLACE_BUILDING':
-                return this.placeBuilding(cmd.payload.x, cmd.payload.z, cmd.payload.buildingType, state, cmd.payload.isInstant);
+                return this.placeBuilding(cmd.payload.x, cmd.payload.z, cmd.payload.buildingType, state, cmd.payload.isInstant, cmd.payload.level);
             case 'SPEED_UP':
                 return this.speedUpConstruction(cmd.payload.x, cmd.payload.z, state);
             case 'REHABILITATE':
@@ -72,23 +72,6 @@ export class ConstructionSystem extends BaseSimSystem {
 
         // CHECK FOLIAGE OBSTRUCTION
         const def = BUILDINGS[headTile.buildingType];
-        if (def) {
-            const w = def.width || 1;
-            const d = def.depth || 1;
-
-            for (let dz = 0; dz < d; dz++) {
-                for (let dx = 0; dx < w; dx++) {
-                    const tx = hx + dx;
-                    const tz = hz + dz;
-                    const pTile = ChunkStore.getTile(state.chunks, tx, tz);
-                    if (pTile && (pTile.structureHeadX === hx && pTile.structureHeadZ === hz)) {
-                        if (pTile.foliage && pTile.foliage !== 'NONE') {
-                            return false; // Obstruction!
-                        }
-                    }
-                }
-            }
-        }
 
         headTile.constructionTimeLeft = Math.max(0, (headTile.constructionTimeLeft || 0) - amount);
 
@@ -165,7 +148,7 @@ export class ConstructionSystem extends BaseSimSystem {
         }
     }
 
-    public placeBuilding(x: number, z: number, buildingType: BuildingType, state: GameState, isInstant: boolean = false): CommandResult {
+    public placeBuilding(x: number, z: number, buildingType: BuildingType, state: GameState, isInstant: boolean = false, level: number = 1): CommandResult {
         const def = BUILDINGS[buildingType];
         if (!def) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: `Unknown building type: ${buildingType}` };
 
@@ -207,8 +190,9 @@ export class ConstructionSystem extends BaseSimSystem {
                     structureHeadX: x,
                     structureHeadZ: z,
                     explored: true,
-                    level: 1,
-                    foliage: 'NONE' // Clear foliage when building is placed
+                    level: level || 1,
+                    foliage: 'NONE', // Clear foliage
+                    markedForHarvest: false // Remove harvest mark
                 });
                 updates.push(tile);
                 affectedChunks.add(`${cx},${cz}`);

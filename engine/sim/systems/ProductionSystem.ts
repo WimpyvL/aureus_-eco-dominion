@@ -7,8 +7,10 @@ import { BaseSimSystem } from '../Simulation';
 import { FixedContext } from '../../kernel';
 import { GameState, BuildingType, SfxType } from '../../../types';
 import { BUILDINGS } from '../../data/VoxelConstants';
-import { getEcoMultiplier } from '../../utils/GameUtils';
+import { getEcoMultiplier, HARVESTABLE_TREES, HARVESTABLE_ROCKS } from '../../utils/GameUtils';
 import { BASE_STORAGE_CAPACITY, DEPOT_CAPACITY_BONUS, STOCKPILE_CAPACITY_BONUS } from '../logic/SimulationLogic';
+import { ChunkStore } from '../../space/ChunkStore';
+import { worldToChunk, CHUNK_SIZE } from '../../utils/coords';
 
 export class ProductionSystem extends BaseSimSystem {
     readonly id = 'production';
@@ -90,13 +92,23 @@ export class ProductionSystem extends BaseSimSystem {
 
                 const utilityEfficiency = powerEfficiency * waterEfficiency;
 
+                // <RESOURCE CONSUMPTION LOGIC>
+                let productionMult = 1.0;
+                if (tile.buildingType === BuildingType.SAWMILL || tile.buildingType === BuildingType.STONE_QUARRY) {
+                    const consumed = this.consumeEnvironment(state, tile, dt);
+                    if (!consumed) {
+                        productionMult = 0; // No resources nearby, building is idle!
+                    }
+                }
+                // </RESOURCE CONSUMPTION LOGIC>
+
                 // Production
                 if (currentDef.productionType === 'MINERALS') {
                     mineralProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05;
                 } else if (currentDef.productionType === 'WOOD') {
-                    woodProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05;
+                    woodProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05 * productionMult;
                 } else if (currentDef.productionType === 'STONE') {
-                    stoneProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05;
+                    stoneProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05 * productionMult;
                 } else if (currentDef.productionType === 'AGT') {
                     totalIncome += (currentDef.production || 0) * ecoMult * trustMult * utilityEfficiency;
                 }
@@ -159,6 +171,76 @@ export class ProductionSystem extends BaseSimSystem {
         if (unlocked.includes('AUTOMATION')) mods.upkeep *= 0.9;
 
         return mods;
+    }
+
+    private consumeEnvironment(state: GameState, buildingTile: any, dt: number): boolean {
+        const radius = 10;
+        const isWood = buildingTile.buildingType === BuildingType.SAWMILL;
+        const targetFoliage = isWood ? HARVESTABLE_TREES : HARVESTABLE_ROCKS;
+
+        // Find a suitable tile in radius
+        // To be efficient, we search for the first one. 
+        // A better version might cache the "Current Extraction Tile"
+        for (let dz = -radius; dz <= radius; dz++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+                const tx = buildingTile.x + dx;
+                const tz = buildingTile.z + dz;
+                const tile = ChunkStore.getTile(state.chunks, tx, tz);
+
+                if (tile && tile.foliage && targetFoliage.includes(tile.foliage as any)) {
+                    // Consume integrity
+                    if (tile.integrity === undefined || tile.integrity <= 0) tile.integrity = 100;
+
+                    // Buildings consume 5% of a tile per second (adjust for difficulty)
+                    const consumptionRate = 5.0;
+                    const prevIntegrity = tile.integrity;
+                    tile.integrity -= consumptionRate * dt;
+
+                    // <VISUAL DEGRADATION STAGES>
+                    let changed = false;
+                    if (isWood) {
+                        if (tile.foliage.startsWith('TREE_') && tile.integrity < 50 && prevIntegrity >= 50) {
+                            tile.foliage = 'BUSH_OAK' as any;
+                            changed = true;
+                        } else if (tile.foliage === 'BUSH_OAK' && tile.integrity < 20 && prevIntegrity >= 20) {
+                            tile.foliage = 'TREE_STUMP' as any;
+                            changed = true;
+                        }
+                    } else {
+                        if (tile.foliage === 'ROCK_BOULDER' && tile.integrity < 50 && prevIntegrity >= 50) {
+                            tile.foliage = 'ROCK_PEBBLE' as any;
+                            changed = true;
+                        }
+                    }
+                    // </VISUAL DEGRADATION STAGES>
+
+                    if (tile.integrity <= 0 || changed) {
+                        if (tile.integrity <= 0) {
+                            tile.foliage = 'NONE' as any;
+                            tile.markedForHarvest = false;
+                            tile.integrity = 100;
+                        }
+
+                        // Force mesh update
+                        const { cx, cz } = worldToChunk(tx, tz, CHUNK_SIZE);
+                        const chunk = state.chunks[`${cx},${cz}`];
+                        if (chunk) {
+                            chunk.meshDirty = true;
+                            chunk.simDirty = true;
+                        }
+                        state.pendingEffects.push({ type: 'CHUNK_UPDATE', cx, cz, updates: [tile] });
+
+                        // FX for stage change or destruction
+                        if (changed) {
+                            state.pendingEffects.push({ type: 'FX', fxType: isWood ? 'FARM' : 'MINING', x: tx, z: tz });
+                        }
+                    }
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private executeAutoSell(ctx: FixedContext, state: GameState, modifiers: any) {

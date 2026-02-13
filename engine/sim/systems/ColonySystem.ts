@@ -54,7 +54,10 @@ export class ColonySystem extends BaseSimSystem {
                     'ENGINEER': 'Construction Engineer',
                     'BOTANIST': 'Agricultural Botanist',
                     'SECURITY': 'Security Officer',
-                    'ILLEGAL_MINER': 'Infiltrator'
+                    'ILLEGAL_MINER': 'Infiltrator',
+                    'LUMBERJACK': 'Lumberjack',
+                    'QUARRYMAN': 'Quarryman',
+                    'UNEMPLOYED': 'Unemployed Colonist'
                 };
 
                 state.newsFeed.push({
@@ -91,7 +94,8 @@ export class ColonySystem extends BaseSimSystem {
 
     private determineNeededRole(chunks: Record<string, Chunk>, agents: Agent[]): AgentRole {
         const roleCounts: Record<AgentRole, number> = {
-            'WORKER': 0, 'MINER': 0, 'ENGINEER': 0, 'BOTANIST': 0, 'SECURITY': 0, 'ILLEGAL_MINER': 0
+            'WORKER': 0, 'MINER': 0, 'ENGINEER': 0, 'BOTANIST': 0, 'SECURITY': 0, 'ILLEGAL_MINER': 0,
+            'LUMBERJACK': 0, 'QUARRYMAN': 0, 'UNEMPLOYED': 0
         };
 
         agents.forEach(a => {

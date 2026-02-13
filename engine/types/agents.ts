@@ -1,5 +1,5 @@
 
-export type AgentRole = 'WORKER' | 'MINER' | 'BOTANIST' | 'ENGINEER' | 'SECURITY' | 'ILLEGAL_MINER';
+export type AgentRole = 'WORKER' | 'MINER' | 'BOTANIST' | 'ENGINEER' | 'SECURITY' | 'ILLEGAL_MINER' | 'LUMBERJACK' | 'QUARRYMAN' | 'UNEMPLOYED';
 
 export type JobType = 'BUILD' | 'MINE' | 'RESCUE' | 'FARM' | 'REPAIR' | 'RESEARCH' | 'SLEEP' | 'IDLE' | 'MOVE' | 'REHABILITATE' | 'EAT' | 'SOCIALIZE' | 'PATROL' | 'DEPOSIT_RESOURCES';
 
@@ -97,7 +97,7 @@ export interface Agent {
     visualX?: number;
     visualZ?: number;
 
-    state: 'MOVING' | 'WORKING' | 'IDLE' | 'SLEEPING' | 'EATING' | 'RELAXING' | 'SOCIALIZING' | 'PATROLLING' | 'OFF_DUTY' | 'PLANNING' | 'DEPOSITING';
+    state: 'MOVING' | 'WORKING' | 'IDLE' | 'SLEEPING' | 'EATING' | 'RELAXING' | 'SOCIALIZING' | 'PATROLLING' | 'OFF_DUTY' | 'PLANNING' | 'DEPOSITING' | 'MANUAL';
 
     // Needs (0-100)
     energy: number;
@@ -109,6 +109,7 @@ export interface Agent {
     currentJobId: string | null;
 
     inventory: AgentInventory;
+    layer: number; // 0 for surface, 1+ for underground
 
     // Intelligence features (optional for backward compatibility)
     personality?: AgentPersonality;
@@ -131,4 +132,9 @@ export interface Agent {
     // Pathfinding failsafe
     lastAbandonedJobId?: string | null;
     unreachableCooldowns?: Record<string, number>; // TargetKey (x,z) -> expirationTick
+
+    // Employment System
+    profession?: string | null;
+    workPlaceX?: number | null;
+    workPlaceZ?: number | null;
 }
