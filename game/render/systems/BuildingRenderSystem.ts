@@ -98,7 +98,7 @@ export class BuildingRenderSystem {
                         const conn = this.getInfrastructureConnections(tile, chunks);
                         connectionHash = `_${conn.north}_${conn.south}_${conn.east}_${conn.west}`;
                     }
-                    const stateHash = `${tile.buildingType}_${tile.isUnderConstruction}_${tile.integrity}_${tile.waterStatus}_${tile.powerStatus}_VM:${viewMode}`;
+                    const stateHash = `${tile.buildingType}_${tile.level || 1}_${tile.isUnderConstruction}_${tile.integrity}_${tile.waterStatus}_${tile.powerStatus}_VM:${viewMode}`;
 
                     // Detect Changes
                     if (!cached || cached.type !== tile.buildingType || Math.abs(cached.progress - currentProgress) > 0.05 || cached.state !== stateHash) {
@@ -221,7 +221,11 @@ export class BuildingRenderSystem {
                 });
 
                 if (BuildingFactory['CONSTRUCTION']) {
-                    const scaffold = BuildingFactory['CONSTRUCTION']({ width: w, depth: d });
+                    const scaffold = BuildingFactory['CONSTRUCTION']({
+                        width: w,
+                        depth: d,
+                        progress: progress
+                    });
                     root.add(scaffold);
                 }
             }

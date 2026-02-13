@@ -199,13 +199,17 @@ export function getFoliageAt(x: number, z: number, biome: string, height: number
     if (height === 0) return 'NONE';
 
     // 2. Gold Logic (Functional Foliage)
-    let goldChance = 0.005; // Base 0.5%
-    if (biome === 'STONE' || height >= 10) goldChance = 0.04;
-    else if (biome === 'DIRT') goldChance = 0.015;
+    let goldChance = 0.003; // Reduced from 0.005 (Rare Discovery)
+    if (biome === 'STONE' || height >= 10) goldChance = 0.015; // Reduced from 0.04
+    else if (biome === 'DIRT') goldChance = 0.008; // Reduced from 0.015
 
-    // Clustered gold veins in rich areas
-    if (clusterNoise > 0.75 && rand < goldChance * 3) return 'GOLD_VEIN';
-    if (rand < goldChance) return 'GOLD_VEIN';
+    // Clustered gold veins in rich areas (Reduced clustering factor)
+    if (clusterNoise > 0.82 && rand < goldChance * 2) {
+        return rand < 0.1 ? 'GOLD_VEIN_VAR' : 'GOLD_VEIN';
+    }
+    if (rand < goldChance) {
+        return rand < goldChance * 0.3 ? 'GOLD_VEIN_VAR' : 'GOLD_VEIN';
+    }
 
     // 3. Biome-Specific Clustering Logic
     // Drastic reduction for better visibility and building space
@@ -244,12 +248,18 @@ export function getFoliageAt(x: number, z: number, biome: string, height: number
     else if (biome === 'SAND') {
         // Desert patches / Oases (30%)
         if (clusterNoise > 0.70) {
-            if (rand < 0.15) return 'TREE_PALM';
+            if (rand < 0.15) {
+                return rand < 0.05 ? 'TREE_PALM_TALL' : 'TREE_PALM';
+            }
         } else if (rand < 0.01) {
             // Scattered Desert (1%)
-            if (rand < 0.002) return 'CACTUS_SAGUARO';
+            if (rand < 0.002) {
+                return rand < 0.001 ? 'CACTUS_SAGUARO' : 'CACTUS_SAGUARO_VAR';
+            }
             if (rand < 0.004) return 'CACTUS_BARREL';
-            if (rand < 0.006) return 'SHRUB_DRY';
+            if (rand < 0.006) {
+                return rand < 0.005 ? 'SHRUB_DRY' : 'SHRUB_DRY_VAR';
+            }
             return 'ROCK_SANDSTONE';
         }
     }

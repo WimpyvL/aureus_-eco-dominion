@@ -103,7 +103,7 @@ export class FoliageRenderSystem {
                     return;
                 }
 
-                const group = BuildingFactory[type]();
+                const group = BuildingFactory[type]({ seed: 42 });
                 const geometry = mergeGroupGeometry(group);
 
                 // Allocate with some buffer to avoid frequent re-alloc
@@ -123,15 +123,19 @@ export class FoliageRenderSystem {
             // Update Instances
             let idx = 0;
             items.forEach((item) => {
-                // Deterministic rotation based on position
-                const seed = Math.abs(item.x * 31 + item.z * 17);
-                const rotY = (seed % 4) * (Math.PI / 2);
+                // Deterministic rotation and scale based on position
+                const rotSeed = Math.abs(item.x * 31 + item.z * 17);
+                const rotY = (rotSeed % 4) * (Math.PI / 2);
+
+                const scaleSeed = Math.abs(item.x * 7.11 + item.z * 3.45);
+                const scale = 0.85 + (scaleSeed % 10) * 0.03;
 
                 // Position is absolute world coordinate from worker
                 dummy.position.set(item.x, item.y, item.z);
                 dummy.rotation.set(0, rotY, 0);
-                dummy.scale.setScalar(1.0);
+                dummy.scale.setScalar(scale);
                 dummy.updateMatrix();
+                dummy.updateMatrixWorld(true);
 
                 mesh!.setMatrixAt(idx, dummy.matrix);
 

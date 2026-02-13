@@ -69,11 +69,12 @@ export class StateManager {
 
             selectedBuilding: null,
             selectedAgentId: null,
-            interactionMode: 'BUILD',
+            interactionMode: 'INSPECT',
 
             step: GameStep.INTRO,
 
             activeView: 'SURFACE',
+            isFPS: false,
             dungeon: {
                 unlocked: false,
                 miners: [],

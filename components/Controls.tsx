@@ -4,7 +4,7 @@
 */
 
 import React from 'react';
-import { Menu, Layers, Hammer, X, Activity, TrendingUp, Pickaxe, ArrowUp, ArrowDown } from 'lucide-react';
+import { Menu, Layers, Hammer, X, Activity, TrendingUp, Pickaxe, ArrowUp, ArrowDown, Eye } from 'lucide-react';
 import { BuildingType, Action, GameStep } from '../types';
 import { BUILDINGS } from '../engine/data/VoxelConstants';
 import '../components/ViewSwitchButton.css';
@@ -20,11 +20,13 @@ interface ControlsProps {
     dungeonUnlocked: boolean;
     activeView: 'SURFACE' | 'DUNGEON';
     onToggleView: () => void;
+    selectedAgentId: string | null;
 }
 
 export const Controls: React.FC<ControlsProps> = React.memo(({
     selectedBuilding, dispatch, setSidebarOpen, playSfx, step,
-    debugMode, interactionMode, dungeonUnlocked, activeView, onToggleView
+    debugMode, interactionMode, dungeonUnlocked, activeView, onToggleView,
+    selectedAgentId
 }) => {
     // ... (keep existing render logic for selectedBuilding)
     if (selectedBuilding) {
@@ -104,6 +106,22 @@ export const Controls: React.FC<ControlsProps> = React.memo(({
                 >
                     <TrendingUp size={20} className="text-blue-400" />
                 </button>
+
+                {selectedAgentId && (
+                    <button
+                        onClick={() => {
+                            dispatch({ type: 'ENTER_FPS', payload: selectedAgentId });
+                            playSfx('UI_CLICK');
+                        }}
+                        className={`
+                        w-12 h-12 rounded-[4px] flex items-center justify-center transition-all bg-indigo-600 border-indigo-900 hover:-translate-y-0.5
+                        border-2 border-b-[4px]
+                        `}
+                        title="First Person View"
+                    >
+                        <Eye size={20} className="text-white" />
+                    </button>
+                )}
 
                 {dungeonUnlocked && (
                     <button

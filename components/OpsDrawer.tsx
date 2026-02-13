@@ -116,7 +116,8 @@ export const OpsDrawer: React.FC<OpsDrawerProps> = ({ isOpen, onClose, state, di
 
     return (
         <div
-            className={`absolute inset-y-0 left-0 w-full sm:w-[500px] max-w-[100vw] bg-slate-950 border-r-2 border-slate-700 shadow-2xl transform transition-transform duration-300 z-50 flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+            className={`absolute inset-y-0 left-0 w-full sm:w-[500px] max-w-[100vw] bg-slate-950 border-r-2 border-slate-700 shadow-2xl transform transition-transform duration-300 z-50 flex flex-col pointer-events-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+            onClick={(e) => e.stopPropagation()}
         >
             {/* Header */}
             <div className="p-3 border-b-2 border-slate-700 bg-slate-800 flex justify-between items-center shadow-md z-10">

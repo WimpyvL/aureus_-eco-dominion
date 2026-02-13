@@ -66,6 +66,9 @@ export const getBuildingIcon = (type: BuildingType) => {
         case BuildingType.MONUMENT: return <Trophy size={18} />;
         case BuildingType.SPACEPORT: return <Rocket size={18} />;
         case BuildingType.MINE_SHAFT: return <Pickaxe size={18} />;
+        case BuildingType.SAWMILL: return <TreeDeciduous size={18} />;
+        case BuildingType.STONE_QUARRY: return <Pickaxe size={18} />;
+        case BuildingType.POWER_LINE: return <Zap size={18} />;
         default: return <X size={18} />;
     }
 };
@@ -78,6 +81,9 @@ const getCategoryColor = (type: BuildingType): string => {
     if (type === BuildingType.SECURITY_POST) return 'from-rose-600 to-rose-800 border-rose-950 shadow-rose-950/40';
     if (type === BuildingType.CANTEEN || type === BuildingType.SOCIAL_HUB || type === BuildingType.STAFF_QUARTERS) return 'from-indigo-600 to-indigo-800 border-indigo-950 shadow-indigo-950/40';
     if (type === BuildingType.RESERVOIR || type === BuildingType.WATER_WELL || type === BuildingType.GENERATOR) return 'from-blue-600 to-blue-800 border-blue-950 shadow-blue-950/40';
+    if (def.productionType === 'WOOD') return 'from-orange-600 to-orange-950 border-orange-950 shadow-orange-950/40';
+    if (def.productionType === 'STONE') return 'from-stone-500 to-stone-800 border-stone-900 shadow-stone-900/40';
+    if (type === BuildingType.POWER_LINE) return 'from-sky-500 to-sky-700 border-sky-800 shadow-sky-800/40';
     return 'from-slate-700 to-slate-900 border-slate-950 shadow-slate-950/40';
 };
 
@@ -160,8 +166,9 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, wor
 
         const all = [
             // Era 1: Settlement
-            BuildingType.ROAD, BuildingType.PIPE, BuildingType.FENCE,
+            BuildingType.ROAD, BuildingType.PIPE, BuildingType.POWER_LINE, BuildingType.FENCE,
             BuildingType.STAFF_QUARTERS, BuildingType.CANTEEN, BuildingType.WORKSHOP,
+            BuildingType.SAWMILL, BuildingType.STONE_QUARRY,
             BuildingType.WASH_PLANT, BuildingType.SOLAR_ARRAY, BuildingType.WATER_WELL, BuildingType.STORAGE_DEPOT,
             BuildingType.MINING_HEADFRAME, BuildingType.MINE_SHAFT,
             // Era 2: Growth

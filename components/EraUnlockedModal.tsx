@@ -33,7 +33,7 @@ export const EraUnlockedModal: React.FC<EraUnlockedModalProps> = ({ era, onClose
     };
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-auto" onClick={(e) => e.stopPropagation()}>
             {/* Backdrop with particles */}
             <div
                 className="absolute inset-0 bg-black/80 backdrop-blur-sm"

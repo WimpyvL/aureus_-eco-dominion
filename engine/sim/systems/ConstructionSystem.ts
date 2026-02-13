@@ -46,6 +46,8 @@ export class ConstructionSystem extends BaseSimSystem {
                 return this.rehabilitateTile(ctx, cmd.payload.x, cmd.payload.z, state);
             case 'UPGRADE_BUILDING':
                 return this.upgradeBuilding(ctx, cmd.payload.x, cmd.payload.z, state);
+            case 'BULLDOZE':
+                return this.bulldozeBuilding(cmd.payload.x, cmd.payload.z, state);
             case 'MARK_HARVEST':
                 return this.handleMarkHarvest(cmd.payload.x, cmd.payload.z, state);
             default:
@@ -205,7 +207,8 @@ export class ConstructionSystem extends BaseSimSystem {
                     structureHeadX: x,
                     structureHeadZ: z,
                     explored: true,
-                    level: 1
+                    level: 1,
+                    foliage: 'NONE' // Clear foliage when building is placed
                 });
                 updates.push(tile);
                 affectedChunks.add(`${cx},${cz}`);
@@ -410,6 +413,10 @@ export class ConstructionSystem extends BaseSimSystem {
         const hz = tile.structureHeadZ !== undefined ? tile.structureHeadZ : z;
         const headTile = ChunkStore.getTile(state.chunks, hx, hz);
         if (!headTile) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: 'Structure head not found' };
+
+        if (headTile.isUnderConstruction) {
+            return { ok: false, code: CommandErrorCode.INVALID_STATE, reason: 'Building is already under construction' };
+        }
 
         const def = BUILDINGS[headTile.buildingType];
         if (!def || !def.upgrades) {

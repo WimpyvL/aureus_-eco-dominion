@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Routes, Route } from 'react-router-dom';
+import { X } from 'lucide-react';
 import { useAureusEngine } from './game/useAureusEngine';
 import { useEngineState } from './game/useEngineState';
 import { SfxType, BuildingType } from './types';
@@ -48,7 +49,7 @@ const App: React.FC = () => {
             setPendingPlacementPos({ x, z });
             worldInstance?.pinBuildingForConfirmation(x, z);
             console.log(`[App] Pinned building at ${x}, ${z}`);
-        } else if (state.interactionMode === 'INSPECT') {
+        } else if (state.interactionMode === 'INSPECT' || (state.interactionMode === 'BUILD' && !state.selectedBuilding)) {
             setSelectedTilePos({ x, z });
         }
     }, [state, worldInstance]);
@@ -193,122 +194,148 @@ const App: React.FC = () => {
                             {!showHomePage && !isIntroAnim && (
                                 <div className="absolute inset-0">
                                     <WeatherOverlay weather={state.weather} />
-                                    <HUD
-                                        resources={state.resources}
-                                        financials={{ net: financials.net }}
-                                        population={state.agents.filter(a => a.type !== 'ILLEGAL_MINER').length}
-                                        currentEra={state.currentEra}
-                                        state={state}
-                                        activeBlock={activeHUDBlock}
-                                        onToggleBlock={handleHUDToggle}
-                                    />
-                                    <Minimap
-                                        chunks={state.chunks}
-                                        agents={state.agents}
-                                        onOpenMap={() => { setShowWorldMap(true); playSfx(SfxType.UI_OPEN); }}
-                                    />
+                                    {/* Main Game Interface Overlay */}
+                                    {!state.isFPS ? (
+                                        <>
+                                            <HUD
+                                                resources={state.resources}
+                                                financials={{ net: financials.net }}
+                                                population={state.agents.filter(a => a.type !== 'ILLEGAL_MINER').length}
+                                                currentEra={state.currentEra}
+                                                state={state}
+                                                activeBlock={activeHUDBlock}
+                                                onToggleBlock={handleHUDToggle}
+                                            />
+                                            <Minimap
+                                                chunks={state.chunks}
+                                                agents={state.agents}
+                                                onOpenMap={() => { setShowWorldMap(true); playSfx(SfxType.UI_OPEN); }}
+                                            />
 
 
-                                    <WorldMap
-                                        isOpen={showWorldMap}
-                                        onClose={() => setShowWorldMap(false)}
-                                        chunks={state.chunks}
-                                        agents={state.agents}
-                                        playSfx={playSfx}
-                                    />
+                                            <WorldMap
+                                                isOpen={showWorldMap}
+                                                onClose={() => setShowWorldMap(false)}
+                                                chunks={state.chunks}
+                                                agents={state.agents}
+                                                playSfx={playSfx}
+                                            />
 
-                                    <div className="absolute top-14 left-2 sm:left-4 z-40 flex flex-col gap-2 items-start pointer-events-none">
-                                        <TutorialOverlay
-                                            step={state.step}
-                                            dispatch={dispatch}
-                                            setSidebarOpen={handleSidebarOpen}
+                                            <div className="absolute top-14 left-2 sm:left-4 z-40 flex flex-col gap-2 items-start pointer-events-none">
+                                                <TutorialOverlay
+                                                    step={state.step}
+                                                    dispatch={dispatch}
+                                                    setSidebarOpen={handleSidebarOpen}
+                                                    playSfx={playSfx}
+                                                />
+
+                                                <GoalWidget
+                                                    goal={state.activeGoal}
+                                                    dispatch={dispatch}
+                                                    playSfx={playSfx}
+                                                />
+
+                                                <NewsTicker
+                                                    news={state.newsFeed}
+                                                    onDismiss={(id) => dispatch({ type: 'DISMISS_NEWS', payload: id })}
+                                                    playSfx={playSfx}
+                                                />
+                                            </div>
+
+                                            <InventoryHUD
+                                                inventory={state.inventory}
+                                                selectedBuilding={state.selectedBuilding}
+                                                dispatch={dispatch}
+                                                playSfx={playSfx}
+                                                step={state.step}
+                                            />
+
+                                            <Controls
+                                                selectedBuilding={state.selectedBuilding}
+                                                dispatch={dispatch}
+                                                setSidebarOpen={handleSidebarOpen}
+                                                playSfx={playSfx}
+                                                step={state.step}
+                                                debugMode={state.debugMode}
+                                                interactionMode={state.interactionMode}
+                                                dungeonUnlocked={state.dungeon.unlocked}
+                                                activeView={state.activeView}
+                                                selectedAgentId={state.selectedAgentId}
+                                                onToggleView={() => {
+                                                    world?.toggleView();
+                                                    playSfx(SfxType.UI_CLICK);
+                                                }}
+                                            />
+
+                                            <OpsDrawer
+                                                isOpen={sidebarOpen === 'OPS'}
+                                                onClose={() => setSidebarOpen('NONE')}
+                                                state={state}
+                                                dispatch={dispatch}
+                                                financials={{ income: financials.income, cost: financials.cost, net: financials.net }}
+                                                ecoMult={financials.ecoMult}
+                                                trustMult={financials.trustMult}
+                                                playSfx={playSfx}
+                                            />
+
+                                            <SupplySidebar
+                                                isOpen={sidebarOpen === 'SHOP'}
+                                                onClose={() => setSidebarOpen('NONE')}
+                                                state={state}
+                                                world={worldInstance}
+                                                dispatch={dispatch}
+                                                playSfx={playSfx}
+                                            />
+
+                                            <TradeTerminal
+                                                isOpen={sidebarOpen === 'TRADE'}
+                                                onClose={() => setSidebarOpen('NONE')}
+                                                state={state}
+                                                dispatch={dispatch}
+                                                playSfx={playSfx}
+                                            />
+
+                                            <ConstructionModal
+                                                selectedTile={selectedTilePos}
+                                                chunks={state.chunks}
+                                                gems={state.resources.gems}
+                                                dispatch={dispatch}
+                                                onClose={() => setSelectedTilePos(null)}
+                                                playSfx={playSfx}
+                                            />
+
+                                            <BuildingInspectorModal
+                                                selectedTile={selectedTilePos}
+                                                chunks={state.chunks}
+                                                unlockedEras={state.unlockedEras}
+                                                resources={state.resources}
+                                                cheatsEnabled={state.cheatsEnabled}
+                                                dispatch={dispatch}
+                                                onClose={() => setSelectedTilePos(null)}
+                                                playSfx={playSfx}
+                                            />
+                                        </>
+                                    ) : (
+                                        <div className="absolute top-10 left-1/2 -translate-x-1/2 z-[100] pointer-events-auto">
+                                            <button
+                                                onClick={() => dispatch({ type: 'EXIT_FPS' })}
+                                                className="bg-slate-900/80 backdrop-blur-md hover:bg-red-600 text-white px-8 py-4 rounded-[4px] border-2 border-slate-700 hover:border-red-900 shadow-2xl font-black text-sm tracking-widest uppercase flex items-center gap-3 transition-all active:scale-95 group font-['Rajdhani']"
+                                            >
+                                                <X size={20} className="group-hover:rotate-90 transition-transform" />
+                                                <span>Exit First Person</span>
+                                                <span className="text-[10px] opacity-50 ml-2 font-mono">[ESC]</span>
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Era Unlocked Popup */}
+                                    {state?.eraUnlockedPopup && (
+                                        <EraUnlockedModal
+                                            era={state.eraUnlockedPopup}
+                                            onClose={() => world?.dismissEraPopup()}
                                             playSfx={playSfx}
                                         />
-
-                                        <GoalWidget
-                                            goal={state.activeGoal}
-                                            dispatch={dispatch}
-                                            playSfx={playSfx}
-                                        />
-
-                                        <NewsTicker
-                                            news={state.newsFeed}
-                                            onDismiss={(id) => dispatch({ type: 'DISMISS_NEWS', payload: id })}
-                                            playSfx={playSfx}
-                                        />
-                                    </div>
-
-                                    <InventoryHUD
-                                        inventory={state.inventory}
-                                        selectedBuilding={state.selectedBuilding}
-                                        dispatch={dispatch}
-                                        playSfx={playSfx}
-                                        step={state.step}
-                                    />
-
-                                    <Controls
-                                        selectedBuilding={state.selectedBuilding}
-                                        dispatch={dispatch}
-                                        setSidebarOpen={handleSidebarOpen}
-                                        playSfx={playSfx}
-                                        step={state.step}
-                                        debugMode={state.debugMode}
-                                        interactionMode={state.interactionMode}
-                                        dungeonUnlocked={state.dungeon.unlocked}
-                                        activeView={state.activeView}
-                                        onToggleView={() => {
-                                            world?.toggleView();
-                                            playSfx(SfxType.UI_CLICK);
-                                        }}
-                                    />
-
-                                    <OpsDrawer
-                                        isOpen={sidebarOpen === 'OPS'}
-                                        onClose={() => setSidebarOpen('NONE')}
-                                        state={state}
-                                        dispatch={dispatch}
-                                        financials={{ income: financials.income, cost: financials.cost, net: financials.net }}
-                                        ecoMult={financials.ecoMult}
-                                        trustMult={financials.trustMult}
-                                        playSfx={playSfx}
-                                    />
-
-                                    <SupplySidebar
-                                        isOpen={sidebarOpen === 'SHOP'}
-                                        onClose={() => setSidebarOpen('NONE')}
-                                        state={state}
-                                        world={worldInstance}
-                                        dispatch={dispatch}
-                                        playSfx={playSfx}
-                                    />
-
-                                    <TradeTerminal
-                                        isOpen={sidebarOpen === 'TRADE'}
-                                        onClose={() => setSidebarOpen('NONE')}
-                                        state={state}
-                                        dispatch={dispatch}
-                                        playSfx={playSfx}
-                                    />
-
-                                    <ConstructionModal
-                                        selectedTile={selectedTilePos}
-                                        chunks={state.chunks}
-                                        gems={state.resources.gems}
-                                        dispatch={dispatch}
-                                        onClose={() => setSelectedTilePos(null)}
-                                        playSfx={playSfx}
-                                    />
-
-                                    <BuildingInspectorModal
-                                        selectedTile={selectedTilePos}
-                                        chunks={state.chunks}
-                                        unlockedEras={state.unlockedEras}
-                                        resources={state.resources}
-                                        cheatsEnabled={state.cheatsEnabled}
-                                        dispatch={dispatch}
-                                        onClose={() => setSelectedTilePos(null)}
-                                        playSfx={playSfx}
-                                    />
+                                    )}
 
                                     <MobileBuildingConfirmation
                                         buildingType={state.selectedBuilding}

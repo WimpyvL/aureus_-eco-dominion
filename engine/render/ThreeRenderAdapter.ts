@@ -33,7 +33,9 @@ const DEFAULT_CONFIG: ThreeRenderConfig = {
 export class ThreeRenderAdapter implements RenderAdapter {
     private renderer!: THREE.WebGLRenderer;
     private scene: THREE.Scene;
-    private camera: THREE.OrthographicCamera;
+    private orthoCamera: THREE.OrthographicCamera;
+    private perspectiveCamera: THREE.PerspectiveCamera;
+    private activeCamera: THREE.Camera;
     private container: HTMLElement | null = null;
     private resizeObserver: ResizeObserver | null = null;
     private config: ThreeRenderConfig;
@@ -43,9 +45,15 @@ export class ThreeRenderAdapter implements RenderAdapter {
         this.scene = new THREE.Scene();
 
         // Orthographic to match legacy engine
-        this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 2000);
-        this.camera.position.set(0, 40, 50);
-        this.camera.lookAt(0, 0, 0);
+        this.orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 2000);
+        this.orthoCamera.position.set(0, 40, 50);
+        this.orthoCamera.lookAt(0, 0, 0);
+
+        // Perspective for FPV
+        this.perspectiveCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.perspectiveCamera.position.set(0, 5, 10);
+
+        this.activeCamera = this.orthoCamera;
     }
 
     /**
@@ -171,7 +179,7 @@ export class ThreeRenderAdapter implements RenderAdapter {
      * Draw phase - render the scene
      */
     draw(_ctx: FrameContext): void {
-        this.renderer.render(this.scene, this.camera);
+        this.renderer.render(this.scene, this.activeCamera);
     }
 
     /**
@@ -180,9 +188,13 @@ export class ThreeRenderAdapter implements RenderAdapter {
     resize(width: number, height: number): void {
         if (width <= 0 || height <= 0) return;
 
-        // For orthographic, we will sync the bounds from legacy in draw()
-        // but we can set a base ratio here if needed.
         this.renderer.setSize(width, height, false);
+
+        // Update perspective camera aspect ratio
+        this.perspectiveCamera.aspect = width / height;
+        this.perspectiveCamera.updateProjectionMatrix();
+
+        // Update active camera if needed (ortho handling is in draw/camera systems)
     }
 
     /**
@@ -236,11 +248,19 @@ export class ThreeRenderAdapter implements RenderAdapter {
 
     /** Get the camera */
     getCamera(): THREE.Camera {
-        return this.camera;
+        return this.activeCamera;
     }
 
     setCamera(camera: THREE.Camera): void {
-        this.camera = camera as any;
+        this.activeCamera = camera;
+    }
+
+    getOrthoCamera(): THREE.OrthographicCamera {
+        return this.orthoCamera;
+    }
+
+    getPerspectiveCamera(): THREE.PerspectiveCamera {
+        return this.perspectiveCamera;
     }
 
     /** Get the renderer */

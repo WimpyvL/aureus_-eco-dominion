@@ -32,6 +32,7 @@ import { DungeonEngine } from '../engine/dungeon/DungeonEngine';
 import { GameState, GameStep, Agent, GridTile, BuildingType, SfxType, TechId, Chunk, Action } from '../types';
 import { getEcoMultiplier, isHarvestable } from '../engine/utils/GameUtils';
 import { BUILDINGS, TECHNOLOGIES } from '../engine/data/VoxelConstants';
+import { getBiomeAt } from '../engine/worldgen/Core';
 import { TerrainRenderSystem } from './render/systems/TerrainRenderSystem';
 import { FoliageRenderSystem } from './render/systems/FoliageRenderSystem';
 import { BuildingRenderSystem } from './render/systems/BuildingRenderSystem';
@@ -40,6 +41,7 @@ import { EnvironmentRenderSystem } from './render/systems/EnvironmentRenderSyste
 import { DungeonRenderSystem } from './render/systems/DungeonRenderSystem';
 import { IsoCameraSystem } from './render/IsoCameraSystem';
 import { DungeonCameraSystem } from './render/DungeonCameraSystem';
+import { FPSCameraSystem } from './render/FPSCameraSystem';
 import { DungeonInputHandler } from './dungeon/DungeonInputHandler';
 import { InputSystem } from '../engine/input/InputSystem';
 import { StateManager, StateListener } from '../engine/state/StateManager';
@@ -83,8 +85,9 @@ export class AureusWorld extends BaseWorld {
     private foliageRenderSystem: FoliageRenderSystem;
     private buildingRenderSystem: BuildingRenderSystem;
     private environmentRenderSystem: EnvironmentRenderSystem;
-    private cameraSystem: IsoCameraSystem;
-    private dungeonCameraSystem: DungeonCameraSystem;
+    protected cameraSystem!: IsoCameraSystem;
+    protected dungeonCameraSystem!: DungeonCameraSystem;
+    protected fpsCameraSystem!: FPSCameraSystem;
     private dungeonRenderSystem: DungeonRenderSystem;
     private dungeonInputHandler: DungeonInputHandler;
 
@@ -118,10 +121,10 @@ export class AureusWorld extends BaseWorld {
 
         // Initialize engine subsystems
         this.streamMgr = new StreamingManager({
-            viewRadiusH: 6,
-            viewRadiusV: 1,
-            maxLoadsPerFrame: 4,
-            maxUnloadsPerFrame: 8,
+            viewRadiusH: 12, // Increased from 6
+            viewRadiusV: 2,
+            maxLoadsPerFrame: 8, // Increased from 4
+            maxUnloadsPerFrame: 16,
         });
 
         this.jobs = new JobSystem();
@@ -177,7 +180,11 @@ export class AureusWorld extends BaseWorld {
             const state = this.stateManager.getState();
             const chunks = state.chunks;
             const tile = ChunkStore.getTile(chunks, Math.round(worldX), Math.round(worldZ));
-            return tile ? tile.terrainHeight * 0.5 : 0;
+            if (tile) return tile.terrainHeight * 0.5;
+
+            // Fallback for distant/unloaded regions
+            const biomeData = getBiomeAt(Math.round(worldX), Math.round(worldZ));
+            return biomeData.height * 0.5;
         };
 
         this.agentRenderSystem = new AgentRenderSystem(
@@ -199,6 +206,8 @@ export class AureusWorld extends BaseWorld {
         this.dungeonRenderSystem = new DungeonRenderSystem(this.render.getScene());
         this.cameraSystem = new IsoCameraSystem(this.render);
         this.dungeonCameraSystem = new DungeonCameraSystem(this.render);
+        this.fpsCameraSystem = new FPSCameraSystem(this.render);
+        this.fpsCameraSystem.setOnExit(() => this.dispatch({ type: 'EXIT_FPS' } as any));
         this.dungeonInputHandler = new DungeonInputHandler(this.stateManager, this.render.getScene());
 
         // Wire Terrain -> Foliage
@@ -291,6 +300,7 @@ export class AureusWorld extends BaseWorld {
             // When deselecting, revert to INSPECT
             this.stateManager.update({
                 selectedBuilding: null,
+                selectedAgentId: null,
                 interactionMode: 'INSPECT'
             });
         }
@@ -377,6 +387,22 @@ export class AureusWorld extends BaseWorld {
         this.cameraSystem.zoomToPosition(agent.x, agent.z, 2);
     }
 
+    enterFPS(agentId: string): void {
+        this.selectAgent(agentId);
+        this.fpsCameraSystem.attachTo(agentId);
+
+        // Hide UI or notify UI of FPV mode if needed via state
+        this.stateManager.update({
+            interactionMode: 'INSPECT',
+            isFPS: true
+        });
+    }
+
+    exitFPS(): void {
+        this.fpsCameraSystem.setEnabled(false);
+        this.stateManager.update({ isFPS: false });
+    }
+
     /**
      * Dismiss the era unlocked popup
      */
@@ -411,6 +437,10 @@ export class AureusWorld extends BaseWorld {
                 state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.COMPLETE });
             }
         }
+    }
+
+    rehabilitateTile(x: number, z: number): void {
+        this.stateManager.pushCommand('REHABILITATE', { x, z });
     }
 
     saveGame(): void {
@@ -672,11 +702,26 @@ export class AureusWorld extends BaseWorld {
             // Switch to dungeon camera
             if (!this.dungeonCameraSystem.enabled) this.dungeonCameraSystem.setEnabled(true);
             if (this.cameraSystem.enabled) this.cameraSystem.setEnabled(false);
+            if (this.fpsCameraSystem.enabled) this.fpsCameraSystem.setEnabled(false);
 
             this.dungeonInputHandler.setCamera(this.render.getCamera());
             this.dungeonInputHandler.setMeshGroup(this.dungeonRenderSystem.getMeshGroup());
             this.dungeonInputHandler.setDungeonEngine(new DungeonEngine(state.dungeon)); // Ensure it has the engine instance
 
+        } else if (this.fpsCameraSystem.enabled) {
+            // FPS View
+            this.dungeonRenderSystem.setVisible(false);
+
+            if (this.cameraSystem.enabled) this.cameraSystem.setEnabled(false);
+            if (this.dungeonCameraSystem.enabled) this.dungeonCameraSystem.setEnabled(false);
+
+            this.fpsCameraSystem.update(ctx.dt, state.agents, this.getTerrainHeight);
+
+            this.agentRenderSystem.setSelectedAgent(state.selectedAgentId);
+            this.agentRenderSystem.update(ctx.dt, ctx.time, state.agents, 0.1); // Low zoom level for full detail
+
+            this.terrainRenderSystem.update(this.render.getCamera().position, this.render.getCamera());
+            this.buildingRenderSystem.update(ctx.dt, ctx.time, state.chunks, this.stateManager.getDirtyKeys());
         } else {
             // Surface View
             this.dungeonRenderSystem.setVisible(false);
@@ -684,6 +729,7 @@ export class AureusWorld extends BaseWorld {
             // Switch to surface camera
             if (!this.cameraSystem.enabled) this.cameraSystem.setEnabled(true);
             if (this.dungeonCameraSystem.enabled) this.dungeonCameraSystem.setEnabled(false);
+            if (this.fpsCameraSystem.enabled) this.fpsCameraSystem.setEnabled(false);
 
             this.cameraSystem.update(ctx.dt);
             this.agentRenderSystem.setSelectedAgent(state.selectedAgentId);
@@ -753,30 +799,41 @@ export class AureusWorld extends BaseWorld {
             return;
         }
 
+        const chunks = state.chunks;
+        const tile = ChunkStore.getTile(chunks, x, z);
+        if (!tile) return;
+
+        // Prioritize building interaction over agent selection and harvesting
+        const hasBuilding = tile.buildingType !== BuildingType.EMPTY && tile.buildingType !== BuildingType.POND;
+
+        // 1. Building Interaction (if a building exists)
+        if (hasBuilding && (state.interactionMode === 'INSPECT' || (state.interactionMode === 'BUILD' && !state.selectedBuilding))) {
+            this.selectAgent(null); // Deselect agent if a building is clicked
+            config.onTileClick?.(x, z, isTouch); // Notify UI of tile click
+            return;
+        }
+
+        // 2. Agent Selection
         const agent = state.agents.find(a => {
             const ax = Math.round(a.visualX ?? a.x);
             const az = Math.round(a.visualZ ?? a.z);
             return ax === x && az === z;
         });
 
-        // 1. Agent Selection
         if (agent && (state.interactionMode === 'INSPECT' || (state.interactionMode === 'BUILD' && !state.selectedBuilding))) {
             this.selectAgent(agent.id);
             config.onAgentClick?.(agent.id);
             return;
         }
 
-        // 2. Building/Tile Selection (notify React)
-        const chunks = state.chunks;
-        const tile = ChunkStore.getTile(chunks, x, z);
-        if (!tile) return;
+        // 3. Harvestable Tile Interaction
         const canHarvest = isHarvestable(tile.foliage);
-
-        if (canHarvest && state.interactionMode !== 'BULLDOZE' && (!state.selectedBuilding || state.interactionMode !== 'BUILD')) {
+        if (canHarvest && !hasBuilding && state.interactionMode !== 'BULLDOZE' && (!state.selectedBuilding || state.interactionMode !== 'BUILD')) {
             this.stateManager.pushCommand('MARK_HARVEST', { x, z });
             return;
         }
 
+        // 4. Right-click actions
         if (type === 'right-click') {
             if (state.selectedAgentId) {
                 this.stateManager.pushCommand('COMMAND_AGENT', { agentId: state.selectedAgentId, x, z });
@@ -785,7 +842,10 @@ export class AureusWorld extends BaseWorld {
             return;
         }
 
+        // 5. Other interaction modes
         if (state.interactionMode === 'BUILD' && state.selectedBuilding) {
+            config.onTileClick?.(x, z, isTouch);
+        } else if (state.interactionMode === 'INSPECT' || (state.interactionMode === 'BUILD' && !state.selectedBuilding)) {
             config.onTileClick?.(x, z, isTouch);
         } else if (state.interactionMode === 'BULLDOZE') {
             this.bulldozeTile(x, z);
@@ -838,6 +898,18 @@ export class AureusWorld extends BaseWorld {
             case 'BULLDOZE_TILE':
                 this.bulldozeTile(action.payload.x, action.payload.z);
                 break;
+            case 'ACTIVATE_BULLDOZER':
+                this.setInteractionMode('BULLDOZE');
+                break;
+            case 'UPGRADE_BUILDING':
+                this.upgradeBuilding(action.payload.x, action.payload.z);
+                break;
+            case 'SPEED_UP_BUILDING':
+                this.speedUpConstruction(action.payload.x, action.payload.z);
+                break;
+            case 'REHABILITATE_TILE':
+                this.rehabilitateTile(action.payload.x, action.payload.z);
+                break;
             case 'SELECT_BUILDING_TO_PLACE':
                 this.selectBuilding(action.payload);
                 break;
@@ -852,6 +924,15 @@ export class AureusWorld extends BaseWorld {
                 break;
             case 'SELL_MINERALS':
                 this.sellMinerals();
+                break;
+            case 'SELL_GEMS':
+                this.sellGems(action.payload.address);
+                break;
+            case 'SELL_WOOD':
+                this.sellWood();
+                break;
+            case 'SELL_STONE':
+                this.sellStone();
                 break;
             case 'BUY_RESOURCE':
                 this.buyResource(action.payload.resource, action.payload.amount);
@@ -885,6 +966,12 @@ export class AureusWorld extends BaseWorld {
                 break;
             case 'START_DEMO':
                 this.startDemo();
+                break;
+            case 'ENTER_FPS':
+                this.enterFPS(action.payload || this.stateManager.getState().selectedAgentId || '');
+                break;
+            case 'EXIT_FPS':
+                this.exitFPS();
                 break;
             case 'DISMISS_NEWS':
                 // news system handles this via stateManager

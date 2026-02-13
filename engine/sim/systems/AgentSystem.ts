@@ -477,7 +477,7 @@ export class AgentSystem extends BaseSimSystem {
             const foliage = tile.foliage as any;
             let resType: 'minerals' | 'stone' | 'wood' | null = null;
 
-            if (foliage === 'GOLD_VEIN') resType = 'minerals';
+            if (foliage === 'GOLD_VEIN' || foliage === 'GOLD_VEIN_VAR') resType = 'minerals';
             else if (HARVESTABLE_ROCKS.includes(foliage)) resType = 'stone';
             else if (HARVESTABLE_TREES.includes(foliage)) resType = 'wood';
 

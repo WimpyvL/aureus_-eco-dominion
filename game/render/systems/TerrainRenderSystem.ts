@@ -26,8 +26,8 @@ export class TerrainRenderSystem {
     private tileCache: Map<string, GridTile[]> = new Map();
     private viewMode: 'SURFACE' | 'FIRST_PERSON' = 'SURFACE';
 
-    // View radius in chunks (Reduced for optimization)
-    private viewRadius = 5;
+    // View radius in chunks (Increased for better FPV and horizon)
+    private viewRadius = 10;
 
     // Track last camera chunk to avoid redundant updates
     private lastCameraCx = -999;
@@ -103,10 +103,11 @@ export class TerrainRenderSystem {
                 if (camera) {
                     const xPos = cx * CHUNK_SIZE;
                     const zPos = cz * CHUNK_SIZE;
+                    const margin = 16; // Add one chunk of margin to prevent foliage clipping at edges
 
-                    // Define chunk bounds
-                    box.min.set(xPos, -10, zPos);
-                    box.max.set(xPos + CHUNK_SIZE, 80, zPos + CHUNK_SIZE);
+                    // Define chunk bounds with margin for overlapping foliage
+                    box.min.set(xPos - margin, -20, zPos - margin);
+                    box.max.set(xPos + CHUNK_SIZE + margin, 100, zPos + CHUNK_SIZE + margin);
 
                     if (!frustum.intersectsBox(box)) {
                         continue; // Skip off-screen chunks

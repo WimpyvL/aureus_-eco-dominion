@@ -59,7 +59,7 @@ export class JobGenerationSystem extends BaseSimSystem {
                 }
 
                 // 2. SURFACE MINING
-                const isGold = tile.foliage === 'GOLD_VEIN';
+                const isGold = tile.foliage === 'GOLD_VEIN' || tile.foliage === 'GOLD_VEIN_VAR';
                 const canHarvest = isHarvestable(tile.foliage);
 
                 if (canHarvest && tile.markedForHarvest) {
@@ -99,8 +99,9 @@ export class JobGenerationSystem extends BaseSimSystem {
             if (job.type === 'BUILD') {
                 if (!tile.isUnderConstruction) valid = false;
             } else if (job.type === 'MINE') {
-                if (tile.foliage !== 'GOLD_VEIN' && !isHarvestable(tile.foliage)) valid = false;
-                if (tile.foliage !== 'GOLD_VEIN' && !tile.markedForHarvest) valid = false;
+                const isGold = tile.foliage === 'GOLD_VEIN' || tile.foliage === 'GOLD_VEIN_VAR';
+                if (!isGold && !isHarvestable(tile.foliage)) valid = false;
+                if (!isGold && !tile.markedForHarvest) valid = false;
             }
 
             if (!valid) {

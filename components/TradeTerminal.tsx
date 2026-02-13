@@ -46,7 +46,10 @@ export const TradeTerminal: React.FC<TradeTerminalProps> = ({ isOpen, onClose, s
     if (!market || !state.contracts) return null;
 
     return (
-        <div className={`fixed top-0 right-0 h-full w-96 bg-slate-950 border-l border-slate-700 shadow-2xl z-50 transform transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div
+            className={`fixed top-0 right-0 h-full w-96 bg-slate-950 border-l border-slate-700 shadow-2xl z-50 transform transition-transform duration-300 pointer-events-auto ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+            onClick={(e) => e.stopPropagation()}
+        >
             <div className="p-6 h-full flex flex-col">
                 <div className="flex justify-between items-center mb-6">
                     <div className="flex items-center gap-3">

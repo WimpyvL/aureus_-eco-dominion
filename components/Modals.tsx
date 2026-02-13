@@ -269,7 +269,7 @@ export const ConstructionModal: React.FC<{
     if (tile.foliage === 'MINE_HOLE') {
         const isAlreadyJob = tile.rehabProgress !== undefined && tile.rehabProgress > 0;
         return (
-            <div className={containerClass}>
+            <div className={`${containerClass} pointer-events-auto`} onClick={(e) => e.stopPropagation()}>
                 <div className={`${cardClass} border-emerald-500 rounded-[4px]`}>
                     <div className="bg-emerald-900/30 p-2 border-b-2 border-emerald-500/50 flex items-center justify-between">
                         <h3 className="font-black text-emerald-400 text-[10px] uppercase tracking-widest font-['Rajdhani']">Eco-Damage</h3>
@@ -308,7 +308,7 @@ export const ConstructionModal: React.FC<{
     if (tile.isUnderConstruction) {
         const bDef = BUILDINGS[tile.buildingType as BuildingType];
         return (
-            <div className={containerClass}>
+            <div className={`${containerClass} pointer-events-auto`} onClick={(e) => e.stopPropagation()}>
                 <div className={`${cardClass} border-amber-500 rounded-[4px]`}>
                     <div className="bg-amber-900/30 p-2 border-b-2 border-amber-500/50 flex items-center justify-between">
                         <h3 className="font-black text-amber-500 text-[10px] uppercase tracking-widest font-['Rajdhani']">Under Construction</h3>
@@ -413,7 +413,7 @@ export const BuildingInspectorModal: React.FC<{
     const cardClass = "bg-slate-900 border-2 border-blue-500 rounded-[4px] shadow-[4px_4px_0_0_rgba(0,0,0,0.5)] overflow-hidden";
 
     return (
-        <div className={containerClass}>
+        <div className={`${containerClass} pointer-events-auto`} onClick={(e) => e.stopPropagation()}>
             <div className={cardClass}>
                 <div className="bg-blue-900/30 p-2 border-b-2 border-blue-500/50 flex items-center justify-between">
                     <h3 className="font-black text-blue-400 text-[10px] uppercase tracking-widest font-['Rajdhani']">System Inspector</h3>

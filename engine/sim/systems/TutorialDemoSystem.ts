@@ -1,6 +1,9 @@
 import { BaseSimSystem } from '../Simulation';
 import { FixedContext } from '../../kernel/Types';
 import { GameState, GameStep, BuildingType, SfxType, Era } from '../../../types';
+import { BUILDINGS } from '../../data/buildings';
+import { ChunkStore } from '../../space/ChunkStore';
+import { worldToChunk, CHUNK_SIZE } from '../../utils/coords';
 
 
 /**
@@ -76,16 +79,16 @@ export class TutorialDemoSystem extends BaseSimSystem {
     private initializeDemo(state: GameState) {
         state.cheatsEnabled = true;
         // Infinite Demo Resources
-        state.resources.agt = 1000000;
-        state.resources.minerals = 5000;
+        state.resources.agt = 10000000;
+        state.resources.minerals = 50000;
         state.resources.gems = 5000;
-        state.resources.wood = 5000;
-        state.resources.stone = 5000;
+        state.resources.wood = 50000;
+        state.resources.stone = 50000;
         state.resources.eco = 100;
         state.resources.trust = 100;
 
-        state.currentEra = Era.SETTLEMENT;
-        state.unlockedEras = [Era.SETTLEMENT];
+        state.currentEra = Era.PROSPERITY;
+        state.unlockedEras = [Era.SETTLEMENT, Era.GROWTH, Era.INDUSTRY, Era.SUSTAINABILITY, Era.PROSPERITY];
 
         const cx = state.spawnX || 0;
         const cz = state.spawnZ || 0;
@@ -93,77 +96,100 @@ export class TutorialDemoSystem extends BaseSimSystem {
 
         const pos = (dx: number, dz: number) => ({ x: cx + dx, z: cz + dz });
 
+        this.addTask(1.0, (c, s) => this.notify(c, s, "DEMO MODE: COMPACT CITY SHOWCASE", "POSITIVE"));
+        this.addTask(0.5, (c, s) => this.notify(c, s, "GENERATING URBAN GRID...", "NEUTRAL"));
 
-        // --- DEMO SCRIPT: NATURAL GROWTH ---
+        // List of buildings to showcase
+        const buildingTypes = [
+            // Era 1
+            BuildingType.STAFF_QUARTERS, BuildingType.CANTEEN, BuildingType.STORAGE_DEPOT,
+            BuildingType.WASH_PLANT, BuildingType.SAWMILL, BuildingType.STONE_QUARRY,
+            BuildingType.SOLAR_ARRAY, BuildingType.WATER_WELL, BuildingType.WORKSHOP,
+            BuildingType.GENERATOR, BuildingType.MINE_SHAFT, BuildingType.FENCE,
+            // Era 2
+            BuildingType.RECYCLING_PLANT, BuildingType.WIND_TURBINE, BuildingType.SOCIAL_HUB,
+            BuildingType.SECURITY_POST, BuildingType.COMMUNITY_GARDEN, BuildingType.MEDICAL_BAY,
+            BuildingType.TRAINING_CENTER,
+            // Era 3
+            BuildingType.MINING_HEADFRAME, BuildingType.ORE_FOUNDRY, BuildingType.GEM_REFINERY,
+            BuildingType.DISTRIBUTION_HUB,
+            // Era 4 + 5
+            BuildingType.RESERVOIR, BuildingType.WASTE_TREATMENT, BuildingType.HYDROPONICS,
+            BuildingType.GEOTHERMAL_PLANT, BuildingType.LOCAL_SCHOOL, BuildingType.NATURE_RESERVE,
+            BuildingType.MONUMENT, BuildingType.SPACEPORT, BuildingType.SAFARI_LODGE, BuildingType.GREEN_TECH_LAB
+        ];
 
-        // --- DEMO SCRIPT: NATURAL GROWTH ---
+        let currentZ = -30;
+        const COL_SPACING = 7;
+        const ROW_EXTRA = 2; // Fixed road gap between rows
 
-        this.addTask(1.0, (c, s) => this.notify(c, s, "DEMO SEQUENCE: NATURAL GROWTH", "POSITIVE"));
-        this.addTask(0.5, (c, s) => this.notify(c, s, "CHEAT MODES ACTIVE: INSTANT CONSTRUCTION ENABLED", "NEUTRAL"));
-
-        // 1. Central Hub (Settlement Era)
-        this.addTask(0.2, (c, s) => this.pushPlacement(c, s, pos(0, 0), BuildingType.STORAGE_DEPOT));
-
-        // Roads outward
-        for (let i = 1; i <= 3; i++) {
-            this.addTask(0.05, (c, s) => this.pushPlacement(c, s, pos(i, 0), BuildingType.ROAD));
-            this.addTask(0.05, (c, s) => this.pushPlacement(c, s, pos(-i, 0), BuildingType.ROAD));
-            this.addTask(0.05, (c, s) => this.pushPlacement(c, s, pos(0, i), BuildingType.ROAD));
-            this.addTask(0.05, (c, s) => this.pushPlacement(c, s, pos(0, -i), BuildingType.ROAD));
-        }
-
-        // Basic Infrastructure
-        this.addTask(0.5, (c, s) => this.pushPlacement(c, s, pos(2, 2), BuildingType.SOLAR_ARRAY));
-        this.addTask(0.2, (c, s) => this.pushPlacement(c, s, pos(2, -2), BuildingType.WATER_WELL));
-
-        this.addTask(0.5, (c, s) => this.notify(c, s, "FOUNDATION ESTABLISHED. EXPANDING RESIDENTIAL.", "POSITIVE"));
-
-        // 2. Residential District (North)
-        for (let z = -4; z >= -8; z--) this.addTask(0.05, (c, s) => this.pushPlacement(c, s, pos(0, z), BuildingType.ROAD));
-
-        this.addTask(0.2, (c, s) => this.pushPlacement(c, s, pos(-2, -4), BuildingType.STAFF_QUARTERS));
-        this.addTask(0.2, (c, s) => this.pushPlacement(c, s, pos(2, -4), BuildingType.STAFF_QUARTERS));
-        this.addTask(0.2, (c, s) => this.pushPlacement(c, s, pos(-2, -6), BuildingType.STAFF_QUARTERS));
-        this.addTask(0.2, (c, s) => this.pushPlacement(c, s, pos(2, -6), BuildingType.STAFF_QUARTERS));
-        this.addTask(0.5, (c, s) => this.pushPlacement(c, s, pos(0, -9), BuildingType.CANTEEN));
-
-        // 3. Era Upgrade (Growth)
-        this.addTask(1.0, (c, s) => {
-            s.currentEra = Era.GROWTH;
-            if (!s.unlockedEras.includes(Era.GROWTH)) s.unlockedEras.push(Era.GROWTH);
-            this.notify(c, s, "ERA UNLOCKED: GROWTH", "POSITIVE");
+        // 1. Initial Road Paving (Vertical Arteries)
+        this.addTask(0.1, (c, s) => {
+            for (let xOff = -15; xOff <= 15; xOff++) {
+                if (xOff % COL_SPACING === 0 || xOff === 15 || xOff === -15) {
+                    for (let z = -40; z < 180; z++) {
+                        this.pushPlacement(c, s, { x: cx + xOff, z: cz + z }, BuildingType.ROAD);
+                    }
+                }
+            }
         });
 
-        // 4. Industrial Sector (South)
-        this.addTask(0.5, (c, s) => this.notify(c, s, "INITIATING INDUSTRIAL OPERATIONS", "NEUTRAL"));
-        for (let z = 4; z <= 10; z++) this.addTask(0.05, (c, s) => this.pushPlacement(c, s, pos(0, z), BuildingType.ROAD));
+        buildingTypes.forEach((type, idx) => {
+            const def = BUILDINGS[type];
+            if (!def) return;
 
-        this.addTask(0.5, (c, s) => this.pushPlacement(c, s, pos(-3, 6), BuildingType.MINING_HEADFRAME));
-        this.addTask(0.5, (c, s) => this.pushPlacement(c, s, pos(3, 6), BuildingType.WASH_PLANT));
-        this.addTask(0.5, (c, s) => this.pushPlacement(c, s, pos(-3, 9), BuildingType.MINING_HEADFRAME));
+            const w = def.width || 1;
+            const d = def.depth || 1;
 
-        // 5. Advanced Tech (West)
-        this.addTask(0.5, (c, s) => this.notify(c, s, "DEPLOYING ADVANCED POWER SYSTEMS", "NEUTRAL"));
-        for (let x = -4; x >= -10; x--) this.addTask(0.05, (c, s) => this.pushPlacement(c, s, pos(x, 0), BuildingType.ROAD));
+            // Horizontal Road before row
+            this.addTask(0.01, (c, s) => {
+                for (let x = -15; x <= 15; x++) {
+                    this.pushPlacement(c, s, { x: cx + x, z: cz + currentZ - 1 }, BuildingType.ROAD);
+                }
+            });
 
-        this.addTask(0.5, (c, s) => this.pushPlacement(c, s, pos(-6, 2), BuildingType.WIND_TURBINE));
-        this.addTask(0.2, (c, s) => this.pushPlacement(c, s, pos(-8, 2), BuildingType.WIND_TURBINE));
-        this.addTask(0.2, (c, s) => this.pushPlacement(c, s, pos(-10, 2), BuildingType.WIND_TURBINE));
+            // Place 4 levels
+            for (let level = 1; level <= 4; level++) {
+                const offsetX = (level - 1) * COL_SPACING - 11; // More compact
+                const tx = cx + offsetX;
+                const tz = cz + currentZ;
 
-        // 6. Final Era & Monument
-        this.addTask(2.0, (c, s) => {
-            s.currentEra = Era.PROSPERITY;
-            s.unlockedEras = [Era.SETTLEMENT, Era.GROWTH, Era.INDUSTRY, Era.SUSTAINABILITY, Era.PROSPERITY];
-            this.notify(c, s, "MAXIMUM TECH LEVEL ACHIEVED", "POSITIVE");
+                this.addTask(0.02, (c, s) => {
+                    this.pushPlacement(c, s, { x: tx, z: tz }, type);
+
+                    const head = ChunkStore.getTile(s.chunks, tx, tz);
+                    if (head) {
+                        head.level = level;
+                        head.isUnderConstruction = false;
+                        head.constructionTimeLeft = 0;
+                        head.powerStatus = 'CONNECTED';
+                        head.waterStatus = 'CONNECTED';
+
+                        // Sync parts
+                        for (let dz = 0; dz < d; dz++) {
+                            for (let dx = 0; dx < w; dx++) {
+                                const part = ChunkStore.getTile(s.chunks, tx + dx, tz + dz);
+                                if (part) {
+                                    part.level = level;
+                                    part.isUnderConstruction = false;
+                                    part.powerStatus = 'CONNECTED';
+                                    part.waterStatus = 'CONNECTED';
+                                    const { cx: chx, cz: chz } = worldToChunk(tx + dx, tz + dz, CHUNK_SIZE);
+                                    const chunk = s.chunks[`${chx},${chz}`];
+                                    if (chunk) chunk.meshDirty = true;
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            currentZ += (d + ROW_EXTRA);
         });
-
-        this.addTask(1.0, (c, s) => this.pushPlacement(c, s, pos(0, -12), BuildingType.MONUMENT));
-        this.addTask(1.0, (c, s) => this.pushPlacement(c, s, pos(-5, -5), BuildingType.COMMUNITY_GARDEN));
-        this.addTask(0.5, (c, s) => this.pushPlacement(c, s, pos(5, -5), BuildingType.NATURE_RESERVE));
 
         this.addTask(3.0, (c, s) => {
             s.step = GameStep.PLAYING;
-            this.notify(c, s, "DEMO SEQUENCE COMPLETE. HANDING OVER CONTROL.", "POSITIVE");
+            this.notify(c, s, "SHOWCASE COMPLETE. EXPLORE THE COMPACT CITY.", "POSITIVE");
         });
     }
 

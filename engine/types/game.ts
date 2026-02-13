@@ -92,6 +92,7 @@ export enum GameStep {
     TUTORIAL_PLACE = 'TUTORIAL_PLACE',
     TUTORIAL_NEEDS = 'TUTORIAL_NEEDS',
     TUTORIAL_POWER = 'TUTORIAL_POWER',
+    TUTORIAL_UNDERGROUND = 'TUTORIAL_UNDERGROUND',
     TUTORIAL_RESEARCH = 'TUTORIAL_RESEARCH',
     TUTORIAL_ERA = 'TUTORIAL_ERA',
     DEMO = 'DEMO',
@@ -165,6 +166,7 @@ export interface GameState {
 
     // View State
     activeView: 'SURFACE' | 'DUNGEON';
+    isFPS: boolean;
     dungeon: DungeonState;
 
     // Day/Night Cycle (1 game day = 24000 ticks = ~80 real minutes at 200ms/tick)
@@ -260,7 +262,7 @@ export type Action =
     | { type: 'RESET_GAME' }
     | { type: 'TOGGLE_DEBUG' }
     | { type: 'TOGGLE_CHEATS' }
-    | { type: 'ENTER_FPS' }
+    | { type: 'ENTER_FPS', payload?: string }
     | { type: 'EXIT_FPS' }
     | { type: 'CLAIM_GOAL' }
     | { type: 'DISMISS_NEWS', payload: string }

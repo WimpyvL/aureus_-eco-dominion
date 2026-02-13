@@ -5,6 +5,7 @@ export type FoliageType =
     | 'NONE'
     // Functional
     | 'GOLD_VEIN'
+    | 'GOLD_VEIN_VAR'
     | 'MINE_HOLE'
     | 'ILLEGAL_CAMP'
     // Grass Biome
@@ -22,9 +23,12 @@ export type FoliageType =
     | 'ROCK_ICY'
     // Sand Biome
     | 'CACTUS_SAGUARO'
+    | 'CACTUS_SAGUARO_VAR'
     | 'CACTUS_BARREL'
     | 'TREE_PALM'
+    | 'TREE_PALM_TALL'
     | 'SHRUB_DRY'
+    | 'SHRUB_DRY_VAR'
     | 'ROCK_SANDSTONE'
     // Dirt Biome
     | 'TREE_DEAD'
