@@ -8,6 +8,7 @@ import React, { useState } from 'react';
 import { Menu, ArrowLeft, TrendingUp, FlaskConical, BarChart3, Users, Zap, Utensils, Smile, Briefcase, Shield, Leaf, Wrench, Pickaxe } from 'lucide-react';
 import { GameState, Action, Agent, AgentRole } from '../types';
 import { ResearchTree } from './ResearchTree';
+import { BureaucracyOffice } from './BureaucracyOffice';
 import { MAX_AGENTS, CAPACITY_PER_QUARTERS } from '../engine/sim/logic/SimulationLogic';
 import { BuildingType } from '../types';
 
@@ -103,7 +104,7 @@ const TabButton = ({ id, label, icon: Icon, activeTab, setActiveTab, playSfx }: 
 };
 
 export const OpsDrawer: React.FC<OpsDrawerProps> = ({ isOpen, onClose, state, dispatch, financials, ecoMult, trustMult, playSfx }) => {
-    const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'RESEARCH' | 'COLONISTS'>('OVERVIEW');
+    const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'RESEARCH' | 'COLONISTS' | 'BUREAUCRACY'>('OVERVIEW');
 
     // Reset tab when drawer opens
     React.useEffect(() => {
@@ -136,9 +137,10 @@ export const OpsDrawer: React.FC<OpsDrawerProps> = ({ isOpen, onClose, state, di
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b-2 border-slate-700 px-3 pt-3 bg-slate-900 gap-1">
+            <div className="flex border-b-2 border-slate-700 px-3 pt-3 bg-slate-900 gap-1 overflow-x-auto no-scrollbar">
                 <TabButton id="OVERVIEW" label="Stats" icon={BarChart3} activeTab={activeTab} setActiveTab={setActiveTab} playSfx={playSfx} />
                 <TabButton id="COLONISTS" label="Crew" icon={Users} activeTab={activeTab} setActiveTab={setActiveTab} playSfx={playSfx} />
+                <TabButton id="BUREAUCRACY" label="Office" icon={Shield} activeTab={activeTab} setActiveTab={setActiveTab} playSfx={playSfx} />
                 <TabButton id="RESEARCH" label="Tech" icon={FlaskConical} activeTab={activeTab} setActiveTab={setActiveTab} playSfx={playSfx} />
             </div>
 
@@ -212,6 +214,11 @@ export const OpsDrawer: React.FC<OpsDrawerProps> = ({ isOpen, onClose, state, di
                 {activeTab === 'RESEARCH' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
                         <ResearchTree research={state.research} resources={state.resources} dispatch={dispatch} playSfx={playSfx} />
+                    </div>
+                )}
+                {activeTab === 'BUREAUCRACY' && (
+                    <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                        <BureaucracyOffice state={state} dispatch={dispatch} playSfx={playSfx} />
                     </div>
                 )}
             </div>

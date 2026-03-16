@@ -125,6 +125,22 @@ export class DungeonMinerSystem extends BaseSimSystem {
 
                 if (m.miningProgress >= 1) {
                     // Mined!
+                    const isSpecial = blockType === DungeonEngine.BLOCK.GOLD ||
+                        blockType === DungeonEngine.BLOCK.GEMS ||
+                        blockType === DungeonEngine.BLOCK.MANA;
+
+                    if (isSpecial) {
+                        const hasPermit = state.bureaucracy?.permits?.['extraction-intent']?.status === 'APPROVED';
+                        if (!hasPermit) {
+                            dState.logs.push(`Illegal extraction detected at (${bx}, ${bz})! Permit 17-B required.`);
+                            // Optionally penalize or block? For now, we block the actual resource gain.
+                            m.state = 'idle';
+                            m.targetBlock = undefined;
+                            m.miningProgress = 0;
+                            return;
+                        }
+                    }
+
                     if (blockType === DungeonEngine.BLOCK.GOLD) {
                         dState.gold += 50;
                         dState.logs.push("Gold discovered!");

@@ -35,56 +35,102 @@ function createNoiseTexture(width: number, height: number, colorHex: number, gra
 // Universal Noise Texture for Master Material (Grayscale with Grain)
 const texMaster = createNoiseTexture(64, 64, 0xffffff, 40);
 
-// Updated Shader with Instancing Support
-export const waterFlowMaterial = new THREE.ShaderMaterial({
-  uniforms: {
-    time: { value: 0 },
-    color: { value: new THREE.Color(0x06b6d4) }, // Matches Minimap Cyan
-    foamColor: { value: new THREE.Color(0xa5f3fc) }
-  },
-  vertexShader: `
-    varying vec3 vWorldPosition;
-    
-    void main() { 
-        vec3 transformed = position;
-        
-        #ifdef USE_INSTANCING
-          vec4 worldPosition = instanceMatrix * vec4(transformed, 1.0);
-        #else
-          vec4 worldPosition = modelMatrix * vec4(transformed, 1.0);
-        #endif
-        
-        // Apply modelMatrix for non-instanced or global transform if needed
-        #ifdef USE_INSTANCING
-           worldPosition = modelMatrix * worldPosition;
-        #endif
+function createWaterMaterial(baseColorHex: number, foamColorHex: number): THREE.ShaderMaterial {
+    const mat = new THREE.MeshStandardMaterial({
+        color: baseColorHex,
+        transparent: true,
+        opacity: 0.85,
+        roughness: 0.05,
+        metalness: 0.8,
+        side: THREE.DoubleSide
+    }) as unknown as THREE.ShaderMaterial;
 
-        vWorldPosition = worldPosition.xyz;
-        gl_Position = projectionMatrix * viewMatrix * worldPosition; 
-    }
-  `,
-  fragmentShader: `
-    uniform float time; 
-    uniform vec3 color; 
-    uniform vec3 foamColor;
-    varying vec3 vWorldPosition; 
-    void main() { 
-        // World-space continuous pattern
-        float pattern = sin((vWorldPosition.x + vWorldPosition.z) * 4.0 - time * 2.0) * 0.5 + 0.5;
-        // Secondary interference
-        pattern += sin((vWorldPosition.x - vWorldPosition.z) * 2.0 + time) * 0.2;
-        
-        float foam = smoothstep(0.85, 1.0, pattern);
-        vec3 finalColor = mix(color, foamColor, foam * 0.5);
-        
-        // Edge transparency falloff could go here if we had depth buffer access, 
-        // but for now simple alpha
-        gl_FragColor = vec4(finalColor, 0.9); 
-    }
-  `,
-  transparent: true,
-  side: THREE.DoubleSide // Ensure visibility from all angles
-});
+    const uniforms = {
+        time: { value: 0 },
+        waterColor: { value: new THREE.Color(baseColorHex) },
+        foamColor: { value: new THREE.Color(foamColorHex) }
+    };
+    (mat as any).uniforms = uniforms;
+
+    mat.onBeforeCompile = (shader) => {
+        shader.uniforms.time = uniforms.time;
+        shader.uniforms.waterColor = uniforms.waterColor;
+        shader.uniforms.foamColor = uniforms.foamColor;
+
+        shader.vertexShader = `
+            uniform float time;
+            varying vec3 vWorldPos;
+            varying float vWaveHeight;
+            ${shader.vertexShader}
+        `.replace(
+            `#include <begin_vertex>`,
+            `
+            vec3 transformed = vec3(position);
+            
+            #ifdef USE_INSTANCING
+              vec4 myWorldPosition = instanceMatrix * vec4(transformed, 1.0);
+            #else
+              vec4 myWorldPosition = modelMatrix * vec4(transformed, 1.0);
+            #endif
+
+            #ifdef USE_INSTANCING
+               myWorldPosition = modelMatrix * myWorldPosition;
+            #endif
+
+            // More realistic wave sum
+            float wave1 = sin(myWorldPosition.x * 1.5 + time * 1.2) * 0.15;
+            float wave2 = cos(myWorldPosition.z * 1.2 + time * 1.5) * 0.15;
+            float wave3 = sin((myWorldPosition.x * 0.8 + myWorldPosition.z * 0.5) - time) * 0.1;
+            
+            float height = wave1 + wave2 + wave3;
+            transformed.y += height;
+
+            vWorldPos = myWorldPosition.xyz + vec3(0.0, height, 0.0);
+            vWaveHeight = height;
+            `
+        ).replace(
+            `#include <beginnormal_vertex>`,
+            `
+            vec3 objectNormal = vec3(normal);
+            
+            float dHx = 1.5 * 0.15 * cos(vWorldPos.x * 1.5 + time * 1.2) + 0.8 * 0.1 * cos((vWorldPos.x * 0.8 + vWorldPos.z * 0.5) - time);
+            float dHz = 1.2 * 0.15 * -sin(vWorldPos.z * 1.2 + time * 1.5) + 0.5 * 0.1 * cos((vWorldPos.x * 0.8 + vWorldPos.z * 0.5) - time);
+            
+            if (normal.y > 0.5) {
+                vec3 modifiedNormal = normalize(vec3(-dHx, 1.0, -dHz));
+                objectNormal = modifiedNormal;
+            }
+            `
+        );
+
+        shader.fragmentShader = `
+            uniform float time;
+            uniform vec3 waterColor;
+            uniform vec3 foamColor;
+            varying vec3 vWorldPos;
+            varying float vWaveHeight;
+            ${shader.fragmentShader}
+        `.replace(
+            `#include <color_fragment>`,
+            `
+            #include <color_fragment>
+            
+            float pattern = sin((vWorldPos.x + vWorldPos.z) * 4.0 - time * 2.0) * 0.5 + 0.5;
+            pattern += sin((vWorldPos.x - vWorldPos.z) * 2.0 + time) * 0.2;
+            
+            float wavePeak = smoothstep(-0.1, 0.3, vWaveHeight); 
+            float foam = smoothstep(0.85, 1.0, pattern) * wavePeak;
+            
+            vec3 finalMix = mix(waterColor, foamColor, foam);
+            diffuseColor.rgb = finalMix;
+            `
+        );
+    };
+
+    return mat;
+}
+
+export const waterFlowMaterial = createWaterMaterial(0x06b6d4, 0xa5f3fc);
 
 export const bioLumeMaterial = new THREE.ShaderMaterial({
   uniforms: {
@@ -119,6 +165,12 @@ export const bioLumeMaterial = new THREE.ShaderMaterial({
   transparent: true,
   side: THREE.DoubleSide
 });
+
+// Murky/Oil water material for unpowered reservoirs or industrial waste
+export const oilWaterMaterial = createWaterMaterial(0x1a365d, 0x2d3748);
+
+// Deep turquoise water for reservoirs and basins
+export const reservoirWaterMaterial = createWaterMaterial(0x0e7490, 0x22d3ee);
 
 // Single Master Material for Terrain Consolidation
 export const matMaster = new THREE.MeshStandardMaterial({
@@ -188,20 +240,12 @@ export const mats: Record<string, THREE.Material> = {
   sandWet: new THREE.MeshStandardMaterial({ map: createNoiseTexture(64, 64, 0xe6c288, 15), roughness: 0.6 }),
   waterDeep: new THREE.MeshStandardMaterial({ color: 0x06b6d4, transparent: true, opacity: 0.9, roughness: 0.1 }),
   waterSurface: waterFlowMaterial,
+  waterMaterial: waterFlowMaterial,
   waterSeaweed: new THREE.MeshStandardMaterial({ color: 0x228b22, roughness: 0.8 }),
   waterCoral: new THREE.MeshStandardMaterial({ color: 0xf44336, roughness: 0.8 }),
   waterGold: new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.8, roughness: 0.2 }),
-
-  // Dedicated basin/reservoir water - turquoise with focused sun specular
-  reservoirWater: new THREE.MeshStandardMaterial({
-    color: 0x0e7490,           // Deep cyan/teal water
-    transparent: true,
-    opacity: 0.8,
-    metalness: 0.05,           // Very low - water isn't metallic
-    roughness: 0.4,            // Higher - diffuses reflection except sun specular
-    emissive: 0x083344,        // Very subtle deep glow
-    emissiveIntensity: 0.08
-  }),
+  oilWater: oilWaterMaterial,
+  reservoirWater: reservoirWaterMaterial,
   biolume: bioLumeMaterial
 };
 
@@ -210,6 +254,9 @@ Object.values(mats).forEach(mat => {
   if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshBasicMaterial || mat instanceof THREE.ShaderMaterial) {
     if (mat instanceof THREE.MeshStandardMaterial) {
       mat.clipShadows = true;
+    }
+    if (mat instanceof THREE.ShaderMaterial) {
+      mat.clipping = true;
     }
   }
 });

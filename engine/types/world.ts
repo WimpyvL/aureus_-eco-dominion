@@ -72,6 +72,7 @@ export interface GridTile {
     buildingType: BuildingType;
     level: number;
     terrainHeight: number;
+    revealed?: boolean;
     biome: BiomeType;
     foliage?: FoliageType;
     locked?: boolean;

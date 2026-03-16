@@ -11,6 +11,7 @@ export * from './ConstructionSystem';
 export * from './EraSystem';
 export * from './PowerGridSystem';
 export * from './WaterNetworkSystem';
+export * from './BureaucracySystem';
 export * from './EmploymentSystem';
 
 export * from './TutorialDemoSystem';

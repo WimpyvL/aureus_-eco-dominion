@@ -8,7 +8,7 @@
 import { Chunk, GridTile, BuildingType, BiomeType } from '../../types';
 import { floorDiv, mod, toChunkKey, worldToChunk, worldToLocal } from '../utils/coords';
 import { getBiomeAt, getFoliageAt } from '../worldgen/Core';
-import { VOXEL_BUFFER_SIZE, getVoxelIndex, VoxelBits, V_ORE_MASK } from '../types/voxels';
+// import { VOXEL_BUFFER_SIZE, getVoxelIndex, VoxelBits, V_ORE_MASK } from '../types/voxels';
 
 export const CHUNK_SIZE = 16;
 
@@ -54,6 +54,7 @@ export class ChunkStore {
                     biome: biome as BiomeType,
                     foliage,
                     locked: false,
+                    revealed: false,
                     explored: true,
                     markedForHarvest: false
                 });

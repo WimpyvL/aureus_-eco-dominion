@@ -24,6 +24,7 @@ import { WorldMap } from './components/WorldMap';
 import { Minimap } from './components/Minimap';
 import { WeatherOverlay } from './components/WeatherOverlay';
 import { DungeonHUD } from './components/DungeonHUD';
+import { DialogueOverlay } from './components/DialogueOverlay';
 import { MobileBuildingConfirmation } from './components/MobileBuildingConfirmation';
 import { DebugMenu } from './components/DebugMenu';
 import { AgentDebugOverlay } from './components/AgentDebugOverlay';
@@ -312,6 +313,12 @@ const App: React.FC = () => {
                                                 cheatsEnabled={state.cheatsEnabled}
                                                 dispatch={dispatch}
                                                 onClose={() => setSelectedTilePos(null)}
+                                                playSfx={playSfx}
+                                            />
+
+                                            <DialogueOverlay
+                                                state={state}
+                                                dispatch={dispatch}
                                                 playSfx={playSfx}
                                             />
                                         </>

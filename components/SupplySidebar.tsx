@@ -55,7 +55,8 @@ export const getBuildingIcon = (type: BuildingType) => {
         case BuildingType.TRAINING_CENTER: return <Dumbbell size={18} />;
         // Era 3: Industry
         case BuildingType.GEM_REFINERY: return <Gem size={18} />;
-        case BuildingType.RAIL_LINE: return <TrainFront size={18} />;
+        case BuildingType.RAIL_LINE: return <GitCommit size={18} className="rotate-45" />;
+        case BuildingType.TRAIN_STATION: return <TrainFront size={18} />;
         case BuildingType.DISTRIBUTION_HUB: return <Truck size={18} />;
         // Era 4: Sustainability
         case BuildingType.WASTE_TREATMENT: return <Trash2 size={18} />;
@@ -126,6 +127,7 @@ const ITEM_CATEGORIES: Record<BuildingType, CategoryType> = {
     // Era 3: Industry
     [BuildingType.GEM_REFINERY]: 'PRODUCTION',
     [BuildingType.RAIL_LINE]: 'BASICS',
+    [BuildingType.TRAIN_STATION]: 'PRODUCTION',
     [BuildingType.DISTRIBUTION_HUB]: 'PRODUCTION',
     // Era 4: Sustainability
     [BuildingType.WASTE_TREATMENT]: 'UTILITIES',
@@ -140,6 +142,7 @@ const ITEM_CATEGORIES: Record<BuildingType, CategoryType> = {
     [BuildingType.SAWMILL]: 'PRODUCTION',
     [BuildingType.STONE_QUARRY]: 'PRODUCTION',
     [BuildingType.MINE_SHAFT]: 'PRODUCTION',
+    [BuildingType.STOCKPILE]: 'UTILITIES',
     [BuildingType.D_MINE]: 'UNDERGROUND',
     [BuildingType.D_SUPPORT]: 'UNDERGROUND',
     [BuildingType.D_RECHARGER]: 'UNDERGROUND',
@@ -176,7 +179,7 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, wor
             BuildingType.SOCIAL_HUB, BuildingType.SECURITY_POST, BuildingType.COMMUNITY_GARDEN, BuildingType.WIND_TURBINE,
             // Era 3: Industry
             BuildingType.RECYCLING_PLANT, BuildingType.ORE_FOUNDRY, BuildingType.GEM_REFINERY,
-            BuildingType.RAIL_LINE, BuildingType.DISTRIBUTION_HUB, BuildingType.POND,
+            BuildingType.RAIL_LINE, BuildingType.TRAIN_STATION, BuildingType.DISTRIBUTION_HUB, BuildingType.POND,
             // Era 4: Sustainability
             BuildingType.RESERVOIR, BuildingType.LOCAL_SCHOOL, BuildingType.WASTE_TREATMENT,
             BuildingType.NATURE_RESERVE, BuildingType.HYDROPONICS, BuildingType.GEOTHERMAL_PLANT,
@@ -285,7 +288,7 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, wor
             {/* Sidebar Container */}
             <div
                 ref={sidebarRef}
-                className={`fixed right-0 top-14 bottom-22 w-[85vw] sm:w-[500px] z-40 flex pointer-events-none transition-all duration-500 ease-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+                className={`fixed right-0 top-14 bottom-20 w-[85vw] sm:w-[500px] z-40 flex pointer-events-none transition-all duration-500 ease-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
             >
                 {/* Main Panel */}
                 <div className="flex-1 flex flex-col pointer-events-auto bg-slate-950/90 backdrop-blur-xl border-l border-slate-800 shadow-[-20px_0_50px_rgba(0,0,0,0.8)] overflow-hidden">

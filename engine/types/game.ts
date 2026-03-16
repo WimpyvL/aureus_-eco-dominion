@@ -4,6 +4,7 @@ import { Agent, AgentRequest, Job } from './agents';
 import { GridTile, WeatherState, Chunk } from './world';
 import { GameResources, MarketState, Contract } from './economy';
 import { DungeonState } from '../dungeon/DungeonTypes';
+import { BureaucracyState } from './bureaucracy';
 
 export enum Era {
     SETTLEMENT = 'SETTLEMENT',
@@ -129,7 +130,7 @@ export type SimulationEffect =
 
 export interface GameCommand {
     id: string; // Unique ID to prevent double execution
-    type: 'PLACE_BUILDING' | 'BULLDOZE' | 'SPEED_UP' | 'REHABILITATE' | 'UPGRADE_BUILDING' | 'EXPLODE_TILE' | 'COMMAND_AGENT' | 'MANUAL_MOVE_AGENT' | 'BUY_BUILDING' | 'SELL_RESOURCE' | 'BUY_RESOURCE' | 'SET_AUTO_SELL' | 'MARK_HARVEST' | 'RESEARCH_TECH' | 'DELIVER_CONTRACT' | 'ADVANCE_TUTORIAL' | 'START_DEMO' | 'DISMISS_POPUP';
+    type: 'PLACE_BUILDING' | 'BULLDOZE' | 'SPEED_UP' | 'REHABILITATE' | 'UPGRADE_BUILDING' | 'EXPLODE_TILE' | 'COMMAND_AGENT' | 'MANUAL_MOVE_AGENT' | 'BUY_BUILDING' | 'SELL_RESOURCE' | 'BUY_RESOURCE' | 'SET_AUTO_SELL' | 'MARK_HARVEST' | 'RESEARCH_TECH' | 'DELIVER_CONTRACT' | 'ADVANCE_TUTORIAL' | 'START_DEMO' | 'DISMISS_POPUP' | 'SUBMIT_PERMIT' | 'TALK_TO_NPC' | 'CHOOSE_DIALOGUE' | 'CLOSE_DIALOGUE';
     payload: any;
     issuedAtTick?: number;
 }
@@ -230,6 +231,9 @@ export interface GameState {
             reason?: string;
         } | null;
     };
+
+    // Bureaucracy System (Permits & NPCs)
+    bureaucracy: BureaucracyState;
 }
 
 export interface LogisticsState {
@@ -274,4 +278,8 @@ export type Action =
     | { type: 'SET_INTERACTION_MODE', payload: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'TEST_DESTRUCT' }
     | { type: 'EXPLODE_TILE', payload: { x: number, z: number, radius: number, damage: number } }
     | { type: 'SAVE_GAME' }
-    | { type: 'LOAD_GAME', payload: GameState };
+    | { type: 'LOAD_GAME', payload: GameState }
+    | { type: 'SUBMIT_PERMIT', payload: string }
+    | { type: 'TALK_TO_NPC', payload: string }
+    | { type: 'CHOOSE_DIALOGUE', payload: number }
+    | { type: 'CLOSE_DIALOGUE' };

@@ -14,6 +14,7 @@ import { CHUNK_SIZE } from '../space/ChunkStore';
 import { worldToChunk } from '../utils/coords';
 
 import { Random } from '../kernel/Random';
+import { INITIAL_NPCS, INITIAL_PERMITS } from '../data/bureaucracy';
 
 export type StateListener = (state: GameState) => void;
 
@@ -186,6 +187,20 @@ export class StateManager {
                 deficit: 0,
             },
 
+            bureaucracy: {
+                permits: { ...INITIAL_PERMITS },
+                npcs: { ...INITIAL_NPCS },
+                knownNpcIds: ['licensing', 'union'],
+                dirtItems: [],
+                activeNPCId: null,
+                activePermitId: null,
+                activeMiniGame: null,
+                pendingPermitAction: null,
+                tutorialStep: 0,
+                activeDialogue: null,
+                dialogueTree: null
+            },
+
             // View Transition Loading
             isLoading: false,
             loadingMessage: '',
@@ -213,6 +228,7 @@ export class StateManager {
             z: spawnZ,
             visualX: spawnX + (i - 1),
             visualZ: spawnZ,
+            layer: 0,
             state: 'IDLE',
             energy: 80 + Math.random() * 20,
             hunger: 80 + Math.random() * 20,

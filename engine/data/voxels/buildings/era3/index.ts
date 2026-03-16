@@ -5,6 +5,7 @@ import { RecyclingPlantFactory } from './RecyclingPlant';
 import { OreFoundryFactory } from './OreFoundry';
 import { GemRefineryFactory } from './GemRefinery';
 import { RailLineFactory } from './RailLine';
+import { TrainStationFactory } from './TrainStation';
 import { DistributionHubFactory } from './DistributionHub';
 
 export const Era3Buildings = {
@@ -13,5 +14,6 @@ export const Era3Buildings = {
     [BuildingType.ORE_FOUNDRY]: OreFoundryFactory,
     [BuildingType.GEM_REFINERY]: GemRefineryFactory,
     [BuildingType.RAIL_LINE]: RailLineFactory,
+    [BuildingType.TRAIN_STATION]: TrainStationFactory,
     [BuildingType.DISTRIBUTION_HUB]: DistributionHubFactory
 };

@@ -39,6 +39,7 @@ export enum BuildingType {
     // Era 3: Industry
     GEM_REFINERY = 'GEM_REFINERY',
     RAIL_LINE = 'RAIL_LINE',
+    TRAIN_STATION = 'TRAIN_STATION',
     DISTRIBUTION_HUB = 'DISTRIBUTION_HUB',
     // Era 4: Sustainability
     WASTE_TREATMENT = 'WASTE_TREATMENT',

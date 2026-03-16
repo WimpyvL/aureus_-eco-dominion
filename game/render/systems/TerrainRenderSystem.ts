@@ -318,7 +318,7 @@ export class TerrainRenderSystem {
             console.warn(`[TerrainRenderSystem] Mesh IS NULL for ${res.chunkId}`);
         }
 
-        chunk.waterMesh = createMesh(res.water, mats.reservoirWater, false);
+        chunk.waterMesh = createMesh(res.water, mats.waterSurface, false);
         if (chunk.waterMesh) {
             chunk.waterMesh.receiveShadow = false;
             this.scene.add(chunk.waterMesh);

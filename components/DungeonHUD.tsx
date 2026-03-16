@@ -119,7 +119,9 @@ export const DungeonHUD: React.FC<DungeonHUDProps> = ({ state }) => {
             {/* Advisor Feed */}
             <div className="dungeon-logs">
                 {dungeon.logs.slice(-5).reverse().map((log, i) => (
-                    <div key={i} className="log-entry">{log}</div>
+                    <div key={i} className={`log-entry ${log.includes('PERMIT') || log.includes('Illegal') ? 'text-rose-400 font-bold animate-pulse' : ''}`}>
+                        {log.includes('Illegal') ? '⚠️ ' : ''}{log}
+                    </div>
                 ))}
             </div>
         </div>

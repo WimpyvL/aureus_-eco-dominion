@@ -22,7 +22,7 @@ import {
     ProductionSystem, ConstructionSystem, EraSystem,
     PowerGridSystem, WaterNetworkSystem,
     TutorialDemoSystem, CommandDispatcher,
-    ResearchSystem, EmploymentSystem
+    ResearchSystem, EmploymentSystem, BureaucracySystem
 } from '../engine/sim/systems';
 import { DungeonMinerSystem } from '../engine/sim/systems/DungeonMinerSystem';
 import { DungeonStabilitySystem } from '../engine/sim/systems/DungeonStabilitySystem';
@@ -34,6 +34,7 @@ import { getEcoMultiplier, isHarvestable } from '../engine/utils/GameUtils';
 import { BUILDINGS, TECHNOLOGIES } from '../engine/data/VoxelConstants';
 import { getBiomeAt } from '../engine/worldgen/Core';
 import { TerrainRenderSystem } from './render/systems/TerrainRenderSystem';
+import { waterFlowMaterial, oilWaterMaterial, reservoirWaterMaterial } from '../engine/render/materials/VoxelMaterials';
 import { FoliageRenderSystem } from './render/systems/FoliageRenderSystem';
 import { BuildingRenderSystem } from './render/systems/BuildingRenderSystem';
 import { AgentRenderSystem } from './render/systems/AgentRenderSystem';
@@ -156,6 +157,8 @@ export class AureusWorld extends BaseWorld {
 
         this.sim.addSystem(new DungeonMinerSystem());
         this.sim.addSystem(new DungeonStabilitySystem());
+        const bureaucracySystem = new BureaucracySystem();
+        this.sim.addSystem(bureaucracySystem);
 
 
 
@@ -173,7 +176,8 @@ export class AureusWorld extends BaseWorld {
             this.constructionSystem,
             this.agentSystem,
             researchSystem,
-            tutorialDemo
+            tutorialDemo,
+            bureaucracySystem
         ]);
 
         // Render Systems
@@ -728,6 +732,11 @@ export class AureusWorld extends BaseWorld {
     draw(ctx: FrameContext): void {
         const state = this.stateManager.getState();
 
+        // 0. Update Water Animation Time
+        waterFlowMaterial.uniforms.time.value = ctx.time;
+        oilWaterMaterial.uniforms.time.value = ctx.time;
+        reservoirWaterMaterial.uniforms.time.value = ctx.time;
+
         // Process and clear pending effects BEFORE render updates
         // This ensures that worker state is synced (UPDATE_CHUNK) before we potentially dispatch MESH_CHUNK jobs
         if (state.pendingEffects.length > 0) {
@@ -1033,6 +1042,18 @@ export class AureusWorld extends BaseWorld {
                 break;
             case 'DISMISS_NEWS':
                 // news system handles this via stateManager
+                break;
+            case 'SUBMIT_PERMIT':
+                this.stateManager.pushCommand('SUBMIT_PERMIT', { permitId: action.payload });
+                break;
+            case 'TALK_TO_NPC':
+                this.stateManager.pushCommand('TALK_TO_NPC', { npcId: action.payload });
+                break;
+            case 'CHOOSE_DIALOGUE':
+                this.stateManager.pushCommand('CHOOSE_DIALOGUE', { optionIndex: action.payload });
+                break;
+            case 'CLOSE_DIALOGUE':
+                this.stateManager.pushCommand('CLOSE_DIALOGUE', {});
                 break;
             default:
                 console.warn(`[AureusWorld] Unhandled action type: ${(action as any).type}`);

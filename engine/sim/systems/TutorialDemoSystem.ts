@@ -94,22 +94,22 @@ export class TutorialDemoSystem extends BaseSimSystem {
         const cz = state.spawnZ || 0;
         this.tasks = [];
 
-        this.addTask(1.0, (c, s) => this.notify(c, s, "DEMO MODE: ERA PROGRESSION SHOWCASE", "POSITIVE"));
-        this.addTask(0.5, (c, s) => this.notify(c, s, "INITIALIZING SECTORS...", "NEUTRAL"));
+        this.addTask(1.0, (c, s) => this.notify(c, s, "DEMO MODE: GRAND CATALOGUE", "POSITIVE"));
+        this.addTask(0.5, (c, s) => this.notify(c, s, "SHOWCASING ALL BUILDINGS & VARIANTS...", "NEUTRAL"));
 
-        // Define building list
-        const allBuildings = [
+        // Comprehensive list of showcase-worthy buildings
+        const buildingTypes = [
             // Era 1
             BuildingType.STAFF_QUARTERS, BuildingType.CANTEEN, BuildingType.STORAGE_DEPOT,
             BuildingType.WASH_PLANT, BuildingType.SAWMILL, BuildingType.STONE_QUARRY,
             BuildingType.SOLAR_ARRAY, BuildingType.WATER_WELL, BuildingType.WORKSHOP,
             BuildingType.GENERATOR, BuildingType.MINE_SHAFT, BuildingType.FENCE,
             BuildingType.POND, BuildingType.PIPE, BuildingType.POWER_LINE,
-            BuildingType.ROAD, // Explicit road for manual placement checks
+            BuildingType.ROAD,
             // Era 2
             BuildingType.RECYCLING_PLANT, BuildingType.WIND_TURBINE, BuildingType.SOCIAL_HUB,
-            BuildingType.SECURITY_POST, BuildingType.COMMUNITY_GARDEN, BuildingType.MEDICAL_BAY,
-            BuildingType.TRAINING_CENTER, BuildingType.STOCKPILE,
+            BuildingType.STOCKPILE, BuildingType.SECURITY_POST, BuildingType.COMMUNITY_GARDEN, BuildingType.MEDICAL_BAY,
+            BuildingType.TRAINING_CENTER,
             // Era 3
             BuildingType.MINING_HEADFRAME, BuildingType.ORE_FOUNDRY, BuildingType.GEM_REFINERY,
             BuildingType.DISTRIBUTION_HUB, BuildingType.RAIL_LINE,
@@ -119,87 +119,49 @@ export class TutorialDemoSystem extends BaseSimSystem {
             BuildingType.MONUMENT, BuildingType.SPACEPORT, BuildingType.SAFARI_LODGE, BuildingType.GREEN_TECH_LAB
         ];
 
-        // Valid buildings with definitions
-        const validBuildings = allBuildings.filter(t => BUILDINGS[t]);
+        let currentZ = -40;
+        const ROW_EXTRA = 3; // Gap between building rows
 
-        // Group by Era
-        const byEra: Record<string, BuildingType[]> = {};
-        validBuildings.forEach(t => {
-            const era = BUILDINGS[t].era;
-            if (!byEra[era]) byEra[era] = [];
-            byEra[era].push(t);
+        // Initial Paving
+        this.addTask(0.1, (c, s) => {
+            // Main vertical road spine
+            for (let z = -50; z < 400; z++) {
+                this.pushPlacement(c, s, { x: cx - 5, z: cz + z }, BuildingType.ROAD);
+            }
         });
 
-        let currentZ = -40;
-        const ERA_ORDER = [Era.SETTLEMENT, Era.GROWTH, Era.INDUSTRY, Era.SUSTAINABILITY, Era.PROSPERITY];
+        buildingTypes.forEach((type) => {
+            const def = BUILDINGS[type];
+            if (!def) return; // Skip if missing definition
 
-        // Lay out each Era's block
-        ERA_ORDER.forEach(era => {
-            const buildings = byEra[era] || [];
-            if (buildings.length === 0) return;
+            const maxLevel = (def.upgrades?.length || 0) + 1;
+            const width = def.width || 1;
+            const depth = def.depth || 1;
 
-            // Notification for Era Text
-            this.addTask(1.0, (c, s) => this.notify(c, s, `CONSTRUCTING ERA: ${era}`, "NEUTRAL"));
 
-            // Determine grid size for this Era (approx squareish keying off count)
-            const count = buildings.length;
-            const cols = 5;
-            const rows = Math.ceil(count / cols);
-
-            // Build Roads for this block
-            // Vertical roads at edges, Horizontal roads between rows
-            const blockHeight = rows * 5; // Approx 5 tiles per building slot (2-3 + spacing)
-
-            // Road Grid
-            this.addTask(0.2, (c, s) => {
-                // Horizontal Roads
-                for (let r = 0; r <= rows; r++) {
-                    const z = cz + currentZ + (r * 5);
-                    for (let xOff = -15; xOff <= 15; xOff++) {
-                        this.pushPlacement(c, s, { x: cx + xOff, z: z }, BuildingType.ROAD);
-                    }
+            // Task per building type to keep it snappy but sequential
+            this.addTask(0.1, (c, s) => {
+                // 1. Horizontal Road for this row
+                for (let x = -5; x <= (maxLevel * (width + 2)); x++) {
+                    this.pushPlacement(c, s, { x: cx + x, z: cz + currentZ - 1 }, BuildingType.ROAD);
                 }
-                // Vertical Roads
-                for (let xOff = -15; xOff <= 15; xOff += 6) {
-                    for (let zOff = 0; zOff <= blockHeight; zOff++) {
-                        this.pushPlacement(c, s, { x: cx + xOff, z: cz + currentZ + zOff }, BuildingType.ROAD);
-                    }
+
+                // 2. Place each level
+                for (let level = 1; level <= maxLevel; level++) {
+                    // X position: Starts at 0, shifts right by width + spacing
+                    const xPos = (level - 1) * (width + 3);
+
+                    this.pushPlacement(c, s, { x: cx + xPos, z: cz + currentZ }, type, level);
                 }
             });
 
-            // Place Buildings in slots
-            buildings.forEach((type, idx) => {
-                const r = Math.floor(idx / cols);
-                const c = idx % cols;
-
-                // Calculate center of slot
-                const slotX = (c * 6) - 12; // -12, -6, 0, 6, 12
-                const slotZ = currentZ + (r * 5) + 2; // Offset from road
-
-                // Check Max Level (Upgrades)
-                const def = BUILDINGS[type];
-                const maxLevel = (def.upgrades?.length || 0) + 1;
-
-                this.addTask(0.1, (ctx, s) => {
-                    this.pushPlacement(ctx, s, { x: cx + slotX + 1, z: cz + slotZ }, type, 1);
-                    // If it has upgrades, maybe bump it to max level immediately to show off?
-                    // Or cycle levels? Let's just show Level 1 for clarity, or Max for cool factor.
-                    // Doing Max Level for Era 4/5
-                    if (era === Era.PROSPERITY || era === Era.SUSTAINABILITY) {
-                        // We can't instant upgrade easily without multiple commands, 
-                        // but ConstructionSystem Place supports level!
-                        // Let's place Max Level for showcase
-                        this.pushPlacement(ctx, s, { x: cx + slotX + 1, z: cz + slotZ }, type, maxLevel);
-                    }
-                });
-            });
-
-            currentZ += blockHeight + 4; // Gap between Eras
+            // Advance Z for next row
+            currentZ += (depth + ROW_EXTRA);
         });
 
         this.addTask(3.0, (c, s) => {
             s.step = GameStep.PLAYING;
-            this.notify(c, s, "SHOWCASE COMPLETE. WELCOME TO AUREUS.", "POSITIVE");
+            this.notify(c, s, "CATALOGUE COMPLETE. ENJOY THE VIEW.", "POSITIVE");
         });
     }
 
