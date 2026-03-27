@@ -20,9 +20,9 @@ export interface ThreeRenderConfig {
 }
 
 const DEFAULT_CONFIG: ThreeRenderConfig = {
-    antialias: true,
-    shadowMap: true,
-    pixelRatio: window.devicePixelRatio || 1,
+    antialias: false,
+    shadowMap: false,
+    pixelRatio: Math.min(window.devicePixelRatio || 1, 1.25),
     clearColor: 0x0f172a,
     fogEnabled: false,
     fogColor: 0x1a1a2e,
@@ -123,22 +123,6 @@ export class ThreeRenderAdapter implements RenderAdapter {
      * Setup default scene lighting
      */
     private setupDefaultLighting(): void {
-        const cores = navigator.hardwareConcurrency || 4;
-        let shadowSize = 1024;
-        let shadowType = THREE.PCFShadowMap;
-
-        if (cores >= 8) {
-            shadowSize = 2048;
-            shadowType = THREE.PCFSoftShadowMap;
-        } else if (cores < 4) {
-            shadowSize = 512;
-            shadowType = THREE.BasicShadowMap;
-        }
-
-        if (this.renderer) {
-            this.renderer.shadowMap.type = shadowType;
-        }
-
         // Boosted ambient light for visibility
         this.ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
         this.scene.add(this.ambientLight);
@@ -146,20 +130,6 @@ export class ThreeRenderAdapter implements RenderAdapter {
         // Main directional light (sun)
         this.directionalLight = new THREE.DirectionalLight(0xfff5e0, 1.0);
         this.directionalLight.position.set(50, 80, 30);
-        this.directionalLight.castShadow = true;
-        this.directionalLight.shadow.mapSize.width = shadowSize;
-        this.directionalLight.shadow.mapSize.height = shadowSize;
-        this.directionalLight.shadow.camera.near = 10;
-        this.directionalLight.shadow.camera.far = 200;
-        this.directionalLight.shadow.camera.left = -60;
-        this.directionalLight.shadow.camera.right = 60;
-        this.directionalLight.shadow.camera.top = 60;
-        this.directionalLight.shadow.camera.bottom = -60;
-
-        // Bias helps prevent shadow acne on voxel surfaces
-        this.directionalLight.shadow.bias = -0.0005;
-        this.directionalLight.shadow.normalBias = 0.02;
-
         this.scene.add(this.directionalLight);
 
         // Hemisphere light for ambient variation

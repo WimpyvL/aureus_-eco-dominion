@@ -128,8 +128,8 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                 console.log('[useAureusEngine] Creating render adapter...');
 
                 const render = new ThreeRenderAdapter({
-                    antialias: true,
-                    shadowMap: true,
+                    antialias: false,
+                    shadowMap: false,
                     fogEnabled: true,
                 });
                 render.init(container);

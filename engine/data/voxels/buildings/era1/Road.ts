@@ -3,28 +3,37 @@ import * as THREE from 'three';
 import { mats } from '../../../../render/materials/VoxelMaterials';
 import { voxel, FactoryOptions } from '../../../../render/utils/VoxelBuilder';
 
+const roadAccentMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.7, metalness: 0.1 });
+
 export const RoadFactory = (opts?: FactoryOptions) => {
     const g = new THREE.Group();
-    const conn = opts?.connections || { north: false, south: false, east: false, west: false };
+    const deck = new THREE.Group();
+    const conn = opts?.connections || {
+        north: false, south: false, east: false, west: false,
+        northDelta: 0, southDelta: 0, eastDelta: 0, westDelta: 0
+    };
 
     // Count connections to determine road type
     const connCount = [conn.north, conn.south, conn.east, conn.west].filter(Boolean).length;
 
+    const createLaneMark = (w: number, d: number, x = 0, z = 0) =>
+        voxel(w, 0.02, d, mats.concreteLight, x, 0.08, z);
+
     // Asphalt base - always present
-    g.add(voxel(1.0, 0.08, 1.0, mats.asphalt, 0, 0, 0));
+    deck.add(voxel(1.0, 0.08, 1.0, mats.asphalt, 0, 0, 0));
 
     if (connCount === 0) {
         // Isolated road - show all directions as potential
-        g.add(voxel(0.08, 0.02, 0.3, mats.concreteLight, 0, 0.08, -0.3));
-        g.add(voxel(0.08, 0.02, 0.3, mats.concreteLight, 0, 0.08, 0.3));
+        deck.add(createLaneMark(0.08, 0.3, 0, -0.3));
+        deck.add(createLaneMark(0.08, 0.3, 0, 0.3));
     } else if (connCount === 1) {
         // Dead end - single direction
         if (conn.north || conn.south) {
             // Vertical road
-            g.add(voxel(0.08, 0.02, 0.8, mats.concreteLight, 0, 0.08, 0));
+            deck.add(createLaneMark(0.08, 0.8));
         } else {
             // Horizontal road
-            g.add(voxel(0.8, 0.02, 0.08, mats.concreteLight, 0, 0.08, 0));
+            deck.add(createLaneMark(0.8, 0.08));
         }
     } else if (connCount === 2) {
         // Straight or corner
@@ -32,35 +41,49 @@ export const RoadFactory = (opts?: FactoryOptions) => {
             // Straight road
             if (conn.north && conn.south) {
                 // North-South straight
-                g.add(voxel(0.08, 0.02, 0.9, mats.concreteLight, 0, 0.08, 0));
+                deck.add(createLaneMark(0.08, 0.9));
             } else {
                 // East-West straight
-                g.add(voxel(0.9, 0.02, 0.08, mats.concreteLight, 0, 0.08, 0));
+                deck.add(createLaneMark(0.9, 0.08));
             }
         } else {
             // Corner - no center line, just edge markings
-            const cornerMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.7, metalness: 0.1 });
-
             // Add corner accent
             if (conn.north && conn.east) {
-                g.add(voxel(0.15, 0.03, 0.15, cornerMat, 0.35, 0.08, -0.35));
+                deck.add(voxel(0.15, 0.03, 0.15, roadAccentMat, 0.35, 0.08, -0.35));
             } else if (conn.north && conn.west) {
-                g.add(voxel(0.15, 0.03, 0.15, cornerMat, -0.35, 0.08, -0.35));
+                deck.add(voxel(0.15, 0.03, 0.15, roadAccentMat, -0.35, 0.08, -0.35));
             } else if (conn.south && conn.east) {
-                g.add(voxel(0.15, 0.03, 0.15, cornerMat, 0.35, 0.08, 0.35));
+                deck.add(voxel(0.15, 0.03, 0.15, roadAccentMat, 0.35, 0.08, 0.35));
             } else if (conn.south && conn.west) {
-                g.add(voxel(0.15, 0.03, 0.15, cornerMat, -0.35, 0.08, 0.35));
+                deck.add(voxel(0.15, 0.03, 0.15, roadAccentMat, -0.35, 0.08, 0.35));
             }
         }
     } else if (connCount === 3) {
         // T-junction
-        const junctionMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.7, metalness: 0.1 });
-        g.add(voxel(0.3, 0.03, 0.3, junctionMat, 0, 0.08, 0));
+        deck.add(voxel(0.3, 0.03, 0.3, roadAccentMat, 0, 0.08, 0));
     } else {
         // 4-way intersection
-        const crossMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.7, metalness: 0.1 });
-        g.add(voxel(0.4, 0.03, 0.4, crossMat, 0, 0.08, 0));
+        deck.add(voxel(0.4, 0.03, 0.4, roadAccentMat, 0, 0.08, 0));
     }
 
+    // Straight runs should tilt as a single deck instead of stacking connector blocks.
+    if (connCount <= 2) {
+        if ((conn.north || conn.south) && !(conn.east || conn.west)) {
+            const northEdge = conn.north ? Math.max(conn.northDelta || 0, 0) : 0;
+            const southEdge = conn.south ? Math.max(conn.southDelta || 0, 0) : 0;
+            const rise = southEdge - northEdge;
+            deck.rotation.x = -Math.atan2(rise, 1);
+            deck.position.y = (northEdge + southEdge) * 0.5;
+        } else if ((conn.east || conn.west) && !(conn.north || conn.south)) {
+            const westEdge = conn.west ? Math.max(conn.westDelta || 0, 0) : 0;
+            const eastEdge = conn.east ? Math.max(conn.eastDelta || 0, 0) : 0;
+            const rise = eastEdge - westEdge;
+            deck.rotation.z = Math.atan2(rise, 1);
+            deck.position.y = (westEdge + eastEdge) * 0.5;
+        }
+    }
+
+    g.add(deck);
     return g;
 };

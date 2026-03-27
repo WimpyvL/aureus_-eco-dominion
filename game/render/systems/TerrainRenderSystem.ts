@@ -26,8 +26,9 @@ export class TerrainRenderSystem {
     private tileCache: Map<string, GridTile[]> = new Map();
     private viewMode: 'SURFACE' | 'FIRST_PERSON' = 'SURFACE';
 
-    // View radius in chunks (Increased for better FPV and horizon)
-    private viewRadius = 10;
+    // View radius in chunks.
+    // The previous radius was simply too expensive for a mobile target.
+    private viewRadius = ('ontouchstart' in window) ? 4 : 6;
 
     // Track last camera chunk to avoid redundant updates
     private lastCameraCx = -999;
@@ -72,9 +73,15 @@ export class TerrainRenderSystem {
 
 
         const now = Date.now();
+        const hasDirtyVisibleChunks = (() => {
+            for (const chunk of this.chunks.values()) {
+                if (chunk.dirty || chunk.loading) return true;
+            }
+            return false;
+        })();
         // Only recalculate if camera moved or periodically (every 200ms) for frustum updates
         if (cameraCx === this.lastCameraCx && cameraCz === this.lastCameraCz && (now - this.lastFrustumCheck < 200)) {
-            // return; // Skip for now, need strict updates
+            if (!hasDirtyVisibleChunks) return;
         }
 
         this.lastCameraCx = cameraCx;

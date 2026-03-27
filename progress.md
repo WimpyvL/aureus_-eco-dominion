@@ -18,3 +18,4 @@ pm run build passed after the demo rewrite.
 - Fixed command ordering: demo now stays cheat-enabled long enough for the placement burst to clear the construction inventory gate.
 - Wired demo mode into the existing loading overlay state so the player only regains control after prebuild completes.
 - Replaced demo showcase command spam with a direct batched world write plus per-chunk refresh, which should remove the long loading delay.
+- Cleared persistent building chunk dirty flags after sync, added terrain update early-return when the camera is stable, and added road slope bridges for uphill neighbors.

@@ -98,7 +98,7 @@ export class BuildingRenderSystem {
                         const conn = this.getInfrastructureConnections(tile, chunks);
                         connectionHash = `_${conn.north}_${conn.south}_${conn.east}_${conn.west}`;
                     }
-                    const stateHash = `${tile.buildingType}_${tile.level || 1}_${tile.isUnderConstruction}_${tile.integrity}_${tile.waterStatus}_${tile.powerStatus}_VM:${viewMode}`;
+                    const stateHash = `${tile.buildingType}_${tile.level || 1}_${tile.isUnderConstruction}_${tile.integrity}_${tile.waterStatus}_${tile.powerStatus}${connectionHash}_VM:${viewMode}`;
 
                     // Detect Changes
                     if (!cached || cached.type !== tile.buildingType || Math.abs(cached.progress - currentProgress) > 0.05 || cached.state !== stateHash) {
@@ -111,7 +111,8 @@ export class BuildingRenderSystem {
                     }
                 });
 
-                // Reset flags after processing? (Or let engine handle it)
+                chunk.meshDirty = false;
+                chunk.simDirty = false;
             });
         }
 
@@ -132,7 +133,16 @@ export class BuildingRenderSystem {
     /**
      * Calculate infrastructure connections by checking neighboring tiles
      */
-    private getInfrastructureConnections(tile: GridTile, chunks: Record<string, Chunk>): { north: boolean; south: boolean; east: boolean; west: boolean } {
+    private getInfrastructureConnections(tile: GridTile, chunks: Record<string, Chunk>): {
+        north: boolean;
+        south: boolean;
+        east: boolean;
+        west: boolean;
+        northDelta: number;
+        southDelta: number;
+        eastDelta: number;
+        westDelta: number;
+    } {
         const targetType = tile.buildingType;
 
         // Find neighbors via ChunkStore
@@ -141,11 +151,20 @@ export class BuildingRenderSystem {
         const east = ChunkStore.getTile(chunks, tile.x + 1, tile.z);
         const west = ChunkStore.getTile(chunks, tile.x - 1, tile.z);
 
+        const getDelta = (neighbor: GridTile | null | undefined) => {
+            if (!neighbor || neighbor.buildingType !== targetType) return 0;
+            return (neighbor.terrainHeight - tile.terrainHeight) * 0.5;
+        };
+
         return {
             north: north?.buildingType === targetType,
             south: south?.buildingType === targetType,
             east: east?.buildingType === targetType,
-            west: west?.buildingType === targetType
+            west: west?.buildingType === targetType,
+            northDelta: getDelta(north),
+            southDelta: getDelta(south),
+            eastDelta: getDelta(east),
+            westDelta: getDelta(west),
         };
     }
 

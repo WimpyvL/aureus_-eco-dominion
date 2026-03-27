@@ -359,5 +359,9 @@ export interface FactoryOptions {
         south?: boolean;
         east?: boolean;
         west?: boolean;
+        northDelta?: number;
+        southDelta?: number;
+        eastDelta?: number;
+        westDelta?: number;
     };
 }
