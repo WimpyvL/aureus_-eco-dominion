@@ -1,165 +1,198 @@
 import { BaseSimSystem } from '../Simulation';
+import { GameState, GameStep, BuildingType, SfxType } from '../../../types';
 import { FixedContext } from '../../kernel/Types';
-import { GameState, GameStep, BuildingType, SfxType, Era } from '../../../types';
-import { BUILDINGS } from '../../data/buildings';
-import { ChunkStore } from '../../space/ChunkStore';
-import { worldToChunk, CHUNK_SIZE } from '../../utils/coords';
+import { BUILDINGS } from '../../data/VoxelConstants';
 
+interface DemoTask {
+    delay: number; // in seconds
+    run: (ctx: FixedContext, state: GameState) => void;
+}
 
-/**
- * TutorialDemoSystem - The Living Simulation
- * Simulates a high-speed "pro-player" build sequence.
- * Buildings are placed individually with logical delays to create a "playing" feel.
- */
 export class TutorialDemoSystem extends BaseSimSystem {
-    readonly id = 'tutorial-demo';
-    readonly priority = -10;
+    readonly id = 'tutorial_demo';
+    readonly priority = 200;
 
-    handleCommand(cmd: any, ctx: any, state: GameState): any {
-        if (cmd.type === 'ADVANCE_TUTORIAL') {
-            const steps = [
-                GameStep.INTRO, GameStep.TUTORIAL_NAV, GameStep.TUTORIAL_MINE,
-                GameStep.TUTORIAL_SELL, GameStep.TUTORIAL_BUY, GameStep.TUTORIAL_PLACE,
-                GameStep.TUTORIAL_NEEDS, GameStep.TUTORIAL_POWER, GameStep.TUTORIAL_UNDERGROUND,
-                GameStep.TUTORIAL_RESEARCH, GameStep.TUTORIAL_ERA, GameStep.DEMO,
-                GameStep.PLAYING
-            ];
-            const idx = steps.indexOf(state.step);
-            if (idx !== -1 && idx < steps.length - 1) {
-                state.step = steps[idx + 1];
-                state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
-                return { ok: true };
-            }
-            return { ok: false, reason: 'Already at end' };
-        }
-
-        if (cmd.type === 'START_DEMO') {
-            state.step = GameStep.DEMO;
-            return { ok: true };
-        }
-
-        if (cmd.type === 'DISMISS_POPUP') {
-            state.eraUnlockedPopup = null;
-            return { ok: true };
-        }
-
-        return null;
-    }
-
-    private stateInitialized = false;
-    private timer = 0;
-    private taskIndex = 0;
-    private tasks: { delay: number; run: (ctx: FixedContext, state: GameState) => void }[] = [];
+    private tasks: DemoTask[] = [];
+    private elapsedSinceStart = 0;
+    private hasStarted = false;
 
     tick(ctx: FixedContext, state: GameState): void {
+        // Only run if step is DEMO
         if (state.step !== GameStep.DEMO) {
-            this.stateInitialized = false;
-            this.timer = 0;
-            this.taskIndex = 0;
+            this.hasStarted = false;
+            this.tasks = [];
+            this.elapsedSinceStart = 0;
             return;
         }
 
-        if (!this.stateInitialized) {
-            this.initializeDemo(state);
-            this.stateInitialized = true;
+        if (!this.hasStarted) {
+            this.startDemoDemo(ctx, state);
+            this.hasStarted = true;
         }
 
-        this.timer += ctx.fixedDt;
+        const dt = 1 / 60; // Approximate dt
+        this.elapsedSinceStart += dt;
 
-        if (this.tasks[this.taskIndex]) {
-            const task = this.tasks[this.taskIndex];
-            if (this.timer >= task.delay) {
+        // Process tasks
+        for (let i = this.tasks.length - 1; i >= 0; i--) {
+            const task = this.tasks[i];
+            if (this.elapsedSinceStart >= task.delay) {
                 task.run(ctx, state);
-                this.taskIndex++;
-                this.timer = 0;
+                this.tasks.splice(i, 1);
             }
         }
     }
 
-    private initializeDemo(state: GameState) {
-        state.cheatsEnabled = true;
-        // Infinite Demo Resources
-        state.resources.agt = 10000000;
-        state.resources.minerals = 50000;
-        state.resources.gems = 5000;
-        state.resources.wood = 50000;
-        state.resources.stone = 50000;
-        state.resources.eco = 100;
-        state.resources.trust = 100;
-
-        state.currentEra = Era.PROSPERITY;
-        state.unlockedEras = [Era.SETTLEMENT, Era.GROWTH, Era.INDUSTRY, Era.SUSTAINABILITY, Era.PROSPERITY];
-
-        const cx = state.spawnX || 0;
-        const cz = state.spawnZ || 0;
+    private startDemoDemo(ctx: FixedContext, state: GameState): void {
         this.tasks = [];
+        this.elapsedSinceStart = 0;
 
-        this.addTask(1.0, (c, s) => this.notify(c, s, "DEMO MODE: GRAND CATALOGUE", "POSITIVE"));
-        this.addTask(0.5, (c, s) => this.notify(c, s, "SHOWCASING ALL BUILDINGS & VARIANTS...", "NEUTRAL"));
+        state.newsFeed = [];
+        this.notify(ctx, state, "INITIALIZING SOLARIS DEMO SEQUENCE...", "NEUTRAL");
 
-        // Comprehensive list of showcase-worthy buildings
-        const buildingTypes = [
-            // Era 1
-            BuildingType.STAFF_QUARTERS, BuildingType.CANTEEN, BuildingType.STORAGE_DEPOT,
-            BuildingType.WASH_PLANT, BuildingType.SAWMILL, BuildingType.STONE_QUARRY,
-            BuildingType.SOLAR_ARRAY, BuildingType.WATER_WELL, BuildingType.WORKSHOP,
-            BuildingType.GENERATOR, BuildingType.MINE_SHAFT, BuildingType.FENCE,
-            BuildingType.POND, BuildingType.PIPE, BuildingType.POWER_LINE,
-            BuildingType.ROAD,
-            // Era 2
-            BuildingType.RECYCLING_PLANT, BuildingType.WIND_TURBINE, BuildingType.SOCIAL_HUB,
-            BuildingType.STOCKPILE, BuildingType.SECURITY_POST, BuildingType.COMMUNITY_GARDEN, BuildingType.MEDICAL_BAY,
-            BuildingType.TRAINING_CENTER,
-            // Era 3
-            BuildingType.MINING_HEADFRAME, BuildingType.ORE_FOUNDRY, BuildingType.GEM_REFINERY,
-            BuildingType.DISTRIBUTION_HUB, BuildingType.RAIL_LINE,
-            // Era 4 + 5
-            BuildingType.RESERVOIR, BuildingType.WASTE_TREATMENT, BuildingType.HYDROPONICS,
-            BuildingType.GEOTHERMAL_PLANT, BuildingType.LOCAL_SCHOOL, BuildingType.NATURE_RESERVE,
-            BuildingType.MONUMENT, BuildingType.SPACEPORT, BuildingType.SAFARI_LODGE, BuildingType.GREEN_TECH_LAB
-        ];
+        let cx = 10;
+        let cz = 10;
 
-        let currentZ = -40;
-        const ROW_EXTRA = 3; // Gap between building rows
+        // Collect buildings
+        const buildingTypes = Object.values(BuildingType) as BuildingType[];
+        const withUpgrades: BuildingType[] = [];
+        const withoutUpgrades: BuildingType[] = [];
 
-        // Initial Paving
+        for (const type of buildingTypes) {
+            if (type === BuildingType.EMPTY || type.startsWith('D_')) continue;
+            
+            const def = BUILDINGS[type];
+            if (def && def.upgrades && def.upgrades.length > 0) {
+                withUpgrades.push(type);
+            } else {
+                withoutUpgrades.push(type);
+            }
+        }
+
+        let currentZ = 0;
+
+        // Initial Paving for the table part
         this.addTask(0.1, (c, s) => {
-            // Main vertical road spine
-            for (let z = -50; z < 400; z++) {
-                this.pushPlacement(c, s, { x: cx - 5, z: cz + z }, BuildingType.ROAD);
+            // Main vertical road spine for the table section
+            for (let z = -5; z < currentZ + withUpgrades.length * 6; z++) {
+                this.pushPlacement(c, s, { x: cx - 1, z: cz + z }, BuildingType.ROAD);
             }
         });
 
-        buildingTypes.forEach((type) => {
+        const CELL_SIZE = 5; // A 5x5 bounding box for each building level ensuring a 4x4 + 1 road border
+        
+        // 1. Table/Row layout for buildings WITH upgrades matching Grid Sketch
+        withUpgrades.forEach((type, rIndex) => {
             const def = BUILDINGS[type];
-            if (!def) return; // Skip if missing definition
-
+            if (!def) return;
             const maxLevel = (def.upgrades?.length || 0) + 1;
-            const width = def.width || 1;
-            const depth = def.depth || 1;
 
-
-            // Task per building type to keep it snappy but sequential
             this.addTask(0.1, (c, s) => {
-                // 1. Horizontal Road for this row
-                for (let x = -5; x <= (maxLevel * (width + 2)); x++) {
+                // Horizontal Roads defining the Top and Bottom of the Row cells
+                for (let x = 0; x <= (maxLevel * CELL_SIZE); x++) {
                     this.pushPlacement(c, s, { x: cx + x, z: cz + currentZ - 1 }, BuildingType.ROAD);
+                    this.pushPlacement(c, s, { x: cx + x, z: cz + currentZ + CELL_SIZE - 1 }, BuildingType.ROAD);
                 }
 
-                // 2. Place each level
-                for (let level = 1; level <= maxLevel; level++) {
-                    // X position: Starts at 0, shifts right by width + spacing
-                    const xPos = (level - 1) * (width + 3);
+                // Vertical Cross-Roads dividing the columns
+                for (let col = 0; col <= maxLevel; col++) {
+                    for (let z = -1; z < CELL_SIZE; z++) {
+                         this.pushPlacement(c, s, { x: cx + (col * CELL_SIZE), z: cz + currentZ + z }, BuildingType.ROAD);
+                    }
+                }
 
-                    this.pushPlacement(c, s, { x: cx + xPos, z: cz + currentZ }, type, level);
+                // Place Level 1 buildings centered in the cells across the row
+                for (let level = 1; level <= maxLevel; level++) {
+                   const cellX = cx + ((level - 1) * CELL_SIZE) + 1; // offset past vertical road
+                   const cellZ = cz + currentZ;
+                   // Just plop a level 1 building everywhere first (instant)
+                   this.pushPlacement(c, s, { x: cellX, z: cellZ }, type, 1);
                 }
             });
 
-            // Advance Z for next row
-            currentZ += (depth + ROW_EXTRA);
+            // Iterate upgrades over time using Gem Speedups 
+            for (let colLevel = 2; colLevel <= maxLevel; colLevel++) {
+                 const cellX = cx + ((colLevel - 1) * CELL_SIZE) + 1;
+                 const cellZ = cz + currentZ;
+                 
+                 // Apply upgrades up to the target colLevel
+                 // This effectively loops to run upgrade -> speedup -> upgrade -> speedup 
+                 for(let u = 1; u < colLevel; u++) {
+                     const delay = 0.5 + (0.3 * u);
+                     
+                     // Hit Upgrade
+                     this.addTask(0.5 + delay, (cCtx, state) => {
+                         state.commandQueue.push({
+                            id: cCtx.getNextId?.('demo_upg') || `upg_${Date.now()}_${Math.random()}`,
+                            type: 'UPGRADE_BUILDING',
+                            payload: { x: cellX, z: cellZ }
+                         });
+                     });
+
+                     // Provide Gems to Speed Up
+                     this.addTask(0.5 + delay + 0.1, (cCtx, state) => {
+                        state.commandQueue.push({
+                            id: cCtx.getNextId?.('demo_spd') || `spd_${Date.now()}_${Math.random()}`,
+                            type: 'SPEED_UP',
+                            payload: { x: cellX, z: cellZ }
+                        });
+                     });
+                 }
+            }
+
+            currentZ += CELL_SIZE;
         });
 
-        this.addTask(3.0, (c, s) => {
+        // 2. Spiral layout for buildings WITHOUT upgrades
+        this.addTask(0.5, () => {}); 
+
+        let spiralX = 0;
+        let spiralZ = 0;
+        let dx = 0;
+        let dz = -1;
+        let stepCount = 0;
+        let segmentLength = 1;
+        let currentSegment = 0;
+        
+        // Let's center the spiral further down
+        currentZ += 10;
+        
+        withoutUpgrades.forEach((type) => {
+            const def = BUILDINGS[type];
+            if (!def) return;
+
+            this.addTask(0.1, (c, s) => {
+                // Use larger steps for the spiral to account for building sizes (approx 6 blocks per step)
+                const placementX = cx + spiralX * 6;
+                const placementZ = cz + currentZ + spiralZ * 6;
+                
+                this.pushPlacement(c, s, { x: placementX, z: placementZ }, type, 1);
+                
+                // Add a small piece of road leading to it
+                this.pushPlacement(c, s, { x: placementX - 1, z: placementZ }, BuildingType.ROAD);
+                
+                // Calculate next position in the spiral
+                spiralX += dx;
+                spiralZ += dz;
+                currentSegment++;
+                
+                if (currentSegment === segmentLength) {
+                    currentSegment = 0;
+                    // Rotate 90 degrees clockwise
+                    const tempDx = dx;
+                    dx = -dz;
+                    dz = tempDx;
+                    stepCount++;
+                    
+                    if (stepCount === 2) {
+                        stepCount = 0;
+                        segmentLength++;
+                    }
+                }
+            });
+        });
+
+        this.addTask(5.0, (c, s) => {
             s.step = GameStep.PLAYING;
             this.notify(c, s, "CATALOGUE COMPLETE. ENJOY THE VIEW.", "POSITIVE");
         });
@@ -182,9 +215,8 @@ export class TutorialDemoSystem extends BaseSimSystem {
         state.commandQueue.push({
             id: ctx.getNextId?.('demo_cmd') || `demo_${Date.now()}_${type}_${coord.x}_${coord.z}_${Math.random()}`,
             type: 'PLACE_BUILDING',
-            payload: { x: coord.x, z: coord.z, buildingType: type, isInstant: true, level } // Instant build enabled
+            payload: { x: coord.x, z: coord.z, buildingType: type, isInstant: true, level }
         });
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BUILD_START });
     }
-
 }

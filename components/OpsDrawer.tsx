@@ -28,6 +28,9 @@ const RoleIcon = ({ role, size = 14 }: { role: AgentRole, size?: number }) => {
         case 'ENGINEER': return <Zap size={size} className="text-blue-400" />;
         case 'SECURITY': return <Shield size={size} className="text-rose-500" />;
         case 'ILLEGAL_MINER': return <Briefcase size={size} className="text-slate-700" />;
+        case 'CITIZEN': return <Users size={size} className="text-slate-400" />;
+        case 'LUMBERJACK': return <Pickaxe size={size} className="text-orange-600" />;
+        case 'QUARRYMAN': return <Pickaxe size={size} className="text-slate-500" />;
         default: return <Briefcase size={size} className="text-amber-400" />;
     }
 };

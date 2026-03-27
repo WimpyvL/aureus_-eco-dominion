@@ -29,6 +29,8 @@ export class ProductionSystem extends BaseSimSystem {
         let mineralProd = 0;
         let woodProd = 0;
         let stoneProd = 0;
+        let gemProd = 0;
+        let trustProd = 0;
         let ecoChange = 0;
         let totalMaintenance = 0;
 
@@ -36,6 +38,10 @@ export class ProductionSystem extends BaseSimSystem {
         const trustMult = 1 + (state.resources.trust / 200);
         const modifiers = this.getModifiers(state);
         let totalIncome = 0;
+        
+        // Track global building effects
+        let hasSpaceport = false;
+        let hasWasteTreatment = false;
 
         for (const chunk of Object.values(state.chunks)) {
             for (const tile of chunk.tiles) {
@@ -65,6 +71,9 @@ export class ProductionSystem extends BaseSimSystem {
                     }
                 }
                 // </UPGRADE LOGIC>
+
+                if (tile.buildingType === BuildingType.SPACEPORT) hasSpaceport = true;
+                if (tile.buildingType === BuildingType.WASTE_TREATMENT) hasWasteTreatment = true;
 
                 // Maintenance (Cost per second)
                 totalMaintenance += (currentDef.maintenance || 0) * modifiers.upkeep;
@@ -109,30 +118,61 @@ export class ProductionSystem extends BaseSimSystem {
                     woodProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05 * productionMult;
                 } else if (currentDef.productionType === 'STONE') {
                     stoneProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05 * productionMult;
+                } else if (currentDef.productionType === 'GEMS') {
+                    gemProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05;
+                } else if (currentDef.productionType === 'TRUST') {
+                    trustProd += (currentDef.production || 0) * utilityEfficiency * 0.05;
+                } else if (currentDef.productionType === 'ECO') {
+                    ecoChange -= (currentDef.production || 0) * utilityEfficiency * 0.05;
                 } else if (currentDef.productionType === 'AGT') {
                     totalIncome += (currentDef.production || 0) * ecoMult * trustMult * utilityEfficiency;
                 }
             }
         }
 
+        // Apply Global Modifiers
+        if (hasSpaceport) modifiers.sellPrice *= 10;
+        if (hasWasteTreatment && ecoChange > 0) ecoChange *= 0.8; // 20% pollution reduction
 
         // Calculate Storage Capacity
         const allTiles = Object.values(state.chunks).flatMap(c => c.tiles);
-        const depots = allTiles.filter(t => t.buildingType === BuildingType.STORAGE_DEPOT && !t.isUnderConstruction).length;
-        const stockpiles = allTiles.filter(t => t.buildingType === BuildingType.STOCKPILE && !t.isUnderConstruction).length;
-        const totalCapacity = BASE_STORAGE_CAPACITY +
-            (depots * DEPOT_CAPACITY_BONUS) +
-            (stockpiles * STOCKPILE_CAPACITY_BONUS);
-
+        let totalCapacity = BASE_STORAGE_CAPACITY;
+        
+        for (const t of allTiles) {
+            if (t.isUnderConstruction) continue;
+            // Only count structure heads to avoid multi-counting
+            if (t.structureHeadX !== undefined && (t.x !== t.structureHeadX || t.z !== t.structureHeadZ)) continue;
+            
+            if (t.buildingType === BuildingType.STORAGE_DEPOT || t.buildingType === BuildingType.STOCKPILE) {
+                const def = BUILDINGS[t.buildingType];
+                if (!def) continue;
+                
+                // Parse stats diff for correct storage size
+                let addedStorage = t.buildingType === BuildingType.STORAGE_DEPOT ? DEPOT_CAPACITY_BONUS : STOCKPILE_CAPACITY_BONUS;
+                
+                if (def.upgrades && (t.level || 1) > 1) {
+                    const upgrade = def.upgrades.find(u => u.level === t.level);
+                    if (upgrade && upgrade.statsDiff) {
+                        const match = upgrade.statsDiff.match(/\+?(\d+)\s*Storage/);
+                        if (match && match[1]) {
+                            addedStorage = parseInt(match[1], 10);
+                        }
+                    }
+                }
+                totalCapacity += addedStorage;
+            }
+        }
 
         // Apply Results
         state.resources.agt += (totalIncome - totalMaintenance) * dt;
         state.resources.eco = Math.max(0, Math.min(100, state.resources.eco - (ecoChange / 8) * dt));
+        state.resources.trust = Math.min(100, state.resources.trust + (trustProd * dt));
 
         // Resource Clamping
         state.resources.minerals = Math.min(totalCapacity, state.resources.minerals + (mineralProd * dt));
         state.resources.wood = Math.min(totalCapacity, state.resources.wood + (woodProd * dt));
         state.resources.stone = Math.min(totalCapacity, state.resources.stone + (stoneProd * dt));
+        state.resources.gems = Math.max(0, state.resources.gems + (gemProd * dt)); // UnCapped
 
         // Cache summary for UI
         state.resources.income = totalIncome;

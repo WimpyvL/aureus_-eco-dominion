@@ -25,7 +25,11 @@ export const AgentFactory: Record<AgentRole, AgentFactoryFn> = {
     'ENGINEER': EngineerFactory,
     'BOTANIST': BotanistFactory,
     'SECURITY': SecurityFactory,
-    'ILLEGAL_MINER': IllegalMinerFactory
+    'ILLEGAL_MINER': IllegalMinerFactory,
+    'LUMBERJACK': WorkerFactory,
+    'QUARRYMAN': WorkerFactory,
+    'UNEMPLOYED': WorkerFactory,
+    'CITIZEN': WorkerFactory
 };
 
 /**

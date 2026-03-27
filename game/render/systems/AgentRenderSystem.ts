@@ -32,6 +32,10 @@ const ROLE_ICONS: Record<AgentRole, { icon: string; color: string }> = {
     'SECURITY': { icon: '🛡️', color: '#e11d48' },
     'WORKER': { icon: '👷', color: '#f59e0b' },
     'ILLEGAL_MINER': { icon: '👤', color: '#0f172a' },
+    'CITIZEN': { icon: '🏙️', color: '#94a3b8' },
+    'LUMBERJACK': { icon: '🪓', color: '#78350f' },
+    'QUARRYMAN': { icon: '⚒️', color: '#4b5563' },
+    'UNEMPLOYED': { icon: '❓', color: '#d1d5db' },
 };
 
 const WARNING_ICONS = {

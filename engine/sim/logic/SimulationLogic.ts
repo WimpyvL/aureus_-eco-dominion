@@ -51,8 +51,17 @@ function generatePersonality(ctx: FixedContext | undefined, role: AgentRole): { 
             break;
         case 'ILLEGAL_MINER':
             personality.bravery += 0.4;
-            personality.diligence = 0.9; // Very driven
-            personality.sociability = 0.1; // Loner
+            personality.diligence = 0.9;
+            personality.sociability = 0.1;
+            break;
+        case 'LUMBERJACK':
+        case 'QUARRYMAN':
+            personality.diligence += 0.2;
+            personality.patience += 0.1;
+            break;
+        case 'CITIZEN':
+            personality.sociability += 0.3;
+            personality.diligence -= 0.1;
             break;
     }
 
@@ -95,10 +104,17 @@ function generateSkills(ctx: FixedContext | undefined, role: AgentRole): { minin
             skills.mining = bonus(); // Combat/strength
             break;
         case 'WORKER':
-            // Workers are generalists - boost one random skill
-            const random = ctx?.random;
             const skillKey = ['mining', 'construction', 'plants'][Math.floor((random ? random.next() : Math.random()) * 3)] as keyof typeof skills;
             skills[skillKey] = bonus();
+            break;
+        case 'LUMBERJACK':
+            skills.mining = bonus() + 1; // Strength
+            break;
+        case 'QUARRYMAN':
+            skills.mining = bonus() + 1;
+            break;
+        case 'CITIZEN':
+            skills.intelligence = bonus();
             break;
     }
 

@@ -80,6 +80,7 @@ export class IsoCameraSystem {
         if (enabled) {
             this.adapter.setCamera(this.camera);
             this.bindEvents();
+            this.updateCameraTransform();
         } else {
             this.unbindEvents();
         }

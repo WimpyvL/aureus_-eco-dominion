@@ -16,15 +16,36 @@ import { DungeonEngine } from '../../dungeon/DungeonEngine';
 export class ConstructionSystem extends BaseSimSystem {
     readonly id = 'construction';
     readonly priority = 60; // Run high to handle placement/removal before sim systems
-
     tick(ctx: FixedContext, state: GameState): void {
         // 1. Passive Construction Progress (All head tiles under construction progress slowly)
         if (state.tickCount % 60 === 0) {
+            
+            // Gather active workshops to speed up nearby construction
+            const workshops: {x: number, z: number}[] = [];
+            for (const chunk of Object.values(state.chunks)) {
+                for (const tile of chunk.tiles) {
+                    if (tile.buildingType === BuildingType.WORKSHOP && !tile.isUnderConstruction) {
+                        workshops.push({ x: tile.x, z: tile.z });
+                    }
+                }
+            }
+            
             for (const chunk of Object.values(state.chunks)) {
                 for (const tile of chunk.tiles) {
                     // Only progress if it's a head tile (or single-tile) under construction
                     if (tile.isUnderConstruction && (tile.structureHeadX === undefined || (tile.structureHeadX === tile.x && tile.structureHeadZ === tile.z))) {
-                        this.progressConstruction(tile.x, tile.z, 1.0, state);
+                        
+                        // Check for nearby workshop (radius ~15 tiles)
+                        let speedMult = 1.0;
+                        for (const ws of workshops) {
+                            const dist = Math.sqrt(Math.pow(tile.x - ws.x, 2) + Math.pow(tile.z - ws.z, 2));
+                            if (dist <= 15) {
+                                speedMult = 1.25;
+                                break;
+                            }
+                        }
+                        
+                        this.progressConstruction(tile.x, tile.z, 1.0 * speedMult, state);
                     }
                 }
             }

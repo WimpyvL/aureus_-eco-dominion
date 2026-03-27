@@ -156,9 +156,9 @@ export class FPSCameraSystem {
 
     private onPointerLockChange(): void {
         if (document.pointerLockElement !== this.domElement && this.enabled) {
-            // User exited pointer lock (maybe via Escape)
-            // We should probably exit FPS mode or showing a 'Paused' state
-            // For now, let's keep it enabled but stop look controls
+            // User exited pointer lock (usually via Escape, which the browser swallows so keydown doesn't fire)
+            this.setEnabled(false);
+            this.onExit?.();
         }
     }
 

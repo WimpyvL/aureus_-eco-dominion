@@ -22,7 +22,7 @@ import {
     ProductionSystem, ConstructionSystem, EraSystem,
     PowerGridSystem, WaterNetworkSystem,
     TutorialDemoSystem, CommandDispatcher,
-    ResearchSystem, EmploymentSystem, BureaucracySystem
+    ResearchSystem, EmploymentSystem, BureaucracySystem, AmbientNPCSystem
 } from '../engine/sim/systems';
 import { DungeonMinerSystem } from '../engine/sim/systems/DungeonMinerSystem';
 import { DungeonStabilitySystem } from '../engine/sim/systems/DungeonStabilitySystem';
@@ -165,6 +165,8 @@ export class AureusWorld extends BaseWorld {
         this.sim.addSystem(new EmploymentSystem());
         this.agentSystem = new AgentSystem(this.jobs, this.constructionSystem);
         this.sim.addSystem(this.agentSystem);
+
+        this.sim.addSystem(new AmbientNPCSystem());
 
         const researchSystem = new ResearchSystem();
         this.sim.addSystem(researchSystem);
@@ -407,8 +409,12 @@ export class AureusWorld extends BaseWorld {
         const state = this.stateManager.getMutableState();
         if (state.selectedAgentId) {
             const agent = state.agents.find(a => a.id === state.selectedAgentId);
-            if (agent && agent.state === 'MANUAL') {
-                agent.state = 'IDLE';
+            if (agent) {
+                if (agent.state === 'MANUAL') {
+                    agent.state = 'IDLE';
+                }
+                // Focus camera back onto the agent
+                this.cameraSystem.jumpTo(agent.x, agent.z);
             }
         }
         this.fpsCameraSystem.setEnabled(false);
@@ -785,7 +791,8 @@ export class AureusWorld extends BaseWorld {
             this.fpsCameraSystem.update(ctx.dt, state.agents, this.getTerrainHeight);
 
             this.agentRenderSystem.setSelectedAgent(state.selectedAgentId);
-            this.agentRenderSystem.update(ctx.dt, ctx.time, state.agents, 0.1); // Low zoom level for full detail
+            const allAgents = [...state.agents, ...state.ambientNpcs];
+            this.agentRenderSystem.update(ctx.dt, ctx.time, allAgents, 0.1); // Low zoom level for full detail
 
             this.terrainRenderSystem.update(this.render.getCamera().position, this.render.getCamera());
             this.buildingRenderSystem.update(ctx.dt, ctx.time, state.chunks, this.stateManager.getDirtyKeys());
@@ -801,7 +808,8 @@ export class AureusWorld extends BaseWorld {
             this.cameraSystem.update(ctx.dt);
             this.agentRenderSystem.setSelectedAgent(state.selectedAgentId);
             const zoomLevel = this.cameraSystem.cameraZoom;
-            this.agentRenderSystem.update(ctx.dt, ctx.time, state.agents, zoomLevel);
+            const allAgents = [...state.agents, ...state.ambientNpcs];
+            this.agentRenderSystem.update(ctx.dt, ctx.time, allAgents, zoomLevel);
 
             this.terrainRenderSystem.update(this.cameraSystem.cameraFocus, this.render.getCamera());
             this.buildingRenderSystem.update(ctx.dt, ctx.time, state.chunks, this.stateManager.getDirtyKeys());

@@ -52,6 +52,7 @@ export class StateManager {
         return {
             chunks,
             agents: this.createInitialAgents(spawnX, spawnZ),
+            ambientNpcs: [],
             jobs: [],
             commandQueue: [],
 

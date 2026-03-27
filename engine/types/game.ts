@@ -139,6 +139,7 @@ export interface GameState {
     resources: GameResources;
     chunks: Record<string, Chunk>; // Surface chunks
     agents: Agent[];
+    ambientNpcs: Agent[];
     jobs: Job[];
     inventory: Partial<Record<BuildingType, number>>;
     selectedBuilding: BuildingType | null;
