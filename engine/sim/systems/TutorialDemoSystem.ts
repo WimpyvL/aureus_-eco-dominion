@@ -1,12 +1,29 @@
 import { BaseSimSystem } from '../Simulation';
-import { GameState, GameStep, BuildingType, SfxType } from '../../../types';
-import { FixedContext } from '../../kernel/Types';
+import { GameState, GameStep, BuildingType, SfxType, Era, GameCommand, GridTile } from '../../../types';
+import { FixedContext, CommandContext, CommandResult } from '../../kernel/Types';
 import { BUILDINGS } from '../../data/VoxelConstants';
+import { ChunkStore } from '../../space/ChunkStore';
+import { worldToChunk, CHUNK_SIZE } from '../../utils/coords';
+import { updateWaterConnectivity } from '../../utils/GameUtils';
 
 interface DemoTask {
-    delay: number; // in seconds
+    delay: number;
     run: (ctx: FixedContext, state: GameState) => void;
 }
+
+interface DemoBuilding {
+    type: BuildingType;
+    maxLevel: number;
+    name: string;
+}
+
+const ALL_ERAS: Era[] = [
+    Era.SETTLEMENT,
+    Era.GROWTH,
+    Era.INDUSTRY,
+    Era.SUSTAINABILITY,
+    Era.PROSPERITY,
+];
 
 export class TutorialDemoSystem extends BaseSimSystem {
     readonly id = 'tutorial_demo';
@@ -15,9 +32,37 @@ export class TutorialDemoSystem extends BaseSimSystem {
     private tasks: DemoTask[] = [];
     private elapsedSinceStart = 0;
     private hasStarted = false;
+    private priorCheatsEnabled = false;
+
+    handleCommand(cmd: GameCommand, _ctx: CommandContext, state: GameState): CommandResult | null {
+        if (cmd.type !== 'START_DEMO') return null;
+
+        this.tasks = [];
+        this.elapsedSinceStart = 0;
+        this.hasStarted = false;
+        this.priorCheatsEnabled = state.cheatsEnabled;
+
+        state.step = GameStep.DEMO;
+        state.gameOver = false;
+        state.selectedBuilding = null;
+        state.selectedAgentId = null;
+        state.interactionMode = 'INSPECT';
+        state.newsFeed = [];
+        state.activeGoal = null;
+        state.ui.lastCommandResult = null;
+        state.debug.commandTrace = [];
+        state.isLoading = true;
+        state.loadingMessage = 'Preparing demo colony...';
+
+        // Demo mode should be deterministic and not fail on inventory or era gating.
+        state.cheatsEnabled = true;
+        state.currentEra = Era.PROSPERITY;
+        state.unlockedEras = [...ALL_ERAS];
+
+        return { ok: true };
+    }
 
     tick(ctx: FixedContext, state: GameState): void {
-        // Only run if step is DEMO
         if (state.step !== GameStep.DEMO) {
             this.hasStarted = false;
             this.tasks = [];
@@ -26,14 +71,12 @@ export class TutorialDemoSystem extends BaseSimSystem {
         }
 
         if (!this.hasStarted) {
-            this.startDemoDemo(ctx, state);
+            this.startDemoSequence(ctx, state);
             this.hasStarted = true;
         }
 
-        const dt = 1 / 60; // Approximate dt
-        this.elapsedSinceStart += dt;
+        this.elapsedSinceStart += ctx.fixedDt;
 
-        // Process tasks
         for (let i = this.tasks.length - 1; i >= 0; i--) {
             const task = this.tasks[i];
             if (this.elapsedSinceStart >= task.delay) {
@@ -43,180 +86,248 @@ export class TutorialDemoSystem extends BaseSimSystem {
         }
     }
 
-    private startDemoDemo(ctx: FixedContext, state: GameState): void {
+    private startDemoSequence(ctx: FixedContext, state: GameState): void {
         this.tasks = [];
         this.elapsedSinceStart = 0;
 
-        state.newsFeed = [];
-        this.notify(ctx, state, "INITIALIZING SOLARIS DEMO SEQUENCE...", "NEUTRAL");
+        this.notify(ctx, state, 'INITIALIZING SOLARIS DEMO SEQUENCE...', 'NEUTRAL');
 
-        let cx = 10;
-        let cz = 10;
+        const buildables = this.getDemoBuildings();
+        const cellWidth = 10;
+        const cellHeight = 8;
+        const buildingColumns = 3;
+        const maxLevels = Math.max(...buildables.map((building) => building.maxLevel));
+        const sectionWidth = (maxLevels * cellWidth) + 4;
+        const sectionRows = Math.ceil(buildables.length / buildingColumns);
+        const showcaseWidth = (buildingColumns * sectionWidth) + 2;
+        const showcaseHeight = (sectionRows * cellHeight) + 2;
+        const showcaseOrigin = this.findShowcaseOrigin(state, showcaseWidth, showcaseHeight);
+        const originX = showcaseOrigin.x;
+        const originZ = showcaseOrigin.z;
+        // Build the full showcase in one batched state write instead of simulating hundreds of user actions.
+        this.addTask(0, (taskCtx, taskState) => {
+            taskState.loadingMessage = 'Laying infrastructure grid...';
+            this.applyShowcaseDirect(taskState, buildables, {
+                originX,
+                originZ,
+                showcaseWidth,
+                showcaseHeight,
+                buildingColumns,
+                sectionWidth,
+                cellWidth,
+                cellHeight,
+                maxLevels,
+            });
 
-        // Collect buildings
-        const buildingTypes = Object.values(BuildingType) as BuildingType[];
-        const withUpgrades: BuildingType[] = [];
-        const withoutUpgrades: BuildingType[] = [];
+            taskState.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.COMPLETE });
+        });
 
-        for (const type of buildingTypes) {
-            if (type === BuildingType.EMPTY || type.startsWith('D_')) continue;
-            
-            const def = BUILDINGS[type];
-            if (def && def.upgrades && def.upgrades.length > 0) {
-                withUpgrades.push(type);
-            } else {
-                withoutUpgrades.push(type);
+        this.addTask(0.1, (_taskCtx, taskState) => {
+            taskState.loadingMessage = 'Finalizing build showcase...';
+        });
+
+        this.addTask(0.6, (taskCtx, taskState) => {
+            taskState.cheatsEnabled = this.priorCheatsEnabled;
+            taskState.step = GameStep.PLAYING;
+            taskState.isLoading = false;
+            taskState.loadingMessage = '';
+            this.notify(taskCtx, taskState, 'CATALOGUE COMPLETE. ALL BUILDINGS AND UPGRADE TIERS DEPLOYED.', 'POSITIVE');
+        });
+    }
+
+    private getDemoBuildings(): DemoBuilding[] {
+        return Object.entries(BUILDINGS)
+            .filter(([type]) => type !== BuildingType.EMPTY && !type.startsWith('D_'))
+            .map(([type, def]) => ({
+                type: type as BuildingType,
+                maxLevel: (def.upgrades?.length || 0) + 1,
+                name: def.name,
+                era: def.era,
+            }))
+            .sort((a, b) => {
+                const eraOrder = ALL_ERAS.indexOf(a.era) - ALL_ERAS.indexOf(b.era);
+                return eraOrder !== 0 ? eraOrder : a.name.localeCompare(b.name);
+            })
+            .map(({ era, ...building }) => building);
+    }
+
+    private findShowcaseOrigin(state: GameState, width: number, height: number): { x: number; z: number } {
+        let best = {
+            x: state.spawnX - Math.floor(width / 2),
+            z: state.spawnZ - Math.floor(height / 2),
+            waterTiles: Number.POSITIVE_INFINITY,
+        };
+
+        for (let offsetZ = -48; offsetZ <= 48; offsetZ += 8) {
+            for (let offsetX = -48; offsetX <= 48; offsetX += 8) {
+                const originX = state.spawnX + offsetX;
+                const originZ = state.spawnZ + offsetZ;
+                let waterTiles = 0;
+
+                for (let z = 0; z < height; z += 4) {
+                    for (let x = 0; x < width; x += 4) {
+                        const worldX = originX + x;
+                        const worldZ = originZ + z;
+                        const { cx, cz } = worldToChunk(worldX, worldZ, CHUNK_SIZE);
+                        ChunkStore.ensureChunk(state.chunks, cx, cz, state.seed);
+                        const tile = ChunkStore.getTile(state.chunks, worldX, worldZ);
+
+                        if (!tile || tile.buildingType === BuildingType.POND) {
+                            waterTiles++;
+                        }
+                    }
+                }
+
+                if (waterTiles < best.waterTiles) {
+                    best = { x: originX, z: originZ, waterTiles };
+                }
             }
         }
 
-        let currentZ = 0;
-
-        // Initial Paving for the table part
-        this.addTask(0.1, (c, s) => {
-            // Main vertical road spine for the table section
-            for (let z = -5; z < currentZ + withUpgrades.length * 6; z++) {
-                this.pushPlacement(c, s, { x: cx - 1, z: cz + z }, BuildingType.ROAD);
-            }
-        });
-
-        const CELL_SIZE = 5; // A 5x5 bounding box for each building level ensuring a 4x4 + 1 road border
-        
-        // 1. Table/Row layout for buildings WITH upgrades matching Grid Sketch
-        withUpgrades.forEach((type, rIndex) => {
-            const def = BUILDINGS[type];
-            if (!def) return;
-            const maxLevel = (def.upgrades?.length || 0) + 1;
-
-            this.addTask(0.1, (c, s) => {
-                // Horizontal Roads defining the Top and Bottom of the Row cells
-                for (let x = 0; x <= (maxLevel * CELL_SIZE); x++) {
-                    this.pushPlacement(c, s, { x: cx + x, z: cz + currentZ - 1 }, BuildingType.ROAD);
-                    this.pushPlacement(c, s, { x: cx + x, z: cz + currentZ + CELL_SIZE - 1 }, BuildingType.ROAD);
-                }
-
-                // Vertical Cross-Roads dividing the columns
-                for (let col = 0; col <= maxLevel; col++) {
-                    for (let z = -1; z < CELL_SIZE; z++) {
-                         this.pushPlacement(c, s, { x: cx + (col * CELL_SIZE), z: cz + currentZ + z }, BuildingType.ROAD);
-                    }
-                }
-
-                // Place Level 1 buildings centered in the cells across the row
-                for (let level = 1; level <= maxLevel; level++) {
-                   const cellX = cx + ((level - 1) * CELL_SIZE) + 1; // offset past vertical road
-                   const cellZ = cz + currentZ;
-                   // Just plop a level 1 building everywhere first (instant)
-                   this.pushPlacement(c, s, { x: cellX, z: cellZ }, type, 1);
-                }
-            });
-
-            // Iterate upgrades over time using Gem Speedups 
-            for (let colLevel = 2; colLevel <= maxLevel; colLevel++) {
-                 const cellX = cx + ((colLevel - 1) * CELL_SIZE) + 1;
-                 const cellZ = cz + currentZ;
-                 
-                 // Apply upgrades up to the target colLevel
-                 // This effectively loops to run upgrade -> speedup -> upgrade -> speedup 
-                 for(let u = 1; u < colLevel; u++) {
-                     const delay = 0.5 + (0.3 * u);
-                     
-                     // Hit Upgrade
-                     this.addTask(0.5 + delay, (cCtx, state) => {
-                         state.commandQueue.push({
-                            id: cCtx.getNextId?.('demo_upg') || `upg_${Date.now()}_${Math.random()}`,
-                            type: 'UPGRADE_BUILDING',
-                            payload: { x: cellX, z: cellZ }
-                         });
-                     });
-
-                     // Provide Gems to Speed Up
-                     this.addTask(0.5 + delay + 0.1, (cCtx, state) => {
-                        state.commandQueue.push({
-                            id: cCtx.getNextId?.('demo_spd') || `spd_${Date.now()}_${Math.random()}`,
-                            type: 'SPEED_UP',
-                            payload: { x: cellX, z: cellZ }
-                        });
-                     });
-                 }
-            }
-
-            currentZ += CELL_SIZE;
-        });
-
-        // 2. Spiral layout for buildings WITHOUT upgrades
-        this.addTask(0.5, () => {}); 
-
-        let spiralX = 0;
-        let spiralZ = 0;
-        let dx = 0;
-        let dz = -1;
-        let stepCount = 0;
-        let segmentLength = 1;
-        let currentSegment = 0;
-        
-        // Let's center the spiral further down
-        currentZ += 10;
-        
-        withoutUpgrades.forEach((type) => {
-            const def = BUILDINGS[type];
-            if (!def) return;
-
-            this.addTask(0.1, (c, s) => {
-                // Use larger steps for the spiral to account for building sizes (approx 6 blocks per step)
-                const placementX = cx + spiralX * 6;
-                const placementZ = cz + currentZ + spiralZ * 6;
-                
-                this.pushPlacement(c, s, { x: placementX, z: placementZ }, type, 1);
-                
-                // Add a small piece of road leading to it
-                this.pushPlacement(c, s, { x: placementX - 1, z: placementZ }, BuildingType.ROAD);
-                
-                // Calculate next position in the spiral
-                spiralX += dx;
-                spiralZ += dz;
-                currentSegment++;
-                
-                if (currentSegment === segmentLength) {
-                    currentSegment = 0;
-                    // Rotate 90 degrees clockwise
-                    const tempDx = dx;
-                    dx = -dz;
-                    dz = tempDx;
-                    stepCount++;
-                    
-                    if (stepCount === 2) {
-                        stepCount = 0;
-                        segmentLength++;
-                    }
-                }
-            });
-        });
-
-        this.addTask(5.0, (c, s) => {
-            s.step = GameStep.PLAYING;
-            this.notify(c, s, "CATALOGUE COMPLETE. ENJOY THE VIEW.", "POSITIVE");
-        });
+        return { x: best.x, z: best.z };
     }
 
-    private addTask(delay: number, run: (ctx: FixedContext, s: GameState) => void) {
+    private addTask(delay: number, run: (ctx: FixedContext, state: GameState) => void): void {
         this.tasks.push({ delay, run });
     }
 
-    private notify(ctx: FixedContext, state: GameState, message: string, type: any): void {
+    private applyShowcaseDirect(
+        state: GameState,
+        buildables: DemoBuilding[],
+        layout: {
+            originX: number;
+            originZ: number;
+            showcaseWidth: number;
+            showcaseHeight: number;
+            buildingColumns: number;
+            sectionWidth: number;
+            cellWidth: number;
+            cellHeight: number;
+            maxLevels: number;
+        }
+    ): void {
+        const affectedChunks = new Map<string, GridTile[]>();
+        const {
+            originX,
+            originZ,
+            showcaseWidth,
+            showcaseHeight,
+            buildingColumns,
+            sectionWidth,
+            cellWidth,
+            cellHeight,
+            maxLevels,
+        } = layout;
+
+        const touchTile = (x: number, z: number): GridTile => {
+            const { cx, cz } = worldToChunk(x, z, CHUNK_SIZE);
+            ChunkStore.ensureChunk(state.chunks, cx, cz, state.seed);
+            const tile = ChunkStore.getTile(state.chunks, x, z);
+            if (!tile) {
+                throw new Error(`Demo showcase failed to resolve tile at (${x}, ${z})`);
+            }
+
+            const key = `${cx},${cz}`;
+            const updates = affectedChunks.get(key);
+            if (updates) {
+                if (!updates.includes(tile)) updates.push(tile);
+            } else {
+                affectedChunks.set(key, [tile]);
+            }
+
+            const chunk = state.chunks[key];
+            if (chunk) {
+                chunk.meshDirty = true;
+                chunk.simDirty = true;
+            }
+
+            return tile;
+        };
+
+        // Flatten the showcase area first so we don't waste time fighting occupancy or water placement rules.
+        for (let z = -2; z <= showcaseHeight; z++) {
+            for (let x = -2; x <= showcaseWidth; x++) {
+                const tile = touchTile(originX + x, originZ + z);
+                Object.assign(tile, {
+                    buildingType: BuildingType.EMPTY,
+                    level: 0,
+                    isUnderConstruction: false,
+                    constructionTimeLeft: 0,
+                    structureHeadX: undefined,
+                    structureHeadZ: undefined,
+                    foliage: 'NONE',
+                    markedForHarvest: false,
+                    revealed: true,
+                    explored: true,
+                });
+            }
+        }
+
+        const placeDirect = (x: number, z: number, type: BuildingType, level: number = 1) => {
+            const def = BUILDINGS[type];
+            if (!def) return;
+
+            const width = def.width || 1;
+            const depth = def.depth || 1;
+
+            for (let dz = 0; dz < depth; dz++) {
+                for (let dx = 0; dx < width; dx++) {
+                    const tile = touchTile(x + dx, z + dz);
+                    Object.assign(tile, {
+                        buildingType: type,
+                        level,
+                        isUnderConstruction: false,
+                        constructionTimeLeft: 0,
+                        structureHeadX: x,
+                        structureHeadZ: z,
+                        foliage: 'NONE',
+                        markedForHarvest: false,
+                        revealed: true,
+                        explored: true,
+                    });
+                }
+            }
+        };
+
+        for (let x = -1; x <= showcaseWidth; x++) {
+            placeDirect(originX + x, originZ - 2, BuildingType.ROAD);
+            placeDirect(originX + x, originZ + showcaseHeight, BuildingType.ROAD);
+        }
+
+        for (let z = -2; z <= showcaseHeight; z++) {
+            placeDirect(originX - 2, originZ + z, BuildingType.ROAD);
+        }
+
+        buildables.forEach((building, rowIndex) => {
+            const gridColumn = rowIndex % buildingColumns;
+            const gridRow = Math.floor(rowIndex / buildingColumns);
+            const rowX = originX + (gridColumn * sectionWidth);
+            const rowZ = originZ + (gridRow * cellHeight);
+
+            for (let x = -1; x <= (maxLevels * cellWidth); x++) {
+                placeDirect(rowX + x, rowZ - 1, BuildingType.ROAD);
+            }
+
+            for (let level = 1; level <= building.maxLevel; level++) {
+                placeDirect(rowX + ((level - 1) * cellWidth), rowZ, building.type, level);
+            }
+        });
+
+        updateWaterConnectivity(state.chunks);
+
+        for (const [key, updates] of affectedChunks.entries()) {
+            const [cx, cz] = key.split(',').map(Number);
+            state.pendingEffects.push({ type: 'CHUNK_UPDATE', cx, cz, updates });
+        }
+    }
+
+    private notify(ctx: FixedContext, state: GameState, message: string, type: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'CRITICAL'): void {
         state.newsFeed.unshift({
             id: ctx.getNextId?.('demo_msg') || `msg_${Date.now()}_${Math.random()}`,
             headline: message,
-            type: type,
+            type,
             timestamp: state.tickCount
         });
     }
 
-    private pushPlacement(ctx: FixedContext, state: GameState, coord: { x: number, z: number }, type: BuildingType, level: number = 1): void {
-        state.commandQueue.push({
-            id: ctx.getNextId?.('demo_cmd') || `demo_${Date.now()}_${type}_${coord.x}_${coord.z}_${Math.random()}`,
-            type: 'PLACE_BUILDING',
-            payload: { x: coord.x, z: coord.z, buildingType: type, isInstant: true, level }
-        });
-        state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BUILD_START });
-    }
 }

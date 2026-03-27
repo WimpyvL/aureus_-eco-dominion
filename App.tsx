@@ -28,6 +28,7 @@ import { DialogueOverlay } from './components/DialogueOverlay';
 import { MobileBuildingConfirmation } from './components/MobileBuildingConfirmation';
 import { DebugMenu } from './components/DebugMenu';
 import { AgentDebugOverlay } from './components/AgentDebugOverlay';
+import { LoadingOverlay } from './components/LoadingOverlay';
 
 export type SidebarOpen = 'NONE' | 'OPS' | 'SHOP' | 'TRADE' | 'CREW' | 'TECH';
 
@@ -366,6 +367,11 @@ const App: React.FC = () => {
                                             setPinnedTilePos(null); // Reset two-tap flow
                                         }}
                                         playSfx={playSfx}
+                                    />
+
+                                    <LoadingOverlay
+                                        isVisible={state.isLoading}
+                                        message={state.loadingMessage || 'Preparing systems...'}
                                     />
 
                                     {state.debugMode && (

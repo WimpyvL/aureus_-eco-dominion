@@ -267,6 +267,11 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                 // NOW set state - this triggers the loading screen to hide
                 setState(worldInstance.getState());
 
+                if (import.meta.env.DEV) {
+                    (window as any).__aureusWorld = worldInstance;
+                    (window as any).__aureusGetState = () => worldInstance.getState();
+                }
+
                 /* 
                 // AUTO-LOAD: If a save exists, load it automatically
                 const savedGame = localStorage.getItem('aureus_save_v2');
@@ -279,6 +284,10 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
 
                 // Store cleanup function
                 (window as any).__aureusCleanup = () => {
+                    if (import.meta.env.DEV) {
+                        delete (window as any).__aureusWorld;
+                        delete (window as any).__aureusGetState;
+                    }
                     unsubscribe();
                     runtimeInstance.stop();
                     // debugHudInstance.dispose();
