@@ -4,6 +4,20 @@ import { mats } from '../../../../render/materials/VoxelMaterials';
 import { voxel, FactoryOptions } from '../../../../render/utils/VoxelBuilder';
 
 const roadAccentMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.7, metalness: 0.1 });
+const roadLaneMarkMat = new THREE.MeshStandardMaterial({
+    color: 0xe2e8f0,
+    roughness: 0.75,
+    metalness: 0.05,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -4,
+    depthWrite: false,
+});
+
+const configureRoadOverlay = (mesh: THREE.Mesh) => {
+    mesh.renderOrder = 2;
+    return mesh;
+};
 
 export const RoadFactory = (opts?: FactoryOptions) => {
     const g = new THREE.Group();
@@ -17,7 +31,7 @@ export const RoadFactory = (opts?: FactoryOptions) => {
     const connCount = [conn.north, conn.south, conn.east, conn.west].filter(Boolean).length;
 
     const createLaneMark = (w: number, d: number, x = 0, z = 0) =>
-        voxel(w, 0.02, d, mats.concreteLight, x, 0.08, z);
+        configureRoadOverlay(voxel(w, 0.02, d, roadLaneMarkMat, x, 0.1, z));
 
     // Asphalt base - always present
     deck.add(voxel(1.0, 0.08, 1.0, mats.asphalt, 0, 0, 0));
@@ -50,21 +64,21 @@ export const RoadFactory = (opts?: FactoryOptions) => {
             // Corner - no center line, just edge markings
             // Add corner accent
             if (conn.north && conn.east) {
-                deck.add(voxel(0.15, 0.03, 0.15, roadAccentMat, 0.35, 0.08, -0.35));
+                deck.add(configureRoadOverlay(voxel(0.15, 0.03, 0.15, roadAccentMat, 0.35, 0.1, -0.35)));
             } else if (conn.north && conn.west) {
-                deck.add(voxel(0.15, 0.03, 0.15, roadAccentMat, -0.35, 0.08, -0.35));
+                deck.add(configureRoadOverlay(voxel(0.15, 0.03, 0.15, roadAccentMat, -0.35, 0.1, -0.35)));
             } else if (conn.south && conn.east) {
-                deck.add(voxel(0.15, 0.03, 0.15, roadAccentMat, 0.35, 0.08, 0.35));
+                deck.add(configureRoadOverlay(voxel(0.15, 0.03, 0.15, roadAccentMat, 0.35, 0.1, 0.35)));
             } else if (conn.south && conn.west) {
-                deck.add(voxel(0.15, 0.03, 0.15, roadAccentMat, -0.35, 0.08, 0.35));
+                deck.add(configureRoadOverlay(voxel(0.15, 0.03, 0.15, roadAccentMat, -0.35, 0.1, 0.35)));
             }
         }
     } else if (connCount === 3) {
         // T-junction
-        deck.add(voxel(0.3, 0.03, 0.3, roadAccentMat, 0, 0.08, 0));
+        deck.add(configureRoadOverlay(voxel(0.3, 0.03, 0.3, roadAccentMat, 0, 0.1, 0)));
     } else {
         // 4-way intersection
-        deck.add(voxel(0.4, 0.03, 0.4, roadAccentMat, 0, 0.08, 0));
+        deck.add(configureRoadOverlay(voxel(0.4, 0.03, 0.4, roadAccentMat, 0, 0.1, 0)));
     }
 
     // Straight runs should tilt as a single deck instead of stacking connector blocks.

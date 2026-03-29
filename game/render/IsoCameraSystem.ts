@@ -336,6 +336,12 @@ export class IsoCameraSystem {
     public updateCameraTransform(): void {
         const aspect = window.innerWidth / window.innerHeight;
         const frustumSize = this.cameraZoom;
+        const dist = 100;
+
+        // Keep the depth range tight around the active play space.
+        // A huge orthographic near/far span murders precision and makes coplanar surfaces shimmer.
+        this.camera.near = 1;
+        this.camera.far = dist + 220;
 
         // Update orthographic frustum
         this.camera.left = -frustumSize * aspect / 2;
@@ -345,7 +351,6 @@ export class IsoCameraSystem {
         this.camera.updateProjectionMatrix();
 
         // Position camera at an offset from focus point
-        const dist = 100;
         const y = dist * Math.sin(this.cameraElevation);
         const h = dist * Math.cos(this.cameraElevation);
         const x = h * Math.sin(this.cameraAngle);
