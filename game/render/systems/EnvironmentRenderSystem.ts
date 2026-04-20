@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { COLORS } from '../../../engine/data/VoxelConstants';
 import { ThreeRenderAdapter } from '../../../engine/render/ThreeRenderAdapter';
+import { getCelestialPosition, getDaylightFactor, isDaytime } from '../../../engine/sim/dayNightCycle';
 
 export class EnvironmentRenderSystem {
     private scene: THREE.Scene;
@@ -96,37 +97,8 @@ export class EnvironmentRenderSystem {
     }
 
     private calculateSunPosition(timeOfDay: number): THREE.Vector3 {
-        // Time 0 = midnight, 6000 = sunrise, 12000 = noon, 18000 = sunset, 24000 = midnight
-        // Sun arc: from East at sunrise, overhead at noon, to West at sunset
-
-        // Normalize to 0-1 range where 0.25 = sunrise, 0.5 = noon, 0.75 = sunset
-        const normalizedTime = timeOfDay / 24000;
-
-        // Calculate angle: 0 at sunrise (East), PI/2 at noon (overhead), PI at sunset (West)
-        // Sun travels from East (positive X) to West (negative X)
-        const sunAngle = (normalizedTime - 0.25) * Math.PI * 2;
-
-        // Height follows a sine curve, peaking at noon
-        const dayProgress = (normalizedTime - 0.25) * 2; // 0 at sunrise, 1 at sunset
-        const height = Math.sin(Math.max(0, Math.min(1, dayProgress)) * Math.PI);
-
-        const isNight = timeOfDay < 6000 || timeOfDay > 18000;
-
-        if (isNight) {
-            // Moon position (opposite side of sky)
-            const moonAngle = sunAngle + Math.PI;
-            return new THREE.Vector3(
-                Math.cos(moonAngle) * this.sunDistance * 0.8,
-                40 + Math.abs(Math.sin(moonAngle)) * 60,
-                Math.sin(moonAngle) * this.sunDistance * 0.5
-            );
-        }
-
-        return new THREE.Vector3(
-            Math.cos(sunAngle) * this.sunDistance,
-            30 + height * 100, // 30 at horizon, 130 at noon
-            Math.sin(sunAngle) * this.sunDistance * 0.5
-        );
+        const position = getCelestialPosition(timeOfDay, this.sunDistance);
+        return new THREE.Vector3(position.x, position.y, position.z);
     }
 
     public update(dt: number, timeOfDay: number, weather: string, cameraFocus: THREE.Vector3) {
@@ -149,18 +121,11 @@ export class EnvironmentRenderSystem {
 
     private calculateTargets(timeOfDay: number, weather: string) {
         // Normalize time (0-24000)
-        const isNight = timeOfDay < 6000 || timeOfDay > 18000;
-        const normalizedTime = timeOfDay / 24000;
+        const daylightFactor = getDaylightFactor(timeOfDay);
+        const isNight = daylightFactor <= 0;
 
         // Base Intensity
-        let intensity = 1.2;
-        if (isNight) {
-            intensity = 0.4; // Moonlight
-        } else {
-            // Day arc
-            const dayFactor = Math.sin((normalizedTime - 0.25) * 2 * Math.PI);
-            intensity = 0.4 + dayFactor * 1.0;
-        }
+        let intensity = isNight ? 0.4 : 0.4 + daylightFactor * 1.0;
 
         // Weather Modifiers
         this.isRaining = false;
@@ -252,7 +217,7 @@ export class EnvironmentRenderSystem {
 
         // Update Sun/Moon Position
         const sunPos = this.calculateSunPosition(this.timeOfDay);
-        const isNight = this.timeOfDay < 6000 || this.timeOfDay > 18000;
+        const isNight = !isDaytime(this.timeOfDay);
 
         // Position sun relative to camera focus
         this.sunMesh.position.set(

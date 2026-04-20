@@ -9,6 +9,7 @@ import { FixedContext } from '../../kernel';
 import { GameState, BuildingType } from '../../../types';
 import { BUILDINGS } from '../../data/VoxelConstants';
 import { ChunkStore } from '../../space/ChunkStore';
+import { getSolarEfficiency } from '../dayNightCycle';
 
 
 export class PowerGridSystem extends BaseSimSystem {
@@ -50,9 +51,7 @@ export class PowerGridSystem extends BaseSimSystem {
                         if (!isDaytime) {
                             production = 0;
                         } else {
-                            const distFromNoon = Math.abs(timeOfDay - 12000);
-                            const dayHalfWidth = 6000;
-                            const solarEfficiency = Math.max(0.3, 1 - (distFromNoon / dayHalfWidth) * 0.5);
+                            const solarEfficiency = getSolarEfficiency(timeOfDay);
                             production = Math.floor(def.power.produces * solarEfficiency);
                         }
                     }

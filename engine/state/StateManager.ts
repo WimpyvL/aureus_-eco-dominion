@@ -15,6 +15,7 @@ import { worldToChunk } from '../utils/coords';
 
 import { Random } from '../kernel/Random';
 import { INITIAL_NPCS, INITIAL_PERMITS } from '../data/bureaucracy';
+import { DAY_NIGHT } from '../sim/dayNightCycle';
 
 export type StateListener = (state: GameState) => void;
 
@@ -165,7 +166,7 @@ export class StateManager {
             },
 
             dayNightCycle: {
-                timeOfDay: 6000,
+                timeOfDay: DAY_NIGHT.INITIAL_TIME_OF_DAY,
                 dayCount: 1,
                 isDaytime: true,
             },

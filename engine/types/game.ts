@@ -5,6 +5,7 @@ import { GridTile, WeatherState, Chunk } from './world';
 import { GameResources, MarketState, Contract } from './economy';
 import { DungeonState } from '../dungeon/DungeonTypes';
 import { BureaucracyState } from './bureaucracy';
+import { DayNightCycleState } from '../sim/dayNightCycle';
 
 export enum Era {
     SETTLEMENT = 'SETTLEMENT',
@@ -172,11 +173,7 @@ export interface GameState {
     dungeon: DungeonState;
 
     // Day/Night Cycle (1 game day = 24000 ticks = ~80 real minutes at 200ms/tick)
-    dayNightCycle: {
-        timeOfDay: number;      // 0-24000 (0 = midnight, 12000 = noon)
-        dayCount: number;       // How many days have passed
-        isDaytime: boolean;     // true if between 6000-18000 (6 AM - 6 PM)
-    };
+    dayNightCycle: DayNightCycleState;
 
     // Era System
     currentEra: Era;
