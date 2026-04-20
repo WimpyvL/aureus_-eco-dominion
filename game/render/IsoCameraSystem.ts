@@ -239,41 +239,21 @@ export class IsoCameraSystem {
     private createGestureSnapshot(): GestureSnapshot | null {
         if (this.activeTouchPointers.size < 2) return null;
 
-            // Convert distance change to zoom delta
-            // Negative distance change = pinch in = zoom out (increase frustum)
-            // Positive distance change = pinch out = zoom in (decrease frustum)
-            const zoomSensitivity = 0.01; // Significantly reduced from 0.1 for smoother control
-            const zoomDelta = -distanceChange * zoomSensitivity;
+        const pointers = Array.from(this.activeTouchPointers.values());
+        const p0 = pointers[0];
+        const p1 = pointers[1];
 
-            this.zoom(zoomDelta);
-        }
+        const dx = p1.x - p0.x;
+        const dy = p1.y - p0.y;
 
-        // TWO-FINGER ROTATE
-        if (this.lastTouchAngle !== 0) {
-            let angleDelta = currentAngle - this.lastTouchAngle;
-
-            // Normalize angle delta to [-PI, PI]
-            while (angleDelta > Math.PI) angleDelta -= 2 * Math.PI;
-            while (angleDelta < -Math.PI) angleDelta += 2 * Math.PI;
-
-            // Apply rotation (invert for natural feel)
-            const rotateSensitivity = 0.5; // Reduced from 2.0
-            this.cameraAngle -= angleDelta * rotateSensitivity;
-            this.updateCameraTransform();
-        }
-
-        // TWO-FINGER PAN
-        const midpointDx = currentMidpoint.x - this.lastTouchMidpoint.x;
-        const midpointDy = currentMidpoint.y - this.lastTouchMidpoint.y;
-
-        if (Math.abs(midpointDx) > 1 || Math.abs(midpointDy) > 1) {
-            this.pan(midpointDx, midpointDy);
-        }
-
-        // Update last values for next frame
-        this.lastTouchDistance = currentDistance;
-        this.lastTouchAngle = currentAngle;
-        this.lastTouchMidpoint = currentMidpoint;
+        return {
+            distance: Math.hypot(dx, dy),
+            angle: Math.atan2(dy, dx),
+            midpoint: {
+                x: (p0.x + p1.x) / 2,
+                y: (p0.y + p1.y) / 2,
+            },
+        };
     }
 
     public setTargetHeight(y: number): void {
@@ -340,19 +320,17 @@ export class IsoCameraSystem {
         this.updateCameraTransform();
     }
 
-    public zoom(delta: number): void {
-        // Continuous target update
-        this.targetZoomLevel = Math.max(0, Math.min(this.maxZoomLevel, this.targetZoomLevel + delta));
     public zoom(delta: number, smooth: boolean = false): void {
         if (smooth) {
+            // Direct zoom for pinch gesture - real-time feedback
             this.cameraZoom = Math.max(15, Math.min(85, this.cameraZoom + delta));
             this.zoomLevel = Math.round((this.cameraZoom - 15) / 10);
+            this.targetZoomLevel = this.zoomLevel;
+            this.updateCameraTransform();
         } else {
-            const direction = delta > 0 ? 1 : -1;
-            this.zoomLevel = Math.max(0, Math.min(7, this.zoomLevel + direction));
-            this.cameraZoom = 15 + (this.zoomLevel * 10);
+            // Continuous target update for wheel scroll - lerped in update()
+            this.targetZoomLevel = Math.max(0, Math.min(this.maxZoomLevel, this.targetZoomLevel + delta));
         }
-        this.updateCameraTransform();
     }
 
     public updateCameraTransform(): void {
