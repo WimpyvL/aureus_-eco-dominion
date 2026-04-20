@@ -328,6 +328,14 @@ export class AureusWorld extends BaseWorld {
         this.buildingRenderSystem.setPinnedGhost(null);
     }
 
+    confirmMobileBuildingPlacement(index: number): boolean {
+        return confirmMobilePlacement(
+            (placementIndex) => this.placeBuilding(placementIndex),
+            () => this.clearPinnedBuilding(),
+            index
+        );
+    }
+
     selectAgent(id: string | null): void {
         this.stateManager.update({ selectedAgentId: id });
     }
