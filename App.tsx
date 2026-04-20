@@ -541,9 +541,10 @@ const App: React.FC = () => {
                         tileIndex={pendingPlacementIndex}
                         onConfirm={() => {
                             if (world && pendingPlacementIndex !== null) {
-                                world.placeBuilding(pendingPlacementIndex);
-                                world.clearPinnedBuilding();
-                                setPendingPlacementIndex(null);
+                                const placed = world.confirmMobileBuildingPlacement(pendingPlacementIndex);
+                                if (placed) {
+                                    setPendingPlacementIndex(null);
+                                }
                             }
                         }}
                         onCancel={() => {

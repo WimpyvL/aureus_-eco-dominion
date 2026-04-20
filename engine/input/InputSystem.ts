@@ -19,6 +19,7 @@ export class InputSystem {
     private isRightClick = false;
     private activePointers: Map<number, PointerEvent> = new Map();
     private lastHoverCheckTime = 0;
+    private hadMultiTouchGesture = false;
 
     // Dependencies
     private renderAdapter: ThreeRenderAdapter;
@@ -92,6 +93,9 @@ export class InputSystem {
 
     private handlePointerDown(e: PointerEvent) {
         this.activePointers.set(e.pointerId, e);
+        if (e.pointerType === 'touch' && this.activePointers.size > 1) {
+            this.hadMultiTouchGesture = true;
+        }
         if (this.activePointers.size === 1) {
             this.isDragging = false; // Assume click until moved
             this.dragStartScreen.set(e.clientX, e.clientY);
@@ -139,7 +143,7 @@ export class InputSystem {
     private handlePointerUp(e: PointerEvent) {
         this.activePointers.delete(e.pointerId);
 
-        if (!this.isDragging) {
+        if (!this.isDragging && !this.hadMultiTouchGesture) {
             // Click confirmed
             if (this.isRightClick) {
                 this.handleClick(e.clientX, e.clientY, true);
@@ -149,6 +153,9 @@ export class InputSystem {
         }
 
         this.isDragging = false;
+        if (this.activePointers.size <= 1) {
+            this.hadMultiTouchGesture = false;
+        }
     }
 
     private handleContextMenu(e: MouseEvent) {

@@ -34,6 +34,7 @@ import { EnvironmentRenderSystem } from './render/systems/EnvironmentRenderSyste
 import { IsoCameraSystem } from './render/IsoCameraSystem';
 import { InputSystem } from '../engine/input/InputSystem';
 import { StateManager, StateListener } from '../engine/state/StateManager';
+import { confirmMobilePlacement } from './mobilePlacement';
 
 export interface AureusWorldConfig {
     container: HTMLElement;
@@ -174,30 +175,31 @@ export class AureusWorld extends BaseWorld {
     // GAME ACTIONS (UI calls these)
     // ═══════════════════════════════════════════════════════════════
 
-    placeBuilding(index: number, type?: string): void {
+    placeBuilding(index: number, type?: string): boolean {
         const state = this.stateManager.getMutableState();
         const buildingType = (type || state.selectedBuilding) as BuildingType;
-        if (!buildingType) return;
+        if (!buildingType) return false;
 
         const def = BUILDINGS[buildingType];
-        if (!def) return;
+        if (!def) return false;
 
         // NEW: Era validation
         if (!state.cheatsEnabled && !state.unlockedEras.includes(def.era)) {
             console.warn(`Cannot place ${buildingType}: Era ${def.era} not unlocked`);
             state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
-            return;
+            return false;
         }
 
         // Validate placement
         const tile = state.grid[index];
-        if (!tile || tile.locked) return;
-        if (tile.buildingType !== BuildingType.EMPTY && tile.buildingType !== BuildingType.POND) return;
+        if (!tile || tile.locked) return false;
+        if (tile.buildingType !== BuildingType.EMPTY && tile.buildingType !== BuildingType.POND) return false;
 
         // Check if building is in inventory
         if (!state.inventory[buildingType] || state.inventory[buildingType] <= 0) {
             console.warn(`Cannot place ${buildingType}: not in inventory`);
-            return;
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+            return false;
         }
 
         // Consume from inventory
@@ -215,6 +217,7 @@ export class AureusWorld extends BaseWorld {
 
         // Audio effect
         state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.BUILD });
+        return true;
     }
 
     bulldozeTile(index: number): void {
@@ -241,6 +244,14 @@ export class AureusWorld extends BaseWorld {
     clearPinnedBuilding(): void {
         // Clear the pinned ghost (user cancelled)
         this.buildingRenderSystem.setPinnedGhost(null);
+    }
+
+    confirmMobileBuildingPlacement(index: number): boolean {
+        return confirmMobilePlacement(
+            (placementIndex) => this.placeBuilding(placementIndex),
+            () => this.clearPinnedBuilding(),
+            index
+        );
     }
 
     selectAgent(id: string | null): void {

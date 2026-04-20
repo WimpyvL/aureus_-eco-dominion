@@ -9,6 +9,7 @@
 
 import * as THREE from 'three';
 import { ThreeRenderAdapter } from '../../engine/render/ThreeRenderAdapter';
+import { computeTwoFingerGesture, type GestureSnapshot } from './mobileGestureMath';
 
 export class IsoCameraSystem {
     private camera: THREE.OrthographicCamera;
@@ -31,14 +32,8 @@ export class IsoCameraSystem {
     private dragStartY = 0;
 
     // Mobile Touch State
-    private activeTouches = new Map<number, { x: number; y: number; startX: number; startY: number }>();
-    private lastTouchDistance = 0;
-    private lastTouchAngle = 0;
-    private lastTouchMidpoint = { x: 0, y: 0 };
-    private gestureStartZoom = 0;
-    private gestureStartAngle = 0;
-    private isMobileGesture = false;
-    private touchStartTime = 0;
+    private activeTouchPointers = new Map<number, { x: number; y: number; lastX: number; lastY: number }>();
+    private lastGestureSnapshot: GestureSnapshot | null = null;
 
     // Bound handlers for cleanup
     private boundPointerDown: (e: PointerEvent) => void;
@@ -46,9 +41,6 @@ export class IsoCameraSystem {
     private boundPointerUp: (e: PointerEvent) => void;
     private boundWheel: (e: WheelEvent) => void;
     private boundContextMenu: (e: Event) => void;
-    private boundTouchStart: (e: TouchEvent) => void;
-    private boundTouchMove: (e: TouchEvent) => void;
-    private boundTouchEnd: (e: TouchEvent) => void;
 
     constructor(adapter: ThreeRenderAdapter) {
         this.camera = adapter.getCamera() as THREE.OrthographicCamera;
@@ -61,10 +53,6 @@ export class IsoCameraSystem {
         this.boundPointerUp = this.onPointerUp.bind(this);
         this.boundWheel = this.onWheel.bind(this);
         this.boundContextMenu = (e: Event) => e.preventDefault();
-        this.boundTouchStart = this.onTouchStart.bind(this);
-        this.boundTouchMove = this.onTouchMove.bind(this);
-        this.boundTouchEnd = this.onTouchEnd.bind(this);
-
         this.bindEvents();
         this.updateCameraTransform();
     }
@@ -87,26 +75,18 @@ export class IsoCameraSystem {
         this.domElement.addEventListener('pointerdown', this.boundPointerDown);
         window.addEventListener('pointermove', this.boundPointerMove);
         window.addEventListener('pointerup', this.boundPointerUp);
+        window.addEventListener('pointercancel', this.boundPointerUp);
         this.domElement.addEventListener('wheel', this.boundWheel, { passive: false });
         this.domElement.addEventListener('contextmenu', this.boundContextMenu);
-
-        // Touch events for mobile gestures
-        this.domElement.addEventListener('touchstart', this.boundTouchStart, { passive: false });
-        this.domElement.addEventListener('touchmove', this.boundTouchMove, { passive: false });
-        this.domElement.addEventListener('touchend', this.boundTouchEnd, { passive: false });
     }
 
     private unbindEvents(): void {
         this.domElement.removeEventListener('pointerdown', this.boundPointerDown);
         window.removeEventListener('pointermove', this.boundPointerMove);
         window.removeEventListener('pointerup', this.boundPointerUp);
+        window.removeEventListener('pointercancel', this.boundPointerUp);
         this.domElement.removeEventListener('wheel', this.boundWheel);
         this.domElement.removeEventListener('contextmenu', this.boundContextMenu);
-
-        // Remove touch events
-        this.domElement.removeEventListener('touchstart', this.boundTouchStart);
-        this.domElement.removeEventListener('touchmove', this.boundTouchMove);
-        this.domElement.removeEventListener('touchend', this.boundTouchEnd);
     }
 
     public dispose(): void {
@@ -117,6 +97,22 @@ export class IsoCameraSystem {
 
     private onPointerDown(e: PointerEvent): void {
         if (!this.enabled) return;
+
+        if (e.pointerType === 'touch') {
+            this.activeTouchPointers.set(e.pointerId, {
+                x: e.clientX,
+                y: e.clientY,
+                lastX: e.clientX,
+                lastY: e.clientY,
+            });
+
+            if (this.activeTouchPointers.size >= 2) {
+                this.lastGestureSnapshot = this.createGestureSnapshot();
+            } else {
+                this.lastGestureSnapshot = null;
+            }
+            return;
+        }
 
         this.lastMouseX = e.clientX;
         this.lastMouseY = e.clientY;
@@ -134,6 +130,11 @@ export class IsoCameraSystem {
 
     private onPointerMove(e: PointerEvent): void {
         if (!this.enabled) return;
+
+        if (e.pointerType === 'touch' && this.activeTouchPointers.has(e.pointerId)) {
+            this.handleTouchPointerMove(e);
+            return;
+        }
 
         const dx = e.clientX - this.lastMouseX;
         const dy = e.clientY - this.lastMouseY;
@@ -159,7 +160,13 @@ export class IsoCameraSystem {
         this.lastMouseY = e.clientY;
     }
 
-    private onPointerUp(_e: PointerEvent): void {
+    private onPointerUp(e: PointerEvent): void {
+        if (e.pointerType === 'touch') {
+            this.activeTouchPointers.delete(e.pointerId);
+            this.lastGestureSnapshot = this.activeTouchPointers.size >= 2 ? this.createGestureSnapshot() : null;
+            return;
+        }
+
         this.isDragging = false;
         this.isRotating = false;
     }
@@ -174,188 +181,68 @@ export class IsoCameraSystem {
         this.zoom(delta);
     }
 
-    // --- Mobile Touch Handlers ---
+    private handleTouchPointerMove(e: PointerEvent): void {
+        const touch = this.activeTouchPointers.get(e.pointerId);
+        if (!touch) return;
 
-    private onTouchStart(e: TouchEvent): void {
-        if (!this.enabled) return;
-        e.preventDefault();
-
-        this.touchStartTime = Date.now();
-
-        // Update active touches
-        for (let i = 0; i < e.touches.length; i++) {
-            const touch = e.touches[i];
-            this.activeTouches.set(touch.identifier, {
-                x: touch.clientX,
-                y: touch.clientY,
-                startX: touch.clientX,
-                startY: touch.clientY,
-            });
-        }
-
-        // Multi-touch gesture detection
-        if (this.activeTouches.size >= 2) {
-            this.isMobileGesture = true;
-            const touches = Array.from(this.activeTouches.values());
-
-            // Calculate initial distance and angle for pinch/rotate
-            const dx = touches[1].x - touches[0].x;
-            const dy = touches[1].y - touches[0].y;
-            this.lastTouchDistance = Math.sqrt(dx * dx + dy * dy);
-            this.lastTouchAngle = Math.atan2(dy, dx);
-
-            // Calculate midpoint for pan
-            this.lastTouchMidpoint = {
-                x: (touches[0].x + touches[1].x) / 2,
-                y: (touches[0].y + touches[1].y) / 2,
-            };
-
-            // Store starting values for gestures
-            this.gestureStartZoom = this.cameraZoom;
-            this.gestureStartAngle = this.cameraAngle;
-        }
-    }
-
-    private onTouchMove(e: TouchEvent): void {
-        if (!this.enabled) return;
-        e.preventDefault();
-
-        // Update active touches
-        for (let i = 0; i < e.touches.length; i++) {
-            const touch = e.touches[i];
-            const existing = this.activeTouches.get(touch.identifier);
-            if (existing) {
-                this.activeTouches.set(touch.identifier, {
-                    ...existing,
-                    x: touch.clientX,
-                    y: touch.clientY,
-                });
-            }
-        }
-
-        const touches = Array.from(this.activeTouches.values());
-
-        if (touches.length >= 2) {
-            // Two-finger gestures: pinch zoom, rotate, and pan
-            this.handleTwoFingerGesture(touches);
-        } else if (touches.length === 1) {
-            // Single-finger pan (only if not part of a multi-touch gesture)
-            if (!this.isMobileGesture) {
-                this.handleSingleFingerPan(touches[0]);
-            }
-        }
-    }
-
-    private onTouchEnd(e: TouchEvent): void {
-        if (!this.enabled) return;
-        e.preventDefault();
-
-        // Remove ended touches
-        const remainingIds = new Set<number>();
-        for (let i = 0; i < e.touches.length; i++) {
-            remainingIds.add(e.touches[i].identifier);
-        }
-
-        // Remove touches that are no longer active
-        for (const id of this.activeTouches.keys()) {
-            if (!remainingIds.has(id)) {
-                this.activeTouches.delete(id);
-            }
-        }
-
-        // Reset gesture state when all touches are released
-        if (this.activeTouches.size === 0) {
-            this.isMobileGesture = false;
-            this.lastTouchDistance = 0;
-            this.lastTouchAngle = 0;
-        } else if (this.activeTouches.size === 1) {
-            // Transitioned from multi-touch to single touch
-            // Reset single-touch tracking
-            const touch = Array.from(this.activeTouches.values())[0];
-            this.activeTouches.set(
-                Array.from(this.activeTouches.keys())[0],
-                {
-                    ...touch,
-                    startX: touch.x,
-                    startY: touch.y,
-                }
-            );
-            this.isMobileGesture = false;
-        }
-    }
-
-    private handleSingleFingerPan(touch: { x: number; y: number; startX: number; startY: number }): void {
-        // Calculate movement since last frame
-        const dx = touch.x - touch.startX;
-        const dy = touch.y - touch.startY;
-
-        // Only pan if moved enough (prevents accidental pans during taps)
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance > 5) {
-            this.pan(dx, dy);
-
-            // Update start position for next frame
-            const id = Array.from(this.activeTouches.keys())[0];
-            this.activeTouches.set(id, {
-                ...touch,
-                startX: touch.x,
-                startY: touch.y,
-            });
-        }
-    }
-
-    private handleTwoFingerGesture(touches: Array<{ x: number; y: number; startX: number; startY: number }>): void {
-        // Calculate current distance and angle
-        const dx = touches[1].x - touches[0].x;
-        const dy = touches[1].y - touches[0].y;
-        const currentDistance = Math.sqrt(dx * dx + dy * dy);
-        const currentAngle = Math.atan2(dy, dx);
-
-        // Calculate current midpoint
-        const currentMidpoint = {
-            x: (touches[0].x + touches[1].x) / 2,
-            y: (touches[0].y + touches[1].y) / 2,
+        const nextTouch = {
+            x: e.clientX,
+            y: e.clientY,
+            lastX: touch.x,
+            lastY: touch.y,
         };
+        this.activeTouchPointers.set(e.pointerId, nextTouch);
 
-        // PINCH ZOOM
-        if (this.lastTouchDistance > 0) {
-            const distanceChange = currentDistance - this.lastTouchDistance;
+        if (this.activeTouchPointers.size >= 2) {
+            const previous = this.lastGestureSnapshot;
+            const current = this.createGestureSnapshot();
 
-            // Convert distance change to zoom delta
-            // Negative distance change = pinch in = zoom out (increase frustum)
-            // Positive distance change = pinch out = zoom in (decrease frustum)
-            const zoomSensitivity = 0.5;
-            const zoomDelta = -distanceChange * zoomSensitivity;
+            if (previous && current) {
+                const gesture = computeTwoFingerGesture(previous, current, {
+                    zoomFactor: 0.02,
+                    rotationFactor: 0.7,
+                    midpointPanThreshold: 6,
+                });
 
-            this.zoom(zoomDelta);
+                this.zoom(gesture.zoomDelta, true);
+                if (gesture.rotationDelta !== 0) {
+                    this.cameraAngle -= gesture.rotationDelta;
+                    this.updateCameraTransform();
+                }
+
+                if (gesture.midpointPan.x !== 0 || gesture.midpointPan.y !== 0) {
+                    this.pan(gesture.midpointPan.x, gesture.midpointPan.y);
+                }
+            }
+
+            this.lastGestureSnapshot = current;
+            return;
         }
 
-        // TWO-FINGER ROTATE
-        if (this.lastTouchAngle !== 0) {
-            let angleDelta = currentAngle - this.lastTouchAngle;
+        this.lastGestureSnapshot = null;
 
-            // Normalize angle delta to [-PI, PI]
-            while (angleDelta > Math.PI) angleDelta -= 2 * Math.PI;
-            while (angleDelta < -Math.PI) angleDelta += 2 * Math.PI;
-
-            // Apply rotation (invert for natural feel)
-            const rotateSensitivity = 2.0;
-            this.cameraAngle -= angleDelta * rotateSensitivity;
-            this.updateCameraTransform();
+        const dx = nextTouch.x - nextTouch.lastX;
+        const dy = nextTouch.y - nextTouch.lastY;
+        if (Math.hypot(dx, dy) > 3) {
+            this.pan(dx, dy);
         }
+    }
 
-        // TWO-FINGER PAN
-        const midpointDx = currentMidpoint.x - this.lastTouchMidpoint.x;
-        const midpointDy = currentMidpoint.y - this.lastTouchMidpoint.y;
+    private createGestureSnapshot(): GestureSnapshot | null {
+        if (this.activeTouchPointers.size < 2) return null;
 
-        if (Math.abs(midpointDx) > 1 || Math.abs(midpointDy) > 1) {
-            this.pan(midpointDx, midpointDy);
-        }
+        const [first, second] = Array.from(this.activeTouchPointers.values());
+        const dx = second.x - first.x;
+        const dy = second.y - first.y;
 
-        // Update last values for next frame
-        this.lastTouchDistance = currentDistance;
-        this.lastTouchAngle = currentAngle;
-        this.lastTouchMidpoint = currentMidpoint;
+        return {
+            distance: Math.hypot(dx, dy),
+            angle: Math.atan2(dy, dx),
+            midpoint: {
+                x: (first.x + second.x) / 2,
+                y: (first.y + second.y) / 2,
+            },
+        };
     }
 
     // --- Camera Actions (Based on legacy SceneManager) ---
@@ -385,14 +272,15 @@ export class IsoCameraSystem {
         this.updateCameraTransform();
     }
 
-    public zoom(delta: number): void {
-        // Step-based zoom: each tick is roughly 1 step
-        const direction = delta > 0 ? 1 : -1;
-        this.zoomLevel = Math.max(0, Math.min(7, this.zoomLevel + direction));
-
-        // Calculate cameraZoom based on steps: 15 (min) to 85 (max)
-        // This ensures the world corners stay completely off-screen.
-        this.cameraZoom = 15 + (this.zoomLevel * 10);
+    public zoom(delta: number, smooth: boolean = false): void {
+        if (smooth) {
+            this.cameraZoom = Math.max(15, Math.min(85, this.cameraZoom + delta));
+            this.zoomLevel = Math.round((this.cameraZoom - 15) / 10);
+        } else {
+            const direction = delta > 0 ? 1 : -1;
+            this.zoomLevel = Math.max(0, Math.min(7, this.zoomLevel + direction));
+            this.cameraZoom = 15 + (this.zoomLevel * 10);
+        }
         this.updateCameraTransform();
     }
 
