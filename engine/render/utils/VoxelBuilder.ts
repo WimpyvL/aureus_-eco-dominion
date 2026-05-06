@@ -6,12 +6,17 @@
 */
 
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { BiomeType } from '../../../types';
 import { mats } from '../materials/VoxelMaterials';
 import { greedyMesh } from './GreedyMesher';
 
 // --- GEOMETRY CACHE (For standard primitives) ---
 const boxGeoCache: Record<string, THREE.BoxGeometry> = {};
+const roundedBoxGeoCache: Record<string, RoundedBoxGeometry> = {};
+const cylinderGeoCache: Record<string, THREE.CylinderGeometry> = {};
+const sphereGeoCache: Record<string, THREE.SphereGeometry> = {};
+const torusGeoCache: Record<string, THREE.TorusGeometry> = {};
 
 function getBoxGeo(w: number, h: number, d: number) {
     const key = `${w.toFixed(2)},${h.toFixed(2)},${d.toFixed(2)} `;
@@ -19,16 +24,159 @@ function getBoxGeo(w: number, h: number, d: number) {
     return boxGeoCache[key];
 }
 
+function getRoundedBoxGeo(w: number, h: number, d: number, radius: number, segments: number) {
+    const clampedRadius = Math.max(0.01, Math.min(radius, w * 0.45, h * 0.45, d * 0.45));
+    const key = `${w.toFixed(2)},${h.toFixed(2)},${d.toFixed(2)}_${clampedRadius.toFixed(3)}_${segments}`;
+    if (!roundedBoxGeoCache[key]) {
+        roundedBoxGeoCache[key] = new RoundedBoxGeometry(w, h, d, segments, clampedRadius);
+    }
+    return roundedBoxGeoCache[key];
+}
+
+function getCylinderGeo(radiusTop: number, radiusBottom: number, height: number, radialSegments: number) {
+    const key = `${radiusTop.toFixed(2)},${radiusBottom.toFixed(2)},${height.toFixed(2)}_${radialSegments}`;
+    if (!cylinderGeoCache[key]) {
+        cylinderGeoCache[key] = new THREE.CylinderGeometry(radiusTop, radiusBottom, height, radialSegments, 1);
+    }
+    return cylinderGeoCache[key];
+}
+
+function getSphereGeo(radius: number, widthSegments: number, heightSegments: number, phiStart: number, phiLength: number, thetaStart: number, thetaLength: number) {
+    const key = `${radius.toFixed(2)}_${widthSegments}_${heightSegments}_${phiStart.toFixed(3)}_${phiLength.toFixed(3)}_${thetaStart.toFixed(3)}_${thetaLength.toFixed(3)}`;
+    if (!sphereGeoCache[key]) {
+        sphereGeoCache[key] = new THREE.SphereGeometry(radius, widthSegments, heightSegments, phiStart, phiLength, thetaStart, thetaLength);
+    }
+    return sphereGeoCache[key];
+}
+
+function getTorusGeo(radius: number, tube: number, radialSegments: number, tubularSegments: number, arc: number) {
+    const key = `${radius.toFixed(2)}_${tube.toFixed(2)}_${radialSegments}_${tubularSegments}_${arc.toFixed(3)}`;
+    if (!torusGeoCache[key]) {
+        torusGeoCache[key] = new THREE.TorusGeometry(radius, tube, radialSegments, tubularSegments, arc);
+    }
+    return torusGeoCache[key];
+}
+
+function getRoundedVoxelProfile(w: number, h: number, d: number) {
+    const minDim = Math.min(w, h, d);
+    const maxDim = Math.max(w, h, d);
+    const isTiny = minDim <= 0.05 || maxDim <= 0.12;
+    if (isTiny) {
+        return null;
+    }
+
+    const segments = maxDim >= 1.8 ? 5 : maxDim >= 1.0 ? 4 : maxDim >= 0.45 ? 3 : 2;
+    const radius = Math.min(0.14, Math.max(0.04, minDim * 0.22));
+    return { radius, segments };
+}
+
+function getAdaptiveCylinderSegments(radius: number, height: number) {
+    const maxDim = Math.max(radius * 2, height);
+    if (maxDim >= 1.8) return 20;
+    if (maxDim >= 0.9) return 16;
+    return 12;
+}
+
+export type PrimitiveDetailLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface SmoothPrimitiveOptions {
+    detailLevel?: PrimitiveDetailLevel;
+    rotationX?: number;
+    rotationY?: number;
+    rotationZ?: number;
+    castShadow?: boolean;
+    receiveShadow?: boolean;
+}
+
+function getDetailMultiplier(detailLevel: PrimitiveDetailLevel = 'MEDIUM') {
+    switch (detailLevel) {
+        case 'LOW':
+            return 0.75;
+        case 'HIGH':
+            return 1.25;
+        case 'MEDIUM':
+        default:
+            return 1;
+    }
+}
+
+function scaleSegments(base: number, detailLevel: PrimitiveDetailLevel, min: number, max: number) {
+    return THREE.MathUtils.clamp(Math.round(base * getDetailMultiplier(detailLevel)), min, max);
+}
+
+function applyPrimitiveOptions(mesh: THREE.Mesh, options?: SmoothPrimitiveOptions) {
+    mesh.castShadow = options?.castShadow ?? true;
+    mesh.receiveShadow = options?.receiveShadow ?? true;
+    mesh.rotation.set(options?.rotationX ?? 0, options?.rotationY ?? 0, options?.rotationZ ?? 0);
+    return mesh;
+}
+
 export const sharedBoxGeo = new THREE.BoxGeometry(1, 1, 1);
 export const nuggetGeo = new THREE.DodecahedronGeometry(0.5, 0);
 
 // --- LEGACY BUILDER (Kept for fallback/particles) ---
 export function voxel(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0, z = 0) {
+    const roundedProfile = getRoundedVoxelProfile(w, h, d);
+    const geometry = roundedProfile
+        ? getRoundedBoxGeo(w, h, d, roundedProfile.radius, roundedProfile.segments)
+        : getBoxGeo(w, h, d);
+    const mesh = new THREE.Mesh(geometry, mat);
+    mesh.position.set(x, y + h / 2, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+}
+
+export function blockVoxel(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0, z = 0) {
     const mesh = new THREE.Mesh(getBoxGeo(w, h, d), mat);
     mesh.position.set(x, y + h / 2, z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     return mesh;
+}
+
+export function cylinder(radius: number, height: number, mat: THREE.Material, x = 0, y = 0, z = 0, radialSegments = getAdaptiveCylinderSegments(radius, height)) {
+    const mesh = new THREE.Mesh(getCylinderGeo(radius, radius, height, radialSegments), mat);
+    mesh.position.set(x, y + height / 2, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+}
+
+export function taperedCylinder(radiusTop: number, radiusBottom: number, height: number, mat: THREE.Material, x = 0, y = 0, z = 0, radialSegments = getAdaptiveCylinderSegments(Math.max(radiusTop, radiusBottom), height)) {
+    const mesh = new THREE.Mesh(getCylinderGeo(radiusTop, radiusBottom, height, radialSegments), mat);
+    mesh.position.set(x, y + height / 2, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+}
+
+export function dome(radius: number, mat: THREE.Material, x = 0, y = 0, z = 0, options?: SmoothPrimitiveOptions) {
+    const detailLevel = options?.detailLevel ?? 'MEDIUM';
+    const widthSegments = scaleSegments(radius >= 1 ? 24 : 18, detailLevel, 12, 36);
+    const heightSegments = scaleSegments(radius >= 1 ? 16 : 12, detailLevel, 8, 24);
+    const mesh = new THREE.Mesh(
+        getSphereGeo(radius, widthSegments, heightSegments, 0, Math.PI * 2, 0, Math.PI / 2),
+        mat
+    );
+    mesh.position.set(x, y, z);
+    return applyPrimitiveOptions(mesh, options);
+}
+
+export interface TorusRingOptions extends SmoothPrimitiveOptions {
+    arc?: number;
+}
+
+export function torusRing(radius: number, tube: number, mat: THREE.Material, x = 0, y = 0, z = 0, options?: TorusRingOptions) {
+    const detailLevel = options?.detailLevel ?? 'MEDIUM';
+    const radialSegments = scaleSegments(8, detailLevel, 6, 14);
+    const tubularSegments = scaleSegments(radius >= 0.9 ? 28 : 22, detailLevel, 16, 40);
+    const mesh = new THREE.Mesh(
+        getTorusGeo(radius, tube, radialSegments, tubularSegments, options?.arc ?? Math.PI * 2),
+        mat
+    );
+    mesh.position.set(x, y, z);
+    return applyPrimitiveOptions(mesh, options);
 }
 
 export function buildVoxelGroup(voxels: { x: number, y: number, z: number, c: string }[], materialMap?: Record<string, THREE.Material>) {
@@ -351,6 +499,7 @@ export interface FactoryOptions {
     width?: number;
     depth?: number;
     level?: number; // Building upgrade level (1-4)
+    detailLevel?: 'LOW' | 'MEDIUM' | 'HIGH';
     waterStatus?: 'CONNECTED' | 'DISCONNECTED';
     powerStatus?: 'CONNECTED' | 'DISCONNECTED';
     isUnderConstruction?: boolean;

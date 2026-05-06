@@ -22,18 +22,29 @@ export const StaffQuartersFactory = (opts?: FactoryOptions) => {
     }
 };
 
+function getDetailFlags(opts?: FactoryOptions) {
+    const detailLevel = opts?.detailLevel || 'MEDIUM';
+    return {
+        isLow: detailLevel === 'LOW',
+        isHigh: detailLevel === 'HIGH',
+    };
+}
+
 // Level 1: Primitive tent camp
 function buildLevel1(opts?: FactoryOptions) {
     const g = new THREE.Group();
     const isPowered = opts?.powerStatus === 'CONNECTED';
+    const { isLow, isHigh } = getDetailFlags(opts);
 
     // --- TEXTURED FOUNDATION ---
     // Base dirt
     g.add(voxel(1.9, 0.1, 1.9, mats.dirt, 0, 0, 0));
     // Patches of stone and grass for texture
-    g.add(voxel(0.4, 0.11, 0.4, mats.rock, -0.6, 0, -0.6));
-    g.add(voxel(0.3, 0.11, 0.3, mats.rock, 0.7, 0, 0.5));
-    g.add(voxel(0.5, 0.11, 0.4, mats.grass, 0.4, 0, -0.7));
+    if (!isLow) {
+        g.add(voxel(0.4, 0.11, 0.4, mats.rock, -0.6, 0, -0.6));
+        g.add(voxel(0.3, 0.11, 0.3, mats.rock, 0.7, 0, 0.5));
+        g.add(voxel(0.5, 0.11, 0.4, mats.grass, 0.4, 0, -0.7));
+    }
 
     // --- TENT 1 (Large Canvas Tent) ---
     // Frame
@@ -48,8 +59,10 @@ function buildLevel1(opts?: FactoryOptions) {
     g.add(voxel(0.6, 0.02, 1.2, mats.sand, -0.45, 1.3, 0));    // Slanted top (simplified)
 
     // Guy Ropes (thin wood voxels)
-    g.add(voxel(0.02, 0.7, 0.02, mats.wood, -0.3, 0.1, 0.7));
-    g.add(voxel(0.02, 0.7, 0.02, mats.wood, -0.3, 0.1, -0.7));
+    if (isHigh) {
+        g.add(voxel(0.02, 0.7, 0.02, mats.wood, -0.3, 0.1, 0.7));
+        g.add(voxel(0.02, 0.7, 0.02, mats.wood, -0.3, 0.1, -0.7));
+    }
 
     // Interior Detail
     g.add(voxel(0.4, 0.05, 0.8, mats.wood, -0.7, 0.1, 0)); // Sleeping mat/cot
@@ -62,8 +75,9 @@ function buildLevel1(opts?: FactoryOptions) {
     // --- CAMPFIRE (Detailed) ---
     // Stone ring
     const stoneSize = 0.15;
-    for (let i = 0; i < 8; i++) {
-        const angle = (i / 8) * Math.PI * 2;
+    const fireRingCount = isHigh ? 12 : isLow ? 4 : 8;
+    for (let i = 0; i < fireRingCount; i++) {
+        const angle = (i / fireRingCount) * Math.PI * 2;
         g.add(voxel(stoneSize, stoneSize, stoneSize, mats.rock, Math.cos(angle) * 0.25, 0.1, Math.sin(angle) * 0.25));
     }
     // Ash/charcoal base
@@ -78,12 +92,16 @@ function buildLevel1(opts?: FactoryOptions) {
 
     // --- PROPS ---
     // Stacked crates
-    g.add(voxel(0.3, 0.3, 0.3, mats.wood, -0.1, 0.1, -0.8));
-    g.add(voxel(0.25, 0.25, 0.25, mats.wood, -0.1, 0.4, -0.8));
+    if (!isLow) {
+        g.add(voxel(0.3, 0.3, 0.3, mats.wood, -0.1, 0.1, -0.8));
+        g.add(voxel(0.25, 0.25, 0.25, mats.wood, -0.1, 0.4, -0.8));
+    }
 
     // Water barrel
-    g.add(voxel(0.35, 0.5, 0.35, mats.blueMetal, 0.8, 0.1, -0.2));
-    g.add(voxel(0.3, 0.05, 0.3, mats.metal, 0.8, 0.6, -0.2)); // Lid
+    if (isHigh) {
+        g.add(voxel(0.35, 0.5, 0.35, mats.blueMetal, 0.8, 0.1, -0.2));
+        g.add(voxel(0.3, 0.05, 0.3, mats.metal, 0.8, 0.6, -0.2)); // Lid
+    }
 
     // Simple bench near fire
     g.add(voxel(0.1, 0.2, 0.1, mats.wood, 0.5, 0.1, 0.2));
@@ -97,6 +115,7 @@ function buildLevel1(opts?: FactoryOptions) {
 function buildLevel2(opts?: FactoryOptions) {
     const g = new THREE.Group();
     const isPowered = opts?.powerStatus === 'CONNECTED';
+    const { isLow, isHigh } = getDetailFlags(opts);
 
     // --- FOUNDATION & EXTERIOR ---
     // Concrete pad
@@ -114,7 +133,7 @@ function buildLevel2(opts?: FactoryOptions) {
     g.add(voxel(1.4, 1.0, 0.7, c1Mat, -0.2, 0.15, -0.4));
 
     // Corrugation detail (thin vertical strips)
-    for (let x = -0.8; x <= 0.4; x += 0.2) {
+    for (let x = -0.8; x <= 0.4; x += isHigh ? 0.14 : isLow ? 0.35 : 0.2) {
         g.add(voxel(0.02, 1.0, 0.75, mats.metal, x, 0.15, -0.4));
     }
 
@@ -127,8 +146,10 @@ function buildLevel2(opts?: FactoryOptions) {
     g.add(voxel(0.4, 0.02, 0.15, mats.metal, -0.4, 0.85, -0.08)); // Awning
 
     // Rooftop Antenna
-    g.add(voxel(0.04, 0.6, 0.04, mats.metal, -0.7, 1.15, -0.6));
-    g.add(voxel(0.1, 0.1, 0.1, mats.metal, -0.7, 1.75, -0.6));
+    if (!isLow) {
+        g.add(voxel(0.04, 0.6, 0.04, mats.metal, -0.7, 1.15, -0.6));
+        g.add(voxel(0.1, 0.1, 0.1, mats.metal, -0.7, 1.75, -0.6));
+    }
 
     // === MODULAR CONTAINER 2 (Auxiliary) ===
     g.add(voxel(0.7, 0.9, 1.0, mats.hazard, 0.55, 0.15, 0.3));
@@ -140,12 +161,16 @@ function buildLevel2(opts?: FactoryOptions) {
     g.add(voxel(0.7, 0.08, 0.7, mats.wood, 0.5, 0.15, -0.5));
 
     // Folding Chair on deck
-    g.add(voxel(0.05, 0.25, 0.05, mats.metal, 0.3, 1.23, -0.45)); // simplified seat back
-    g.add(voxel(0.25, 0.05, 0.25, mats.wood, 0.3, 0.4, -0.45)); // seat
+    if (isHigh) {
+        g.add(voxel(0.05, 0.25, 0.05, mats.metal, 0.3, 1.23, -0.45)); // simplified seat back
+        g.add(voxel(0.25, 0.05, 0.25, mats.wood, 0.3, 0.4, -0.45)); // seat
+    }
 
     // Small table
-    g.add(voxel(0.05, 0.35, 0.05, mats.metal, 0.55, 0.15, -0.35));
-    g.add(voxel(0.2, 0.05, 0.2, mats.wood, 0.55, 0.5, -0.35));
+    if (!isLow) {
+        g.add(voxel(0.05, 0.35, 0.05, mats.metal, 0.55, 0.15, -0.35));
+        g.add(voxel(0.2, 0.05, 0.2, mats.wood, 0.55, 0.5, -0.35));
+    }
 
     // Power hookup
     g.add(voxel(0.1, 0.6, 0.1, mats.metal, -0.85, 0.15, 0));
@@ -161,6 +186,7 @@ function buildLevel3(opts?: FactoryOptions) {
     const g = new THREE.Group();
     const isPowered = opts?.powerStatus === 'CONNECTED';
     const isWatered = opts?.waterStatus === 'CONNECTED';
+    const { isLow, isHigh } = getDetailFlags(opts);
 
     // --- FOUNDATION & PATH ---
     g.add(voxel(2.0, 0.2, 2.0, mats.concrete, 0, 0, 0));
@@ -171,7 +197,7 @@ function buildLevel3(opts?: FactoryOptions) {
     g.add(voxel(1.6, 1.8, 1.4, mats.brick, 0, 0.2, 0));
 
     // Decorative Brick Trim (Quoining)
-    for (let y = 0.2; y < 2.0; y += 0.4) {
+    for (let y = 0.2; y < 2.0; y += isHigh ? 0.25 : isLow ? 0.6 : 0.4) {
         g.add(voxel(0.1, 0.1, 0.1, mats.concrete, 0.76, y, 0.66));
         g.add(voxel(0.1, 0.1, 0.1, mats.concrete, -0.76, y, 0.66));
     }
@@ -215,8 +241,10 @@ function buildLevel3(opts?: FactoryOptions) {
     g.add(voxel(1.8, 0.05, 0.1, mats.metal, 0, 2.1, 0)); // Ridge tile
 
     // Chimney
-    g.add(voxel(0.2, 0.6, 0.2, mats.brick, 0.6, 2.0, -0.4));
-    g.add(voxel(0.25, 0.05, 0.25, mats.rock, 0.6, 2.6, -0.4)); // Cap
+    if (!isLow) {
+        g.add(voxel(0.2, 0.6, 0.2, mats.brick, 0.6, 2.0, -0.4));
+        g.add(voxel(0.25, 0.05, 0.25, mats.rock, 0.6, 2.6, -0.4)); // Cap
+    }
 
     // Gutter Pipe
     g.add(voxel(0.06, 1.8, 0.06, mats.darkPipe, 0.75, 0.2, 0.65));
@@ -227,13 +255,17 @@ function buildLevel3(opts?: FactoryOptions) {
 
     // --- PROPS ---
     // Garden Planter
-    g.add(voxel(0.5, 0.15, 0.2, mats.wood, -0.5, 0.2, 0.75));
-    g.add(voxel(0.45, 0.05, 0.15, mats.grass, -0.5, 0.35, 0.75));
+    if (isHigh) {
+        g.add(voxel(0.5, 0.15, 0.2, mats.wood, -0.5, 0.2, 0.75));
+        g.add(voxel(0.45, 0.05, 0.15, mats.grass, -0.5, 0.35, 0.75));
+    }
 
     // Wooden Bench
-    g.add(voxel(0.6, 0.05, 0.25, mats.wood, 0.5, 0.35, 0.75)); // seat
-    g.add(voxel(0.05, 0.2, 0.05, mats.wood, 0.25, 0.2, 0.75));  // leg
-    g.add(voxel(0.05, 0.2, 0.05, mats.wood, 0.75, 0.2, 0.75));  // leg
+    if (!isLow) {
+        g.add(voxel(0.6, 0.05, 0.25, mats.wood, 0.5, 0.35, 0.75)); // seat
+        g.add(voxel(0.05, 0.2, 0.05, mats.wood, 0.25, 0.2, 0.75));  // leg
+        g.add(voxel(0.05, 0.2, 0.05, mats.wood, 0.75, 0.2, 0.75));  // leg
+    }
 
     return g;
 }

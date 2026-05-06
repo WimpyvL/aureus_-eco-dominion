@@ -1,7 +1,7 @@
 
 import * as THREE from 'three';
 import { mats } from '../../../../render/materials/VoxelMaterials';
-import { voxel, FactoryOptions } from '../../../../render/utils/VoxelBuilder';
+import { cylinder, dome, torusRing, voxel, FactoryOptions } from '../../../../render/utils/VoxelBuilder';
 
 /**
  * Community Garden Factory - Multi-level green space
@@ -105,18 +105,28 @@ function buildLevel3(opts?: FactoryOptions) {
 // Level 4: Modern Hydroponic Biosphere
 function buildLevel4(opts?: FactoryOptions) {
     const g = new THREE.Group();
+    const detailLevel = opts?.detailLevel ?? 'MEDIUM';
     g.add(voxel(2.0, 0.25, 2.0, mats.concrete, 0, 0, 0));
 
     // Glass dome/structure
-    g.add(voxel(1.8, 1.8, 1.8, mats.glass, 0, 0.25, 0));
-    g.add(voxel(1.85, 0.1, 1.85, mats.blueMetal, 0, 0.25, 0));
-    g.add(voxel(1.85, 0.1, 1.85, mats.blueMetal, 0, 2.0, 0));
+    g.add(dome(1.1, mats.glass, 0, 0.25, 0, { detailLevel }));
+    g.add(torusRing(1.1, 0.05, mats.blueMetal, 0, 0.25, 0, {
+        detailLevel,
+        rotationX: Math.PI / 2,
+    }));
+    g.add(torusRing(0.7, 0.04, mats.blueMetal, 0, 0.95, 0, {
+        detailLevel,
+        rotationX: Math.PI / 2,
+    }));
 
     // Hydroponic towers
     const tower = (x: number, z: number) => {
-        g.add(voxel(0.3, 1.4, 0.3, mats.metalLight, x, 0.25, z));
+        g.add(cylinder(0.14, 1.4, mats.metalLight, x, 0.25, z));
         for (let y = 0.5; y < 1.6; y += 0.4) {
-            g.add(voxel(0.45, 0.25, 0.45, mats.progressGreen, x, y, z));
+            g.add(torusRing(0.22, 0.06, mats.progressGreen, x, y, z, {
+                detailLevel,
+                rotationX: Math.PI / 2,
+            }));
         }
     };
     tower(-0.5, -0.5);
@@ -126,7 +136,8 @@ function buildLevel4(opts?: FactoryOptions) {
 
     // Glowing core
     if (!opts?.isUnderConstruction) {
-        g.add(voxel(0.2, 1.0, 0.2, mats.emissiveCyan, 0, 0.5, 0));
+        g.add(voxel(0.26, 1.0, 0.26, mats.glass, 0, 0.5, 0));
+        g.add(voxel(0.12, 0.84, 0.12, mats.emissiveCyan, 0, 0.58, 0));
     }
 
     return g;

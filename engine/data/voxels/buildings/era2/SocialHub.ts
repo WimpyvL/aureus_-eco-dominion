@@ -1,7 +1,7 @@
 
 import * as THREE from 'three';
 import { mats } from '../../../../render/materials/VoxelMaterials';
-import { voxel, FactoryOptions } from '../../../../render/utils/VoxelBuilder';
+import { cylinder, dome, torusRing, voxel, FactoryOptions } from '../../../../render/utils/VoxelBuilder';
 
 /**
  * Social Hub Factory - Multi-level community space
@@ -56,23 +56,16 @@ function buildLevel1(opts?: FactoryOptions) {
 function buildLevel2(opts?: FactoryOptions) {
     const g = new THREE.Group();
     const isPowered = opts?.powerStatus === 'CONNECTED';
+    const detailLevel = opts?.detailLevel ?? 'MEDIUM';
     g.add(voxel(2.0, 0.25, 2.0, mats.concrete, 0, 0, 0));
-    const dome = new THREE.Mesh(
-        new THREE.SphereGeometry(1.1, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2),
-        isPowered ? mats.glass : mats.darkPipe
-    );
-    dome.position.y = 0.25;
-    g.add(dome);
+    g.add(dome(1.1, isPowered ? mats.glass : mats.darkPipe, 0, 0.25, 0, { detailLevel }));
     for (let r = 0.3; r <= 1.0; r += 0.35) {
-        const ring = new THREE.Mesh(
-            new THREE.TorusGeometry(r, 0.03, 8, 24),
-            mats.metal
-        );
-        ring.rotation.x = Math.PI / 2;
-        ring.position.y = 0.25 + Math.sqrt(1.1 * 1.1 - r * r) * 0.5;
-        g.add(ring);
+        g.add(torusRing(r, 0.03, mats.metal, 0, 0.25 + Math.sqrt(1.1 * 1.1 - r * r) * 0.5, 0, {
+            detailLevel,
+            rotationX: Math.PI / 2,
+        }));
     }
-    g.add(voxel(0.4, 1.6, 0.4, mats.metal, 0, 0.25, 0));
+    g.add(cylinder(0.2, 1.6, mats.metal, 0, 0.25, 0));
     if (!opts?.isUnderConstruction) {
         g.add(voxel(0.2, 0.2, 0.2, isPowered ? mats.emissiveCyan : mats.emissiveRed, 0, 1.85, 0));
     }
@@ -80,7 +73,7 @@ function buildLevel2(opts?: FactoryOptions) {
         const angle = (i / 6) * Math.PI * 2;
         const x = Math.cos(angle) * 0.7;
         const z = Math.sin(angle) * 0.7;
-        g.add(voxel(0.25, 0.15, 0.25, mats.wood, x, 0.25, z));
+        g.add(cylinder(0.13, 0.15, mats.wood, x, 0.25, z));
     }
     g.add(voxel(0.5, 0.8, 0.15, mats.metal, 0, 0.25, 1.0));
     if (!opts?.isUnderConstruction) {
@@ -94,17 +87,13 @@ function buildLevel2(opts?: FactoryOptions) {
 function buildLevel3(opts?: FactoryOptions) {
     const g = new THREE.Group();
     const isPowered = opts?.powerStatus === 'CONNECTED';
+    const detailLevel = opts?.detailLevel ?? 'MEDIUM';
     g.add(voxel(2.2, 0.25, 2.2, mats.concrete, 0, 0, 0));
 
     // Two smaller domes
     const addDome = (x: number, z: number) => {
-        const dome = new THREE.Mesh(
-            new THREE.SphereGeometry(0.8, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2),
-            isPowered ? mats.glass : mats.darkPipe
-        );
-        dome.position.set(x, 0.25, z);
-        g.add(dome);
-        g.add(voxel(0.2, 1.2, 0.2, mats.metal, x, 0.25, z));
+        g.add(dome(0.8, isPowered ? mats.glass : mats.darkPipe, x, 0.25, z, { detailLevel }));
+        g.add(cylinder(0.1, 1.2, mats.metal, x, 0.25, z));
     };
     addDome(-0.4, -0.4);
     addDome(0.4, 0.4);
@@ -127,6 +116,7 @@ function buildLevel3(opts?: FactoryOptions) {
 function buildLevel4(opts?: FactoryOptions) {
     const g = new THREE.Group();
     const isPowered = opts?.powerStatus === 'CONNECTED';
+    const detailLevel = opts?.detailLevel ?? 'MEDIUM';
     g.add(voxel(2.4, 0.3, 2.4, mats.concrete, 0, 0, 0));
 
     // Modern concrete atrium with glass sky-lights
@@ -134,17 +124,13 @@ function buildLevel4(opts?: FactoryOptions) {
     g.add(voxel(1.5, 0.1, 1.5, mats.glass, 0, 2.5, 0));
 
     // Central holoprojector
-    g.add(voxel(0.6, 0.4, 0.6, mats.metalLight, 0, 0.3, 0));
+    g.add(cylinder(0.3, 0.4, mats.metalLight, 0, 0.3, 0));
     if (!opts?.isUnderConstruction && isPowered) {
         g.add(voxel(0.5, 1.2, 0.5, mats.emissiveCyan, 0, 0.8, 0));
-        // Rotating decorative element
-        const ring = new THREE.Mesh(
-            new THREE.TorusGeometry(0.6, 0.05, 8, 24),
-            mats.emissiveCyan
-        );
-        ring.position.y = 1.5;
-        ring.rotation.x = Math.PI / 3;
-        g.add(ring);
+        g.add(torusRing(0.6, 0.05, mats.emissiveCyan, 0, 1.5, 0, {
+            detailLevel,
+            rotationX: Math.PI / 3,
+        }));
     }
 
     // Entrance with blue glow

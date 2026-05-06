@@ -1,7 +1,7 @@
 
 import * as THREE from 'three';
 import { mats } from '../../../../render/materials/VoxelMaterials';
-import { voxel, FactoryOptions } from '../../../../render/utils/VoxelBuilder';
+import { cylinder, taperedCylinder, voxel, FactoryOptions } from '../../../../render/utils/VoxelBuilder';
 
 /**
  * Wind Turbine Factory - Multi-level renewable power
@@ -29,10 +29,10 @@ function buildLevel1(opts?: FactoryOptions) {
 
     // Wooden lattice structure
     for (let y = 0.2; y < 4.0; y += 1.0) {
-        g.add(voxel(0.1, 1.0, 0.1, mats.wood, -0.3, y, -0.3));
-        g.add(voxel(0.1, 1.0, 0.1, mats.wood, 0.3, y, -0.3));
-        g.add(voxel(0.1, 1.0, 0.1, mats.wood, -0.3, y, 0.3));
-        g.add(voxel(0.1, 1.0, 0.1, mats.wood, 0.3, y, 0.3));
+        g.add(cylinder(0.05, 1.0, mats.wood, -0.3, y, -0.3));
+        g.add(cylinder(0.05, 1.0, mats.wood, 0.3, y, -0.3));
+        g.add(cylinder(0.05, 1.0, mats.wood, -0.3, y, 0.3));
+        g.add(cylinder(0.05, 1.0, mats.wood, 0.3, y, 0.3));
         // Cross braces
         g.add(voxel(0.6, 0.08, 0.08, mats.wood, 0, y + 0.5, 0.3));
         g.add(voxel(0.6, 0.08, 0.08, mats.wood, 0, y + 0.5, -0.3));
@@ -60,15 +60,15 @@ function buildLevel1(opts?: FactoryOptions) {
 function buildLevel2(opts?: FactoryOptions) {
     const g = new THREE.Group();
     g.add(voxel(1.0, 0.3, 1.0, mats.concrete, 0, 0, 0));
-    g.add(voxel(0.5, 1.5, 0.5, mats.metalLight, 0, 0.3, 0));
-    g.add(voxel(0.45, 1.5, 0.45, mats.metalLight, 0, 1.8, 0));
-    g.add(voxel(0.4, 1.5, 0.4, mats.metalLight, 0, 3.3, 0));
-    g.add(voxel(0.35, 1.5, 0.35, mats.metalLight, 0, 4.8, 0));
+    g.add(taperedCylinder(0.2, 0.26, 1.5, mats.metalLight, 0, 0.3, 0));
+    g.add(taperedCylinder(0.18, 0.22, 1.5, mats.metalLight, 0, 1.8, 0));
+    g.add(taperedCylinder(0.16, 0.2, 1.5, mats.metalLight, 0, 3.3, 0));
+    g.add(taperedCylinder(0.14, 0.18, 1.5, mats.metalLight, 0, 4.8, 0));
     g.add(voxel(0.8, 0.5, 0.4, mats.metalLight, 0, 6.3, 0.3));
 
     const rotor = new THREE.Group();
     rotor.position.set(0, 6.5, 0.9);
-    rotor.add(voxel(0.25, 0.25, 0.3, mats.metal, 0, 0, 0));
+    rotor.add(cylinder(0.14, 0.3, mats.metal, 0, -0.15, 0));
     for (let i = 0; i < 3; i++) {
         const blade = new THREE.Group();
         blade.rotation.z = i * (Math.PI * 2 / 3);
@@ -89,14 +89,14 @@ function buildLevel3(opts?: FactoryOptions) {
     g.add(voxel(1.2, 0.4, 1.2, mats.concrete, 0, 0, 0));
 
     // Tower
-    g.add(voxel(0.6, 6.0, 0.6, mats.metalLight, 0, 0.4, 0));
+    g.add(taperedCylinder(0.18, 0.3, 6.0, mats.metalLight, 0, 0.4, 0));
     g.add(voxel(1.5, 0.6, 0.6, mats.metalLight, 0, 6.4, 0)); // Double nacelle
 
     // Two sets of rotors
     const addRotor = (z: number) => {
         const rotor = new THREE.Group();
         rotor.position.set(0, 6.7, z);
-        rotor.add(voxel(0.3, 0.3, 0.4, mats.blueMetal, 0, 0, 0));
+        rotor.add(cylinder(0.16, 0.4, mats.blueMetal, 0, -0.2, 0));
         for (let i = 0; i < 3; i++) {
             const blade = new THREE.Group();
             blade.rotation.z = i * (Math.PI * 2 / 3);
@@ -117,8 +117,9 @@ function buildLevel4(opts?: FactoryOptions) {
     g.add(voxel(1.6, 0.4, 1.6, mats.concrete, 0, 0, 0));
 
     // Sleek central tower
-    g.add(voxel(0.8, 8.0, 0.8, mats.concrete, 0, 0.4, 0));
-    g.add(voxel(0.85, 0.2, 0.85, mats.emissiveCyan, 0, 4.0, 0));
+    g.add(taperedCylinder(0.22, 0.38, 8.0, mats.concrete, 0, 0.4, 0));
+    g.add(voxel(0.85, 0.2, 0.85, mats.glass, 0, 4.0, 0));
+    g.add(voxel(0.42, 0.08, 0.42, mats.emissiveCyan, 0, 4.06, 0));
 
     // Vertical spiral blades
     for (let r = 0; r < 3; r++) {

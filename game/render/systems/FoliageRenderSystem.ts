@@ -6,7 +6,7 @@
 
 import * as THREE from 'three';
 import { BuildingFactory } from '../../../engine/render/utils/VoxelGenerators';
-import { matMaster } from '../../../engine/render/materials/VoxelMaterials';
+import { foliageInstancedMaterial } from '../../../engine/render/materials/VoxelMaterials';
 import { mergeGroupGeometry } from '../../../engine/render/utils/VoxelUtils';
 
 export interface FoliageItem {
@@ -108,7 +108,7 @@ export class FoliageRenderSystem {
 
                 // Allocate with some buffer to avoid frequent re-alloc
                 const capacity = Math.ceil(count * 1.5);
-                mesh = new THREE.InstancedMesh(geometry, matMaster, capacity);
+                mesh = new THREE.InstancedMesh(geometry, foliageInstancedMaterial, capacity);
 
                 mesh.castShadow = true;
                 mesh.receiveShadow = true;

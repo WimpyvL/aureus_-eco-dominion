@@ -11,6 +11,7 @@ import { BUILDINGS, COLORS } from '../../../engine/data/VoxelConstants';
 import { sharedBoxGeo } from '../../../engine/render/utils/VoxelBuilder';
 import { mats } from '../../../engine/render/materials/VoxelMaterials';
 import { ChunkStore } from '../../../engine/space/ChunkStore';
+import { SmoothDetailLevel } from '../../../engine/render';
 
 interface AnimationDef {
     mesh: THREE.Object3D;
@@ -30,6 +31,7 @@ interface Particle {
 
 export class BuildingRenderSystem {
     private scene: THREE.Scene;
+    private currentDetailLevel: 'LOW' | 'MEDIUM' | 'HIGH' = 'MEDIUM';
 
     // State
     private buildingMeshes: Map<number, THREE.Object3D> = new Map();
@@ -57,6 +59,7 @@ export class BuildingRenderSystem {
 
     // Cache to detect changes
     private tileCache: Map<number, { type: string; progress: number; state: string }> = new Map();
+    private templateCache: Map<string, THREE.Group> = new Map();
 
     constructor(scene: THREE.Scene) {
         this.scene = scene;
@@ -70,11 +73,28 @@ export class BuildingRenderSystem {
         this.scene.add(this.selectionCursor);
     }
 
-    public update(dt: number, time: number, chunks: Record<string, Chunk>, dirtyKeys?: Set<string>, viewMode: 'SURFACE' | 'FIRST_PERSON' = 'SURFACE') {
+    public update(
+        dt: number,
+        time: number,
+        chunks: Record<string, Chunk>,
+        dirtyKeys?: Set<string>,
+        viewMode: 'SURFACE' | 'FIRST_PERSON' = 'SURFACE',
+        zoomLevel: number = 65,
+        runtimeDetailCap: SmoothDetailLevel = 'HIGH'
+    ) {
         this.currentViewMode = viewMode;
+        const nextDetailLevel = this.getDetailLevel(viewMode, zoomLevel, runtimeDetailCap);
+        const detailLevelChanged = nextDetailLevel !== this.currentDetailLevel;
+        this.currentDetailLevel = nextDetailLevel;
 
         // 1. Sync Grid Changes
-        if (dirtyKeys && dirtyKeys.has('chunks')) {
+        if (detailLevelChanged) {
+            Object.values(chunks).forEach(chunk => {
+                chunk.meshDirty = true;
+            });
+        }
+
+        if ((dirtyKeys && dirtyKeys.has('chunks')) || detailLevelChanged) {
             Object.values(chunks).forEach(chunk => {
                 if (!chunk.meshDirty && !chunk.simDirty) return; // Optimization
 
@@ -92,17 +112,11 @@ export class BuildingRenderSystem {
                     const cached = this.tileCache.get(tile.id);
                     const currentProgress = 1 - ((tile.constructionTimeLeft || 0) / (BUILDINGS[tile.buildingType]?.buildTime || 1));
 
-                    // For infrastructure tiles, include connection state in the hash so neighbors trigger updates
-                    let connectionHash = '';
-                    if (tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE || tile.buildingType === BuildingType.POWER_LINE) {
-                        const conn = this.getInfrastructureConnections(tile, chunks);
-                        connectionHash = `_${conn.north}_${conn.south}_${conn.east}_${conn.west}`;
-                    }
-                    const stateHash = `${tile.buildingType}_${tile.level || 1}_${tile.isUnderConstruction}_${tile.integrity}_${tile.waterStatus}_${tile.powerStatus}${connectionHash}_VM:${viewMode}`;
+                    const stateHash = this.getTileVisualStateHash(tile, currentProgress, viewMode, chunks);
 
                     // Detect Changes
                     if (!cached || cached.type !== tile.buildingType || Math.abs(cached.progress - currentProgress) > 0.05 || cached.state !== stateHash) {
-                        this.updateTile(tile, currentProgress, chunks);
+                        this.updateTile(tile, currentProgress, chunks, stateHash);
                         this.tileCache.set(tile.id, {
                             type: tile.buildingType,
                             progress: currentProgress,
@@ -168,7 +182,33 @@ export class BuildingRenderSystem {
         };
     }
 
-    private updateTile(tile: GridTile, progress: number, chunks: Record<string, Chunk>) {
+    private getTileVisualStateHash(tile: GridTile, progress: number, viewMode: 'SURFACE' | 'FIRST_PERSON', chunks: Record<string, Chunk>): string {
+        let connectionHash = '';
+        if (tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE || tile.buildingType === BuildingType.POWER_LINE) {
+            const conn = this.getInfrastructureConnections(tile, chunks);
+            connectionHash = `_${conn.north}_${conn.south}_${conn.east}_${conn.west}_${conn.northDelta}_${conn.southDelta}_${conn.eastDelta}_${conn.westDelta}`;
+        }
+
+        const progressBucket = tile.isUnderConstruction
+            ? Math.round(progress * 20) / 20
+            : 1;
+
+        return [
+            tile.buildingType,
+            tile.level || 1,
+            tile.isUnderConstruction ? 1 : 0,
+            progressBucket.toFixed(2),
+            tile.integrity,
+            tile.waterStatus,
+            tile.powerStatus,
+            connectionHash,
+            `seed:${Math.abs(tile.x * 11 + tile.z * 17 + tile.id * 31)}`,
+            `VM:${viewMode}`,
+            `DL:${this.currentDetailLevel}`,
+        ].join('_');
+    }
+
+    private updateTile(tile: GridTile, progress: number, chunks: Record<string, Chunk>, templateKey: string) {
         // Remove existing
         if (this.buildingMeshes.has(tile.id)) {
             const mesh = this.buildingMeshes.get(tile.id)!;
@@ -193,68 +233,15 @@ export class BuildingRenderSystem {
 
         if (!(type in BuildingFactory)) return;
 
-        const root = new THREE.Group();
         const def = BUILDINGS[tile.buildingType];
         const w = def?.width || 1;
         const d = def?.depth || 1;
         const dx = (w - 1) / 2;
         const dz = (d - 1) / 2;
+        const root = this.getTemplateClone(type, tile, progress, chunks, templateKey);
 
         // Position (Raw world coordinates)
         root.position.set(tile.x + dx, tile.terrainHeight * 0.5, tile.z + dz);
-
-        // Render Main Building
-        if (tile.buildingType !== BuildingType.EMPTY) {
-            const seed = Math.abs(tile.x * 11 + tile.z * 17 + tile.id * 31);
-            const config: any = {
-                isUnderConstruction: tile.isUnderConstruction,
-                progress: progress,
-                integrity: tile.integrity,
-                waterStatus: tile.waterStatus,
-                powerStatus: tile.powerStatus,
-                level: tile.level || 1,
-                seed
-            };
-
-            let connections = undefined;
-            if (tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE || tile.buildingType === BuildingType.POWER_LINE) {
-                connections = this.getInfrastructureConnections(tile, chunks);
-            }
-
-            const buildingGroup = BuildingFactory[type]({ ...config, connections });
-
-
-
-            if (tile.isUnderConstruction) {
-                const scale = 0.4 + (progress * 0.6);
-                buildingGroup.scale.set(scale, scale, scale);
-                buildingGroup.position.y -= (1 - progress) * 0.5;
-
-                buildingGroup.traverse((c: any) => {
-                    if (c.isMesh) {
-                        c.material = new THREE.MeshStandardMaterial({
-                            color: 0x00ffff, transparent: true, opacity: 0.6,
-                            roughness: 0.2, metalness: 0.8, emissive: 0x00ffff, emissiveIntensity: 0.4
-                        });
-                    }
-                });
-
-                if (BuildingFactory['CONSTRUCTION']) {
-                    const scaffold = BuildingFactory['CONSTRUCTION']({
-                        width: w,
-                        depth: d,
-                        progress: progress
-                    });
-                    root.add(scaffold);
-                }
-            }
-
-            // --- Underground Connector Removed ---
-
-            root.add(buildingGroup);
-        }
-
-
 
         // Collect Animations
         const anims: AnimationDef[] = [];
@@ -272,6 +259,104 @@ export class BuildingRenderSystem {
 
         this.scene.add(root);
         this.buildingMeshes.set(tile.id, root);
+    }
+
+    private getTemplateClone(
+        type: BuildingType | 'ILLEGAL_CAMP',
+        tile: GridTile,
+        progress: number,
+        chunks: Record<string, Chunk>,
+        templateKey: string
+    ): THREE.Group {
+        let template = this.templateCache.get(templateKey);
+        if (!template) {
+            template = this.buildTemplate(type, tile, progress, chunks);
+            this.templateCache.set(templateKey, template);
+        }
+
+        return template.clone(true);
+    }
+
+    private buildTemplate(
+        type: BuildingType | 'ILLEGAL_CAMP',
+        tile: GridTile,
+        progress: number,
+        chunks: Record<string, Chunk>
+    ): THREE.Group {
+        const root = new THREE.Group();
+
+        if (tile.buildingType === BuildingType.EMPTY) {
+            return root;
+        }
+
+        const def = BUILDINGS[tile.buildingType];
+        const w = def?.width || 1;
+        const d = def?.depth || 1;
+        const seed = Math.abs(tile.x * 11 + tile.z * 17 + tile.id * 31);
+        const config: any = {
+            isUnderConstruction: tile.isUnderConstruction,
+            progress,
+            integrity: tile.integrity,
+            waterStatus: tile.waterStatus,
+            powerStatus: tile.powerStatus,
+            level: tile.level || 1,
+            detailLevel: this.currentDetailLevel,
+            seed,
+        };
+
+        let connections = undefined;
+        if (tile.buildingType === BuildingType.ROAD || tile.buildingType === BuildingType.PIPE || tile.buildingType === BuildingType.FENCE || tile.buildingType === BuildingType.POWER_LINE) {
+            connections = this.getInfrastructureConnections(tile, chunks);
+        }
+
+        const buildingGroup = BuildingFactory[type]({ ...config, connections });
+
+        if (tile.isUnderConstruction) {
+            const scale = 0.4 + (progress * 0.6);
+            buildingGroup.scale.set(scale, scale, scale);
+            buildingGroup.position.y -= (1 - progress) * 0.5;
+
+            buildingGroup.traverse((c: any) => {
+                if (c.isMesh) {
+                    c.material = new THREE.MeshStandardMaterial({
+                        color: 0x00ffff,
+                        transparent: true,
+                        opacity: 0.6,
+                        roughness: 0.2,
+                        metalness: 0.8,
+                        emissive: 0x00ffff,
+                        emissiveIntensity: 0.4
+                    });
+                }
+            });
+
+            if (BuildingFactory['CONSTRUCTION']) {
+                root.add(BuildingFactory['CONSTRUCTION']({
+                    width: w,
+                    depth: d,
+                    progress
+                }));
+            }
+        }
+
+        root.add(buildingGroup);
+        return root;
+    }
+
+    private getDetailLevel(viewMode: 'SURFACE' | 'FIRST_PERSON', zoomLevel: number, runtimeDetailCap: SmoothDetailLevel): 'LOW' | 'MEDIUM' | 'HIGH' {
+        let zoomDetail: SmoothDetailLevel;
+        if (viewMode === 'FIRST_PERSON') {
+            zoomDetail = 'HIGH';
+        } else if (zoomLevel <= 30) {
+            zoomDetail = 'HIGH';
+        } else if (zoomLevel <= 55) {
+            zoomDetail = 'MEDIUM';
+        } else {
+            zoomDetail = 'LOW';
+        }
+
+        const rank: Record<SmoothDetailLevel, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
+        return rank[zoomDetail] <= rank[runtimeDetailCap] ? zoomDetail : runtimeDetailCap;
     }
 
     // ... Animation Loop ...

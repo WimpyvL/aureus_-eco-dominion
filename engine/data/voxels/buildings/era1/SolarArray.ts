@@ -22,9 +22,18 @@ export const SolarArrayFactory = (opts?: FactoryOptions) => {
     }
 };
 
+function getDetailFlags(opts?: FactoryOptions) {
+    const detailLevel = opts?.detailLevel || 'MEDIUM';
+    return {
+        isLow: detailLevel === 'LOW',
+        isHigh: detailLevel === 'HIGH',
+    };
+}
+
 // Level 1: Primitive wooden frame
 function buildLevel1(opts?: FactoryOptions) {
     const g = new THREE.Group();
+    const { isLow, isHigh } = getDetailFlags(opts);
     g.add(voxel(1.6, 0.1, 0.1, mats.wood, 0, 0, -0.4));
     g.add(voxel(1.6, 0.1, 0.1, mats.wood, 0, 0, 0.4));
     g.add(voxel(0.08, 0.6, 0.08, mats.wood, -0.7, 0.1, 0));
@@ -34,8 +43,8 @@ function buildLevel1(opts?: FactoryOptions) {
     bed.position.y = 0.7;
     bed.rotation.x = Math.PI / 6;
     bed.add(voxel(1.8, 0.08, 1.2, mats.wood, 0, 0, 0));
-    for (let x = -0.65; x <= 0.65; x += 0.45) {
-        for (let z = -0.4; z <= 0.4; z += 0.4) {
+    for (let x = -0.65; x <= 0.65; x += isHigh ? 0.3 : isLow ? 0.65 : 0.45) {
+        for (let z = -0.4; z <= 0.4; z += isHigh ? 0.25 : isLow ? 0.8 : 0.4) {
             bed.add(voxel(0.4, 0.04, 0.35, mats.solar, x, 0.05, z));
         }
     }
@@ -47,6 +56,7 @@ function buildLevel1(opts?: FactoryOptions) {
 // Level 2: Fixed metal frame
 function buildLevel2(opts?: FactoryOptions) {
     const g = new THREE.Group();
+    const { isLow, isHigh } = getDetailFlags(opts);
     g.add(voxel(1.8, 0.15, 1.8, mats.concrete, 0, 0, 0));
     g.add(voxel(0.1, 0.8, 0.1, mats.metal, -0.7, 0.15, 0));
     g.add(voxel(0.1, 0.8, 0.1, mats.metal, 0.7, 0.15, 0));
@@ -54,8 +64,8 @@ function buildLevel2(opts?: FactoryOptions) {
     bed.position.y = 0.95;
     bed.rotation.x = Math.PI / 5;
     bed.add(voxel(2.0, 0.12, 1.4, mats.metal, 0, 0, 0));
-    for (let x = -0.75; x <= 0.75; x += 0.5) {
-        for (let z = -0.5; z <= 0.5; z += 0.5) {
+    for (let x = -0.75; x <= 0.75; x += isHigh ? 0.3 : isLow ? 0.75 : 0.5) {
+        for (let z = -0.5; z <= 0.5; z += isHigh ? 0.25 : isLow ? 1.0 : 0.5) {
             bed.add(voxel(0.45, 0.06, 0.45, mats.solar, x, 0.08, z));
         }
     }
@@ -70,6 +80,7 @@ function buildLevel2(opts?: FactoryOptions) {
 // Level 3: Dual-axis tracking
 function buildLevel3(opts?: FactoryOptions) {
     const g = new THREE.Group();
+    const { isLow, isHigh } = getDetailFlags(opts);
     g.add(voxel(1.8, 0.2, 1.8, mats.concrete, 0, 0, 0));
     // Main tracking pillar
     g.add(voxel(0.3, 1.2, 0.3, mats.metalLight, 0, 0.2, 0));
@@ -81,8 +92,8 @@ function buildLevel3(opts?: FactoryOptions) {
     bed.rotation.y = Math.PI / 8;
     bed.add(voxel(2.2, 0.15, 1.6, mats.metal, 0, 0, 0));
     // Detailed solar cells
-    for (let x = -0.8; x <= 0.8; x += 0.4) {
-        for (let z = -0.6; z <= 0.6; z += 0.4) {
+    for (let x = -0.8; x <= 0.8; x += isHigh ? 0.24 : isLow ? 0.8 : 0.4) {
+        for (let z = -0.6; z <= 0.6; z += isHigh ? 0.24 : isLow ? 0.6 : 0.4) {
             bed.add(voxel(0.35, 0.05, 0.35, mats.solar, x, 0.08, z));
         }
     }
@@ -94,6 +105,8 @@ function buildLevel3(opts?: FactoryOptions) {
 // Level 4: Modern concentrator tower
 function buildLevel4(opts?: FactoryOptions) {
     const g = new THREE.Group();
+    const { isLow, isHigh } = getDetailFlags(opts);
+    const isPowered = opts?.powerStatus === 'CONNECTED';
     g.add(voxel(2.0, 0.25, 2.0, mats.concrete, 0, 0, 0));
     // Central tower (Concrete)
     g.add(voxel(0.8, 2.5, 0.8, mats.concreteLight, 0, 0.25, 0));
@@ -101,12 +114,14 @@ function buildLevel4(opts?: FactoryOptions) {
     g.add(voxel(0.9, 0.1, 0.9, mats.blueMetal, 0, 2.0, 0));
     // Glowing top core
     if (!opts?.isUnderConstruction) {
-        g.add(voxel(0.6, 0.6, 0.6, mats.emissiveCyan, 0, 2.75, 0));
+        g.add(voxel(0.72, 0.72, 0.72, mats.glass, 0, 2.68, 0));
+        g.add(voxel(0.28, 0.28, 0.28, isPowered ? mats.emissiveCyan : mats.blueMetal, 0, 2.83, 0));
     }
     // High-tech panel ring
-    for (let i = 0; i < 4; i++) {
+    const panelCount = isHigh ? 8 : isLow ? 4 : 6;
+    for (let i = 0; i < panelCount; i++) {
         const radius = 0.8;
-        const angle = (i / 4) * Math.PI * 2;
+        const angle = (i / panelCount) * Math.PI * 2;
         const x = Math.cos(angle) * radius;
         const z = Math.sin(angle) * radius;
         const panel = new THREE.Group();

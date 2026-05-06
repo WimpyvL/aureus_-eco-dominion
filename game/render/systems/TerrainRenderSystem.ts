@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { JobSystem, MeshChunkResult, MeshChunkJob, ENGINE_SCHEMA_VERSION, createJob } from '../../../engine/jobs';
 import { GridTile } from '../../../types';
-import { matMaster, mats } from '../../../engine/render/materials/VoxelMaterials';
+import { terrainSurfaceMaterial, mats } from '../../../engine/render/materials/VoxelMaterials';
 import { CHUNK_SIZE, worldToChunk, toChunkKey } from '../../../engine/utils/coords';
 
 interface ChunkRenderData {
@@ -263,8 +263,6 @@ export class TerrainRenderSystem {
             }
         });
 
-        console.log(`[TerrainRenderSystem] Requesting build for ${key} (View: ${this.viewMode})`);
-
         this.jobSystem.enqueue(job);
 
         const chunk = this.chunks.get(key);
@@ -318,7 +316,9 @@ export class TerrainRenderSystem {
             return mesh;
         };
 
-        chunk.mesh = createMesh(res.solid, matMaster, true);
+        // Terrain should receive shadows from buildings/foliage, but not cast its own
+        // broad self-shadow bands back onto itself.
+        chunk.mesh = createMesh(res.solid, terrainSurfaceMaterial, false);
         if (chunk.mesh) {
             this.scene.add(chunk.mesh);
         } else {

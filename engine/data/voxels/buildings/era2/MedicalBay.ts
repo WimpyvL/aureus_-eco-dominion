@@ -1,7 +1,7 @@
 
 import * as THREE from 'three';
 import { mats } from '../../../../render/materials/VoxelMaterials';
-import { voxel, FactoryOptions } from '../../../../render/utils/VoxelBuilder';
+import { dome, torusRing, voxel, FactoryOptions } from '../../../../render/utils/VoxelBuilder';
 
 /**
  * Medical Bay Factory - Multi-level healthcare
@@ -101,15 +101,22 @@ function buildLevel3(opts?: FactoryOptions) {
 function buildLevel4(opts?: FactoryOptions) {
     const g = new THREE.Group();
     const isPowered = opts?.powerStatus === 'CONNECTED';
+    const detailLevel = opts?.detailLevel ?? 'MEDIUM';
     g.add(voxel(2.2, 0.25, 2.2, mats.concrete, 0, 0, 0));
 
     // Modern concrete shell
     g.add(voxel(1.9, 1.2, 1.9, mats.concreteLight, 0, 0.25, 0));
 
     // Glass biosphere top
-    g.add(voxel(1.5, 1.5, 1.5, mats.glass, 0, 1.45, 0));
-    g.add(voxel(1.55, 0.1, 1.55, mats.blueMetal, 0, 1.45, 0));
-    g.add(voxel(1.55, 0.1, 1.55, mats.blueMetal, 0, 2.95, 0));
+    g.add(dome(1.0, mats.glass, 0, 1.45, 0, { detailLevel }));
+    g.add(torusRing(1.0, 0.06, mats.blueMetal, 0, 1.45, 0, {
+        detailLevel,
+        rotationX: Math.PI / 2,
+    }));
+    g.add(torusRing(0.62, 0.04, mats.blueMetal, 0, 2.12, 0, {
+        detailLevel,
+        rotationX: Math.PI / 2,
+    }));
 
     // Interior plants (healing herbs)
     g.add(voxel(0.4, 0.8, 0.4, mats.progressGreen, 0, 1.45, 0));

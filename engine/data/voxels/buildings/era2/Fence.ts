@@ -90,16 +90,21 @@ function buildLevel3(opts?: FactoryOptions) {
 
     // Industrial post
     g.add(voxel(0.2, 1.6, 0.2, mats.blueMetal, 0, 0, 0));
-    g.add(voxel(0.25, 0.1, 0.25, mats.emissiveCyan, 0, 1.6, 0));
+    g.add(voxel(0.25, 0.1, 0.25, mats.glass, 0, 1.6, 0));
+    g.add(voxel(0.12, 0.05, 0.12, mats.emissiveCyan, 0, 1.625, 0));
 
     const addLaser = (isZ: boolean, dir: number) => {
         const x = isZ ? 0 : 0.25 * dir;
         const z = isZ ? 0.25 * dir : 0;
-        const w = isZ ? 0.04 : 0.5;
-        const d = isZ ? 0.5 : 0.04;
-        // Two laser beams
-        g.add(voxel(w, 0.02, d, mats.emissiveCyan, x, 0.6, z));
-        g.add(voxel(w, 0.02, d, mats.emissiveCyan, x, 1.2, z));
+        const w = isZ ? 0.05 : 0.54;
+        const d = isZ ? 0.54 : 0.05;
+        const beamW = isZ ? 0.02 : 0.44;
+        const beamD = isZ ? 0.44 : 0.02;
+        // Glass channels with a smaller live beam inside so the fence reads as built hardware.
+        g.add(voxel(w, 0.08, d, mats.glass, x, 0.57, z));
+        g.add(voxel(w, 0.08, d, mats.glass, x, 1.17, z));
+        g.add(voxel(beamW, 0.02, beamD, mats.emissiveCyan, x, 0.6, z));
+        g.add(voxel(beamW, 0.02, beamD, mats.emissiveCyan, x, 1.2, z));
         // Base rail
         g.add(voxel(w + 0.05, 0.1, d + 0.05, mats.metal, x, 0, z));
     };
@@ -120,16 +125,22 @@ function buildLevel4(opts?: FactoryOptions) {
 
     // Glowing emitter spire
     g.add(voxel(0.15, 2.0, 0.15, mats.metalLight, 0, 0, 0));
-    g.add(voxel(0.2, 0.1, 0.2, mats.emissiveCyan, 0, 0.5, 0));
-    g.add(voxel(0.2, 0.1, 0.2, mats.emissiveCyan, 0, 1.5, 0));
+    g.add(voxel(0.2, 0.1, 0.2, mats.glass, 0, 0.5, 0));
+    g.add(voxel(0.2, 0.1, 0.2, mats.glass, 0, 1.5, 0));
+    g.add(voxel(0.1, 0.05, 0.1, mats.emissiveCyan, 0, 0.525, 0));
+    g.add(voxel(0.1, 0.05, 0.1, mats.emissiveCyan, 0, 1.525, 0));
 
     const addField = (isZ: boolean, dir: number) => {
         const x = isZ ? 0 : 0.25 * dir;
         const z = isZ ? 0.25 * dir : 0;
-        const w = isZ ? 0.02 : 0.5;
-        const d = isZ ? 0.5 : 0.02;
-        // The force field itself (glowing cyan plane)
-        g.add(voxel(w, 1.8, d, mats.emissiveCyan, x, 0.1, z));
+        const frameW = isZ ? 0.07 : 0.54;
+        const frameD = isZ ? 0.54 : 0.07;
+        const fieldW = isZ ? 0.025 : 0.42;
+        const fieldD = isZ ? 0.42 : 0.025;
+        // Blue frame plus glass shell keeps the force field readable without becoming a cyan placeholder slab.
+        g.add(voxel(frameW, 1.82, frameD, mats.blueMetal, x, 0.09, z));
+        g.add(voxel(frameW - 0.02, 1.74, frameD - 0.02, mats.glass, x, 0.13, z));
+        g.add(voxel(fieldW, 1.56, fieldD, mats.emissiveCyan, x, 0.22, z));
     };
 
     if (conn.north || connCount === 0) addField(true, -1);

@@ -109,7 +109,7 @@ function buildLevel4(opts?: FactoryOptions) {
     // Holographic simulation pods on roof
     if (!opts?.isUnderConstruction && isPowered) {
         g.add(voxel(0.6, 0.6, 0.6, mats.glass, 0, 2.8, 0));
-        g.add(voxel(0.4, 0.4, 0.4, mats.emissiveCyan, 0, 2.9, 0)); // Hologram
+        g.add(voxel(0.22, 0.22, 0.22, mats.emissiveCyan, 0, 2.95, 0)); // Hologram core
     }
 
     // Modern entrance with glowing status

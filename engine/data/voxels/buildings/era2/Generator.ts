@@ -93,7 +93,9 @@ function buildLevel3(opts?: FactoryOptions) {
 
     // Advanced display
     if (!opts?.isUnderConstruction) {
-        g.add(voxel(0.5, 0.4, 0.05, mats.emissiveCyan, 0, 0.9, 0.51));
+        g.add(voxel(0.5, 0.4, 0.05, mats.blueMetal, 0, 0.9, 0.51));
+        g.add(voxel(0.42, 0.3, 0.02, mats.glass, 0, 0.95, 0.53));
+        g.add(voxel(0.2, 0.1, 0.01, mats.emissiveCyan, 0, 1.02, 0.545));
     }
 
     return g;
@@ -112,7 +114,8 @@ function buildLevel4(opts?: FactoryOptions) {
     g.add(voxel(0.6, 0.6, 0.05, mats.glass, 0, 0.8, 0.71));
     if (!opts?.isUnderConstruction) {
         // Glowing fusion plasma
-        g.add(voxel(0.5, 0.5, 0.5, mats.emissiveCyan, 0, 0.85, 0));
+        g.add(voxel(0.6, 0.6, 0.6, mats.glass, 0, 0.85, 0));
+        g.add(voxel(0.28, 0.28, 0.28, mats.emissiveCyan, 0, 0.92, 0));
     }
 
     // Cooling vents

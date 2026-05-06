@@ -579,7 +579,7 @@ export class AureusWorld extends BaseWorld {
         // Initial sync of all currently loaded chunks
         this.workerPool.broadcast({ type: 'SYNC_CHUNKS', payload: state.chunks });
         this.terrainRenderSystem.syncGrid(Object.values(state.chunks).flatMap(c => (c as any).tiles));
-        this.buildingRenderSystem.update(0, 0, state.chunks, new Set());
+        this.buildingRenderSystem.update(0, 0, state.chunks, new Set(), 'SURFACE', this.cameraSystem.cameraZoom);
         if (state.agents.length > 0) {
             const firstAgent = state.agents[0];
             this.cameraSystem.zoomToPosition(firstAgent.x, firstAgent.z, 2);
@@ -803,7 +803,15 @@ export class AureusWorld extends BaseWorld {
             this.agentRenderSystem.update(ctx.dt, ctx.time, allAgents, 0.1); // Low zoom level for full detail
 
             this.terrainRenderSystem.update(this.render.getCamera().position, this.render.getCamera());
-            this.buildingRenderSystem.update(ctx.dt, ctx.time, state.chunks, this.stateManager.getDirtyKeys());
+            this.buildingRenderSystem.update(
+                ctx.dt,
+                ctx.time,
+                state.chunks,
+                this.stateManager.getDirtyKeys(),
+                'FIRST_PERSON',
+                0.1,
+                this.render.getRuntimeQuality().smoothDetail
+            );
         } else {
             // Surface View
             this.dungeonRenderSystem.setVisible(false);
@@ -820,7 +828,15 @@ export class AureusWorld extends BaseWorld {
             this.agentRenderSystem.update(ctx.dt, ctx.time, allAgents, zoomLevel);
 
             this.terrainRenderSystem.update(this.cameraSystem.cameraFocus, this.render.getCamera());
-            this.buildingRenderSystem.update(ctx.dt, ctx.time, state.chunks, this.stateManager.getDirtyKeys());
+            this.buildingRenderSystem.update(
+                ctx.dt,
+                ctx.time,
+                state.chunks,
+                this.stateManager.getDirtyKeys(),
+                'SURFACE',
+                zoomLevel,
+                this.render.getRuntimeQuality().smoothDetail
+            );
         }
 
         const cursor = this.inputSystem?.getCurrentCursor() || null;
@@ -1093,6 +1109,11 @@ export class AureusWorld extends BaseWorld {
         const state = this.stateManager.getState();
 
         return {
+            qualityLevel: this.render.getRuntimeQuality().label,
+            qualitySmoothDetail: this.render.getRuntimeQuality().smoothDetail,
+            qualityPixelRatio: this.render.getRuntimeQuality().pixelRatio,
+            qualityShadows: this.render.getRuntimeQuality().shadowMap,
+
             // Render Stats
             drawCalls: renderStats.drawCalls,
             triangles: renderStats.triangles,

@@ -1,10 +1,11 @@
 
 import * as THREE from 'three';
 import { mats } from '../../../../render/materials/VoxelMaterials';
-import { voxel, FactoryOptions } from '../../../../render/utils/VoxelBuilder';
+import { dome, torusRing, voxel, FactoryOptions } from '../../../../render/utils/VoxelBuilder';
 
-export const GreenTechLabFactory = () => {
+export const GreenTechLabFactory = (opts?: FactoryOptions) => {
     const g = new THREE.Group();
+    const detailLevel = opts?.detailLevel ?? 'MEDIUM';
 
     // Large foundation
     g.add(voxel(3.0, 0.3, 3.0, mats.concrete, 0, 0, 0));
@@ -20,22 +21,14 @@ export const GreenTechLabFactory = () => {
     }
 
     // MAIN BIOSPHERE DOME (on top of main building)
-    const mainDome = new THREE.Mesh(
-        new THREE.SphereGeometry(1.0, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2),
-        mats.glass
-    );
-    mainDome.position.set(0, 2.8, 0);
-    g.add(mainDome);
+    g.add(dome(1.0, mats.glass, 0, 2.8, 0, { detailLevel }));
 
     // Dome frame rings
     for (let r = 0.3; r <= 0.9; r += 0.3) {
-        const ring = new THREE.Mesh(
-            new THREE.TorusGeometry(r, 0.04, 8, 24),
-            mats.greenMetal
-        );
-        ring.rotation.x = Math.PI / 2;
-        ring.position.y = 2.8 + Math.sqrt(1.0 - r * r) * 0.5;
-        g.add(ring);
+        g.add(torusRing(r, 0.04, mats.greenMetal, 0, 2.8 + Math.sqrt(1.0 - r * r) * 0.5, 0, {
+            detailLevel,
+            rotationX: Math.PI / 2,
+        }));
     }
 
     // Plants inside main dome

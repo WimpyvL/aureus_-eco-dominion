@@ -11,7 +11,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 
 import { WorldHost, Runtime } from '../engine';
-import { ThreeRenderAdapter } from '../engine/render';
+import { RuntimeQualityGovernor, ThreeRenderAdapter, getRecommendedRenderQuality } from '../engine/render';
 import { DebugHud } from '../engine/tools';
 import { AureusWorld, AureusWorldConfig } from './AureusWorld';
 import { GameState, SfxType } from '../types';
@@ -127,9 +127,12 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                 setLoading({ stage: 'Initializing renderer...', percent: 10 });
                 console.log('[useAureusEngine] Creating render adapter...');
 
+                const renderQuality = getRecommendedRenderQuality();
                 const render = new ThreeRenderAdapter({
-                    antialias: false,
-                    shadowMap: false,
+                    antialias: renderQuality.antialias,
+                    shadowMap: renderQuality.shadowMap,
+                    pixelRatio: renderQuality.pixelRatio,
+                    shadowMapSize: renderQuality.shadowMapSize,
                     fogEnabled: true,
                 });
                 render.init(container);
@@ -200,6 +203,7 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                     maxSimStepsPerFrame: 3, // Reduced from 5
                     profilerEnabled: true,
                 });
+                const qualityGovernor = new RuntimeQualityGovernor(runtimeInstance, render);
                 setRuntime(runtimeInstance);
 
                 if (cancelled) {
@@ -246,9 +250,11 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                 setLoading({ stage: 'Starting simulation...', percent: 80 });
                 // Stage 7: Start runtime
                 runtimeInstance.start();
+                qualityGovernor.start();
 
                 if (cancelled) {
                     unsubscribe();
+                    qualityGovernor.stop();
                     runtimeInstance.stop();
                     return;
                 }
@@ -289,6 +295,7 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                         delete (window as any).__aureusGetState;
                     }
                     unsubscribe();
+                    qualityGovernor.stop();
                     runtimeInstance.stop();
                     // debugHudInstance.dispose();
                     worldInstance.teardown();

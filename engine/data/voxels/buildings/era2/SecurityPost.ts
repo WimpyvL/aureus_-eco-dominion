@@ -1,7 +1,7 @@
 
 import * as THREE from 'three';
 import { mats } from '../../../../render/materials/VoxelMaterials';
-import { voxel, FactoryOptions } from '../../../../render/utils/VoxelBuilder';
+import { cylinder, taperedCylinder, voxel, FactoryOptions } from '../../../../render/utils/VoxelBuilder';
 
 /**
  * Security Post Factory - Multi-level protection
@@ -29,10 +29,10 @@ function buildLevel1(opts?: FactoryOptions) {
 
     // Wooden corner posts
     for (let y = 0.2; y < 3.0; y += 1.0) {
-        g.add(voxel(0.1, 1.0, 0.1, mats.wood, -0.4, y, -0.4));
-        g.add(voxel(0.1, 1.0, 0.1, mats.wood, 0.4, y, -0.4));
-        g.add(voxel(0.1, 1.0, 0.1, mats.wood, -0.4, y, 0.4));
-        g.add(voxel(0.1, 1.0, 0.1, mats.wood, 0.4, y, 0.4));
+        g.add(cylinder(0.05, 1.0, mats.wood, -0.4, y, -0.4));
+        g.add(cylinder(0.05, 1.0, mats.wood, 0.4, y, -0.4));
+        g.add(cylinder(0.05, 1.0, mats.wood, -0.4, y, 0.4));
+        g.add(cylinder(0.05, 1.0, mats.wood, 0.4, y, 0.4));
     }
 
     // Observation platform
@@ -58,7 +58,7 @@ function buildLevel2(opts?: FactoryOptions) {
     g.add(voxel(1.0, 0.4, 1.0, mats.concrete, 0, 0, 0));
     g.add(voxel(0.8, 1.2, 0.8, mats.metal, 0, 0.4, 0));
     g.add(voxel(0.3, 0.5, 0.05, mats.glass, 0, 0.9, 0.41));
-    g.add(voxel(0.35, 4.0, 0.35, mats.metal, 0, 1.6, 0));
+    g.add(taperedCylinder(0.13, 0.18, 4.0, mats.metal, 0, 1.6, 0));
     g.add(voxel(1.2, 0.15, 1.2, mats.concrete, 0, 5.0, 0));
     g.add(voxel(1.0, 1.0, 1.0, mats.glass, 0, 5.15, 0));
     g.add(voxel(1.05, 0.1, 1.05, mats.metal, 0, 6.15, 0));
@@ -81,7 +81,7 @@ function buildLevel3(opts?: FactoryOptions) {
     g.add(voxel(1.4, 0.4, 1.4, mats.concrete, 0, 0, 0));
 
     // Heavy concrete tower
-    g.add(voxel(1.0, 5.5, 1.0, mats.concrete, 0, 0.4, 0));
+    g.add(taperedCylinder(0.36, 0.5, 5.5, mats.concrete, 0, 0.4, 0));
 
     // Armored observation slits
     g.add(voxel(1.1, 0.2, 0.8, mats.darkPipe, 0, 5.0, 0));
@@ -90,7 +90,8 @@ function buildLevel3(opts?: FactoryOptions) {
     // Radar dish
     g.add(voxel(0.1, 0.6, 0.6, mats.metal, 0, 6.1, 0.3));
     if (!opts?.isUnderConstruction && isPowered) {
-        g.add(voxel(0.12, 0.12, 0.12, mats.emissiveCyan, 0, 6.3, 0.5));
+        g.add(voxel(0.16, 0.16, 0.16, mats.glass, 0, 6.28, 0.5));
+        g.add(voxel(0.08, 0.08, 0.08, mats.emissiveCyan, 0, 6.32, 0.5));
     }
 
     // Heavy spotlight
@@ -106,7 +107,7 @@ function buildLevel4(opts?: FactoryOptions) {
     g.add(voxel(1.4, 0.4, 1.4, mats.concrete, 0, 0, 0));
 
     // Sleek metal spire
-    g.add(voxel(0.6, 7.0, 0.6, mats.metalLight, 0, 0.4, 0));
+    g.add(taperedCylinder(0.18, 0.28, 7.0, mats.metalLight, 0, 0.4, 0));
     g.add(voxel(0.65, 0.1, 0.65, mats.blueMetal, 0, 1.5, 0));
     g.add(voxel(0.65, 0.1, 0.65, mats.blueMetal, 0, 4.0, 0));
     g.add(voxel(0.65, 0.1, 0.65, mats.blueMetal, 0, 6.5, 0));
@@ -124,7 +125,8 @@ function buildLevel4(opts?: FactoryOptions) {
 
     // Top beacon
     if (!opts?.isUnderConstruction) {
-        g.add(voxel(0.2, 0.4, 0.2, mats.emissiveCyan, 0, 7.4, 0));
+        g.add(voxel(0.26, 0.44, 0.26, mats.glass, 0, 7.38, 0));
+        g.add(voxel(0.12, 0.28, 0.12, mats.emissiveCyan, 0, 7.46, 0));
     }
 
     return g;

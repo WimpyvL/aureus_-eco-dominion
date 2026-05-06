@@ -114,7 +114,9 @@ function buildLevel3(opts?: FactoryOptions) {
 
     // Display
     if (!opts?.isUnderConstruction) {
-        g.add(voxel(0.4, 0.25, 0.05, mats.emissiveCyan, 0, 1.85, 0.95));
+        g.add(voxel(0.4, 0.25, 0.05, mats.blueMetal, 0, 1.85, 0.95));
+        g.add(voxel(0.32, 0.18, 0.02, mats.glass, 0, 1.9, 0.98));
+        g.add(voxel(0.16, 0.08, 0.01, mats.emissiveCyan, 0, 1.95, 0.995));
     }
 
     // Ventilation
@@ -160,7 +162,9 @@ function buildLevel4(opts?: FactoryOptions) {
 
     // Status display
     if (!opts?.isUnderConstruction) {
-        g.add(voxel(0.5, 0.3, 0.05, isPowered ? mats.emissiveCyan : mats.emissiveRed, 0, 2.0, 0.98));
+        g.add(voxel(0.5, 0.3, 0.05, mats.blueMetal, 0, 2.0, 0.98));
+        g.add(voxel(0.42, 0.22, 0.02, mats.glass, 0, 2.04, 1.01));
+        g.add(voxel(0.18, 0.08, 0.01, isPowered ? mats.emissiveCyan : mats.emissiveRed, 0, 2.11, 1.02));
     }
 
     return g;

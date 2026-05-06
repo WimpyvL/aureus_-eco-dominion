@@ -245,9 +245,10 @@ export class EnvironmentRenderSystem {
                 sunPos.y,
                 this.cameraFocus.z + sunPos.z
             );
-            // Bias helps prevent shadow acne on voxel surfaces
-            this.adapter.directionalLight.shadow.bias = -0.0001; // Slightly reduced bias -0.0005 was too aggressive
-            this.adapter.directionalLight.shadow.normalBias = 0.04; // Increased normal bias for better results on vertical faces
+            // Favor stable contact shadows without letting the terrain shadow itself
+            // into large moving bands as the light/camera shifts.
+            this.adapter.directionalLight.shadow.bias = -0.00002;
+            this.adapter.directionalLight.shadow.normalBias = 0.018;
             // Light target follows camera
             this.adapter.directionalLight.target.position.set(
                 this.cameraFocus.x,
@@ -259,7 +260,7 @@ export class EnvironmentRenderSystem {
             // Disable shadows at night for softer moonlit look, AND at low zoom for performance
             const zoom = this.adapter.getCamera().zoom;
             const isZoomedOut = zoom < 0.6;
-            this.adapter.directionalLight.castShadow = !isNight && !isZoomedOut;
+            this.adapter.directionalLight.castShadow = this.adapter.getRuntimeQuality().shadowMap && !isNight && !isZoomedOut;
         }
     }
 

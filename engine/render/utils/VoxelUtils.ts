@@ -17,6 +17,12 @@ export function mergeGroupGeometry(group: THREE.Group): THREE.BufferGeometry {
         if (child instanceof THREE.Mesh) {
             let geom = child.geometry.clone();
 
+            // RoundedBoxGeometry and some Three primitives are indexed while legacy voxel
+            // meshes are not. Normalize before merge so foliage batching can combine both.
+            if (geom.index) {
+                geom = geom.toNonIndexed();
+            }
+
             // Apply transform
             geom.applyMatrix4(child.matrixWorld);
 

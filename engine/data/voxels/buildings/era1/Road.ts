@@ -29,12 +29,38 @@ export const RoadFactory = (opts?: FactoryOptions) => {
 
     // Count connections to determine road type
     const connCount = [conn.north, conn.south, conn.east, conn.west].filter(Boolean).length;
+    const ROAD_THICKNESS = 0.08;
+    const ROAD_SIZE = 1.04;
+    const EDGE_OVERLAP = 0.18;
+    const EDGE_INSET = 0.49;
+    const CORNER_PATCH_SIZE = 0.26;
 
     const createLaneMark = (w: number, d: number, x = 0, z = 0) =>
         configureRoadOverlay(voxel(w, 0.02, d, roadLaneMarkMat, x, 0.1, z));
 
+    const addEdgeOverlap = (direction: 'north' | 'south' | 'east' | 'west') => {
+        if (direction === 'north') {
+            deck.add(voxel(ROAD_SIZE - 0.02, ROAD_THICKNESS, EDGE_OVERLAP, mats.asphalt, 0, 0, -EDGE_INSET));
+        } else if (direction === 'south') {
+            deck.add(voxel(ROAD_SIZE - 0.02, ROAD_THICKNESS, EDGE_OVERLAP, mats.asphalt, 0, 0, EDGE_INSET));
+        } else if (direction === 'east') {
+            deck.add(voxel(EDGE_OVERLAP, ROAD_THICKNESS, ROAD_SIZE - 0.02, mats.asphalt, EDGE_INSET, 0, 0));
+        } else if (direction === 'west') {
+            deck.add(voxel(EDGE_OVERLAP, ROAD_THICKNESS, ROAD_SIZE - 0.02, mats.asphalt, -EDGE_INSET, 0, 0));
+        }
+    };
+
+    const addCornerPatch = (x: number, z: number) => {
+        deck.add(voxel(CORNER_PATCH_SIZE, ROAD_THICKNESS, CORNER_PATCH_SIZE, mats.asphalt, x, 0, z));
+    };
+
     // Asphalt base - always present
-    deck.add(voxel(1.0, 0.08, 1.0, mats.asphalt, 0, 0, 0));
+    deck.add(voxel(ROAD_SIZE, ROAD_THICKNESS, ROAD_SIZE, mats.asphalt, 0, 0, 0));
+
+    if (conn.north) addEdgeOverlap('north');
+    if (conn.south) addEdgeOverlap('south');
+    if (conn.east) addEdgeOverlap('east');
+    if (conn.west) addEdgeOverlap('west');
 
     if (connCount === 0) {
         // Isolated road - show all directions as potential
@@ -64,12 +90,16 @@ export const RoadFactory = (opts?: FactoryOptions) => {
             // Corner - no center line, just edge markings
             // Add corner accent
             if (conn.north && conn.east) {
+                addCornerPatch(0.4, -0.4);
                 deck.add(configureRoadOverlay(voxel(0.15, 0.03, 0.15, roadAccentMat, 0.35, 0.1, -0.35)));
             } else if (conn.north && conn.west) {
+                addCornerPatch(-0.4, -0.4);
                 deck.add(configureRoadOverlay(voxel(0.15, 0.03, 0.15, roadAccentMat, -0.35, 0.1, -0.35)));
             } else if (conn.south && conn.east) {
+                addCornerPatch(0.4, 0.4);
                 deck.add(configureRoadOverlay(voxel(0.15, 0.03, 0.15, roadAccentMat, 0.35, 0.1, 0.35)));
             } else if (conn.south && conn.west) {
+                addCornerPatch(-0.4, 0.4);
                 deck.add(configureRoadOverlay(voxel(0.15, 0.03, 0.15, roadAccentMat, -0.35, 0.1, 0.35)));
             }
         }

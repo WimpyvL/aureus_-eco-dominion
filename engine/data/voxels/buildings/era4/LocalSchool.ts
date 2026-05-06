@@ -82,7 +82,9 @@ export const LocalSchoolFactory = () => {
 
     // School sign
     g.add(voxel(0.8, 0.5, 0.1, mats.concreteLight, 0, 2.5, -0.5));
-    g.add(voxel(0.6, 0.3, 0.05, mats.emissiveCyan, 0, 2.55, -0.44));
+    g.add(voxel(0.6, 0.3, 0.05, mats.blueMetal, 0, 2.55, -0.44));
+    g.add(voxel(0.48, 0.2, 0.02, mats.glass, 0, 2.6, -0.405));
+    g.add(voxel(0.2, 0.08, 0.01, mats.emissiveCyan, 0, 2.66, -0.39));
 
     return g;
 };

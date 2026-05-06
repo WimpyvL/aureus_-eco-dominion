@@ -7,6 +7,7 @@ export const RecyclingPlantFactory = (opts?: FactoryOptions) => {
     const g = new THREE.Group();
     const isPowered = opts?.powerStatus === 'CONNECTED';
     const isWatered = opts?.waterStatus === 'CONNECTED';
+    const { isLow, isHigh } = getDetailFlags(opts);
 
     // Foundation
     g.add(voxel(2.0, 0.35, 2.0, mats.concrete, 0, 0, 0));
@@ -23,7 +24,9 @@ export const RecyclingPlantFactory = (opts?: FactoryOptions) => {
     // Processing cylinders
     g.add(voxel(0.7, 2.2, 0.7, mats.greenMetal, 0.55, 0.35, 0.55));
     g.add(voxel(0.75, 0.1, 0.75, mats.metal, 0.55, 1.2, 0.55));
-    g.add(voxel(0.75, 0.1, 0.75, mats.metal, 0.55, 1.8, 0.55));
+    if (!isLow) {
+        g.add(voxel(0.75, 0.1, 0.75, mats.metal, 0.55, 1.8, 0.55));
+    }
 
     // Status light on cylinder
     if (!opts?.isUnderConstruction) {
@@ -39,11 +42,28 @@ export const RecyclingPlantFactory = (opts?: FactoryOptions) => {
     // Exhaust tower (clean steam)
     g.add(voxel(0.35, 3.5, 0.35, mats.concreteLight, -0.75, 0.35, 0.75));
     g.add(voxel(0.45, 0.08, 0.45, mats.metal, -0.75, 2.2, 0.75));
-    g.add(voxel(0.45, 0.08, 0.45, mats.metal, -0.75, 2.8, 0.75));
+    if (!isLow) {
+        g.add(voxel(0.45, 0.08, 0.45, mats.metal, -0.75, 2.8, 0.75));
+    }
     g.add(voxel(0.5, 0.15, 0.5, mats.glass, -0.75, 3.5, 0.75));
 
     // Solar panels on roof
     g.add(voxel(0.6, 0.08, 0.4, mats.solar, -0.2, 2.45, -0.2));
+    if (isHigh) {
+        for (let x = 0.2; x <= 0.9; x += 0.23) {
+            g.add(voxel(0.08, 0.08, 0.08, mats.emissiveGreen, x, 0.6, 0.92));
+        }
+        g.add(voxel(0.2, 0.08, 0.55, mats.metal, 0.9, 0.35, 0));
+        g.add(voxel(0.1, 0.08, 0.4, mats.metal, -0.6, 0.35, -0.9));
+    }
 
     return g;
 };
+
+function getDetailFlags(opts?: FactoryOptions) {
+    const detailLevel = opts?.detailLevel || 'MEDIUM';
+    return {
+        isLow: detailLevel === 'LOW',
+        isHigh: detailLevel === 'HIGH',
+    };
+}
