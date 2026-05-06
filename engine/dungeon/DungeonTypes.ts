@@ -21,6 +21,7 @@ export interface DungeonState {
     unlocked: boolean;         // Is the dungeon accessible?
     miners: DungeonMiner[];
     buildings: DungeonBuilding[];
+    renderVersion: number;
 
     // Pending resources (mined but not yet surged to surface)
     gold: number;

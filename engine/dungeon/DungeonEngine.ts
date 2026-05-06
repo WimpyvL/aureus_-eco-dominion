@@ -30,17 +30,29 @@ export class DungeonEngine {
     };
 
     private state: DungeonState;
+    private suppressRenderInvalidationDepth = 0;
 
     constructor(state: DungeonState) {
         this.state = state;
+        this.ensureRenderVersion();
 
         // Initialize arrays if null
         if (!this.state.voxelData) {
             const { x, y, z } = this.state.gridSize;
             this.state.voxelData = new Uint8Array(x * y * z);
             this.state.revealedData = new Uint8Array(x * y * z);
-            this.initWorld();
+            this.runWithoutRenderInvalidation(() => this.initWorld());
+            this.markRenderDirty();
         }
+    }
+
+    getState(): DungeonState {
+        return this.state;
+    }
+
+    getRenderVersion(): number {
+        this.ensureRenderVersion();
+        return this.state.renderVersion;
     }
 
     private initWorld() {
@@ -86,6 +98,27 @@ export class DungeonEngine {
         this.reveal(midX, 1, midZ);
     }
 
+    private ensureRenderVersion() {
+        if (typeof this.state.renderVersion !== 'number' || !Number.isFinite(this.state.renderVersion)) {
+            this.state.renderVersion = 0;
+        }
+    }
+
+    private markRenderDirty() {
+        if (this.suppressRenderInvalidationDepth > 0) return;
+        this.ensureRenderVersion();
+        this.state.renderVersion += 1;
+    }
+
+    private runWithoutRenderInvalidation<T>(fn: () => T): T {
+        this.suppressRenderInvalidationDepth += 1;
+        try {
+            return fn();
+        } finally {
+            this.suppressRenderInvalidationDepth -= 1;
+        }
+    }
+
     // --- Accessors ---
 
     isValid(x: number, y: number, z: number): boolean {
@@ -112,7 +145,10 @@ export class DungeonEngine {
 
     setBlockId(x: number, y: number, z: number, id: number) {
         if (!this.isValid(x, y, z)) return;
-        this.state.voxelData![this.index(Math.floor(x), Math.floor(y), Math.floor(z))] = id;
+        const index = this.index(Math.floor(x), Math.floor(y), Math.floor(z));
+        if (this.state.voxelData![index] === id) return;
+        this.state.voxelData![index] = id;
+        this.markRenderDirty();
     }
 
     isRevealed(x: number, y: number, z: number): boolean {
@@ -122,7 +158,10 @@ export class DungeonEngine {
 
     reveal(x: number, y: number, z: number) {
         if (!this.isValid(x, y, z)) return;
-        this.state.revealedData![this.index(Math.floor(x), Math.floor(y), Math.floor(z))] = 1;
+        const index = this.index(Math.floor(x), Math.floor(y), Math.floor(z));
+        if (this.state.revealedData![index] === 1) return;
+        this.state.revealedData![index] = 1;
+        this.markRenderDirty();
     }
 
     // --- Logic ---

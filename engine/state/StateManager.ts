@@ -82,6 +82,7 @@ export class StateManager {
                 unlocked: false,
                 miners: [],
                 buildings: [],
+                renderVersion: 0,
                 gold: 0,
                 gems: 0,
                 mana: 0,

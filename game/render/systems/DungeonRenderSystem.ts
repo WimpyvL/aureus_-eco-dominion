@@ -20,7 +20,7 @@ export class DungeonRenderSystem {
     private wallNormalMap: THREE.CanvasTexture | null = null;
 
     // State tracking
-    private lastVoxelDataVersion: number = -1; // TODO: Implement versioning or dirty checks
+    private lastVoxelDataVersion: number = -1;
     private engine: DungeonEngine | null = null;
 
     // Miner config
@@ -163,22 +163,15 @@ export class DungeonRenderSystem {
         if (!state.unlocked) return;
 
         // 1. Sync Engine
-        if (!this.engine || this.engine['state'] !== state) {
+        const needsEngineSync = !this.engine || this.engine.getState() !== state;
+        if (needsEngineSync) {
             this.engine = new DungeonEngine(state);
+        }
+
+        const voxelRenderVersion = this.engine.getRenderVersion();
+        if (needsEngineSync || voxelRenderVersion !== this.lastVoxelDataVersion) {
             this.rebuildMesh(state);
-        } else {
-            // Check for dirty flag? For now, rebuild every frame is too slow. 
-            // We need a dirty flag in state. 
-            // Hack: Check random sample or rely on event?
-            // "Force Rebuild" method called by systems?
-            // Or hash the data? Uint8Array hash is fast.
-            // Let's assume external trigger or check specifically.
-            // For Phase 4, I'll add a dirty check logic if possible, or just rebuild periodically/on event.
-            // Since we don't have events from engine yet, I'll rely on a manual call or 'version' in state if I add it.
-            // Let's assume we rebuild every frame for prototyping (32x32x4 is small: 4096 voxels).
-            // Actually 4k voxels is nothing. Rebuilding instanced mesh every frame:
-            // Traversing 4k array, culling, updating matrices. feasible.
-            this.rebuildMesh(state);
+            this.lastVoxelDataVersion = voxelRenderVersion;
         }
 
         // 2. Update Miners
