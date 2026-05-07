@@ -38,3 +38,15 @@ pm run build passed after the demo rewrite.
 - Inspected the live browser console and fixed the actual terrain shader compile error in `engine/render/materials/VoxelMaterials.ts`: `terrainUv` was a `vec2` but the shader still referenced `.z`, which invalidated the terrain program and removed the ground entirely.
 - Added a real runtime quality governor in `engine/render/RuntimeQualityGovernor.ts`, wired through `game/useAureusEngine.ts` and `game/bootstrap.ts`, so renderer quality now steps between capped profiles from live FPS/render timings instead of making one startup-only quality guess.
 - Taught `engine/render/ThreeRenderAdapter.ts`, `game/AureusWorld.ts`, `game/render/systems/BuildingRenderSystem.ts`, and `game/render/systems/EnvironmentRenderSystem.ts` to apply runtime quality changes safely: pixel ratio and shadow maps adjust one rung at a time, shadow casting now obeys runtime quality, and smooth building detail is capped by the current governor level to reduce rounded geometry cost without visual thrash.
+- Reworked every prosperity/level-5 building factory in `engine/data/voxels/buildings/era5`: `SafariLodge`, `GreenTechLab`, `Monument`, and `Spaceport` now use larger silhouettes, more layered massing, and much denser landmark detail instead of the old placeholder-scale forms.
+- Verified the prosperity building overhaul with `npm run build`.
+- Expanded `Eco-Lodge Resort` and `Orbital Spaceport` from cosmetic hero models into real `7x7` footprint buildings in `engine/data/buildings.ts`, and rebuilt both factories to fill that larger campus area with denser detail rather than stretched empty pads.
+- Caught and fixed a bad `voxel(...)` argument order in the new `SafariLodge` path strip before closing the task, then re-verified with `npm run build`.
+- Expanded `Victory Monument` to a real `7x7` footprint in `engine/data/buildings.ts` and rebuilt `engine/data/voxels/buildings/era5/Monument.ts` as a full ceremonial plaza landmark with a much taller central tower, wider stepped base, perimeter spires, lighting, and plaza detailing.
+- Verified the monument expansion with `npm run build`.
+- Reworked `Research Biosphere` into a new `3x9` footprint layout in `engine/data/buildings.ts` and replaced the old compact square model in `engine/data/voxels/buildings/era5/GreenTechLab.ts` with a long linear campus: research spine, central dome, repeated towers, greenhouse ends, solar wings, pods, and bridge markers.
+- Verified the `3x9` biosphere redesign with `npm run build`.
+- Kept the `3x9` biosphere layout but added a connected annex in `engine/data/voxels/buildings/era5/GreenTechLab.ts`: a `1x1` link module feeding a new `3x3` side block with its own proper dome and interior planting detail.
+- Verified the biosphere annex pass with `npm run build`.
+- Reworked the full level-4 sustainability tier in `engine/data/voxels/buildings/era4`: `Reservoir`, `LocalSchool`, `WasteTreatment`, `NatureReserve`, `Hydroponics`, and `GeothermalPlant` now have stronger silhouettes and much denser functional detail instead of placeholder-grade forms.
+- Verified the era-4 sustainability overhaul with `npm run build`.

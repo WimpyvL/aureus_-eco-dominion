@@ -28,3 +28,15 @@
 2026-05-06: Browser console inspection showed the terrain shader was still failing live because `terrainUv` is a `vec2` but the fragment code sampled `terrainUv.z`; fixed that swizzle bug in `engine/render/materials/VoxelMaterials.ts` so the terrain material can compile again.
 2026-05-06: Added `engine/render/RuntimeQualityGovernor.ts` and runtime-quality APIs on `engine/render/ThreeRenderAdapter.ts`; the smooth renderer path now samples live FPS plus render timings and steps quality one profile at a time with cooldown/hysteresis instead of relying on a single startup guess.
 2026-05-06: Fed runtime quality back into `game/AureusWorld.ts`, `game/render/systems/BuildingRenderSystem.ts`, and `game/render/systems/EnvironmentRenderSystem.ts` so governor downgrades can cap rounded/smooth building detail, reduce pixel ratio, and disable shadow casting in one coherent path without thrashing between states.
+2026-05-06: Reworked all prosperity/level-5 landmark factories in `engine/data/voxels/buildings/era5`: `SafariLodge.ts`, `GreenTechLab.ts`, `Monument.ts`, and `Spaceport.ts` now have materially larger silhouettes and much denser architectural detail while keeping the existing footprint contracts intact.
+2026-05-06: Verified the prosperity landmark overhaul with `npm run build`.
+2026-05-06: Expanded `BuildingType.SAFARI_LODGE` and `BuildingType.SPACEPORT` footprint metadata in `engine/data/buildings.ts` to `7x7`, then rebuilt both voxel factories to actually occupy that extra footprint with resort-campus and launch-facility detail instead of leaving empty margins.
+2026-05-06: Caught a malformed `voxel(...)` call in the new `SafariLodge.ts` walkway strip during final inspection, corrected the argument order, and re-verified with `npm run build`.
+2026-05-07: Expanded `BuildingType.MONUMENT` in `engine/data/buildings.ts` from `2x2` to `7x7` and rebuilt `engine/data/voxels/buildings/era5/Monument.ts` as a plaza-scale prosperity landmark instead of a compact pedestal prop.
+2026-05-07: Verified the monument footprint/detail overhaul with `npm run build`.
+2026-05-07: Changed `BuildingType.GREEN_TECH_LAB` from `3x3` to `3x9` in `engine/data/buildings.ts` and rebuilt `engine/data/voxels/buildings/era5/GreenTechLab.ts` as a long-form research campus rather than a square biosphere block.
+2026-05-07: Verified the new `3x9` biosphere design with `npm run build`.
+2026-05-07: Preserved the `3x9` biosphere contract but added a linked annex in `engine/data/voxels/buildings/era5/GreenTechLab.ts`: `1x1` connector plus a new `3x3` side biosphere block with its own dome and planting detail.
+2026-05-07: Verified the biosphere annex addition with `npm run build`.
+2026-05-07: Reworked all era-4 sustainability building factories in `engine/data/voxels/buildings/era4` so the full eco tier has materially richer landmark/detail quality: `Reservoir.ts`, `LocalSchool.ts`, `WasteTreatment.ts`, `NatureReserve.ts`, `Hydroponics.ts`, and `GeothermalPlant.ts`.
+2026-05-07: Verified the era-4 sustainability building overhaul with `npm run build`.

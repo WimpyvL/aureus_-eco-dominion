@@ -1,68 +1,52 @@
-
 import * as THREE from 'three';
 import { mats } from '../../../../render/materials/VoxelMaterials';
-import { voxel, FactoryOptions } from '../../../../render/utils/VoxelBuilder';
+import { cylinder, FactoryOptions, voxel } from '../../../../render/utils/VoxelBuilder';
 
 export const ReservoirFactory = (opts?: FactoryOptions) => {
     const g = new THREE.Group();
     const isPowered = opts?.powerStatus === 'CONNECTED';
 
-    // Large concrete foundation
-    g.add(voxel(3.0, 0.3, 3.0, mats.concrete, 0, 0, 0));
+    g.add(voxel(3.0, 0.34, 3.0, mats.concrete, 0, 0, 0));
+    g.add(voxel(2.7, 0.12, 2.7, mats.concreteLight, 0, 0.34, 0));
 
-    // Concrete walls (rectangular basin)
-    g.add(voxel(3.0, 1.0, 0.2, mats.concrete, 0, 0.3, -1.4)); // Back wall
-    g.add(voxel(3.0, 1.0, 0.2, mats.concrete, 0, 0.3, 1.4));  // Front wall
-    g.add(voxel(0.2, 1.0, 2.8, mats.concrete, -1.4, 0.3, 0)); // Left wall
-    g.add(voxel(0.2, 1.0, 2.8, mats.concrete, 1.4, 0.3, 0));  // Right wall
+    g.add(voxel(3.0, 1.2, 0.24, mats.concrete, 0, 0.34, -1.38));
+    g.add(voxel(3.0, 1.2, 0.24, mats.concrete, 0, 0.34, 1.38));
+    g.add(voxel(0.24, 1.2, 2.76, mats.concrete, -1.38, 0.34, 0));
+    g.add(voxel(0.24, 1.2, 2.76, mats.concrete, 1.38, 0.34, 0));
 
-    // Water surface
-    g.add(voxel(2.6, 0.15, 2.6, isPowered ? mats.reservoirWater : mats.oilWater, 0, 0.9, 0));
+    g.add(voxel(2.48, 0.2, 2.48, isPowered ? mats.reservoirWater : mats.oilWater, 0, 1.0, 0));
+    g.add(voxel(2.1, 0.08, 2.1, isPowered ? mats.glass : mats.darkPipe, 0, 1.18, 0));
 
-    // Metal gantry walkway across top
-    g.add(voxel(3.0, 0.1, 0.4, mats.metal, 0, 1.35, 0));
-    // Gantry supports
-    g.add(voxel(0.1, 0.8, 0.1, mats.metal, -1.3, 0.9, 0));
-    g.add(voxel(0.1, 0.8, 0.1, mats.metal, 1.3, 0.9, 0));
+    g.add(voxel(3.0, 0.12, 0.46, mats.metal, 0, 1.54, 0));
+    g.add(voxel(0.14, 0.94, 0.14, mats.metal, -1.26, 0.9, 0));
+    g.add(voxel(0.14, 0.94, 0.14, mats.metal, 1.26, 0.9, 0));
+    g.add(voxel(3.0, 0.36, 0.05, mats.metalLight, 0, 1.72, 0.2));
+    g.add(voxel(3.0, 0.36, 0.05, mats.metalLight, 0, 1.72, -0.2));
 
-    // Railings
-    g.add(voxel(3.0, 0.4, 0.05, mats.metalLight, 0, 1.55, 0.18));
-    g.add(voxel(3.0, 0.4, 0.05, mats.metalLight, 0, 1.55, -0.18));
-
-    // Pump station (corner)
-    g.add(voxel(0.8, 1.5, 0.8, mats.metal, -1.0, 0.3, -1.0));
-    g.add(voxel(0.85, 0.1, 0.85, mats.metalLight, -1.0, 1.8, -1.0));
-
-    // Pump pipes connecting to basin
-    g.add(voxel(0.15, 0.15, 0.6, mats.blueMetal, -1.0, 0.6, -0.4));
-    g.add(voxel(0.15, 0.6, 0.15, mats.blueMetal, -0.7, 0.4, -1.0));
-
-    // Control panel on pump station
-    g.add(voxel(0.3, 0.4, 0.1, mats.metal, -0.7, 1.0, -0.55));
-
-    // Status light on pump
+    g.add(voxel(0.96, 1.72, 0.96, mats.metal, -0.98, 0.34, -0.98));
+    g.add(voxel(1.02, 0.12, 1.02, mats.metalLight, -0.98, 2.02, -0.98));
+    g.add(voxel(0.32, 0.42, 0.12, mats.blueMetal, -0.62, 1.02, -0.54));
+    g.add(voxel(0.14, 0.68, 0.14, mats.blueMetal, -0.72, 0.54, -0.98));
+    g.add(voxel(0.34, 0.46, 0.12, mats.metal, -0.64, 1.16, -0.5));
     if (!opts?.isUnderConstruction) {
-        g.add(voxel(0.15, 0.2, 0.05, isPowered ? mats.emissiveGreen : mats.emissiveRed, -0.7, 1.15, -0.5));
+        g.add(voxel(0.16, 0.2, 0.06, isPowered ? mats.emissiveGreen : mats.emissiveRed, -0.62, 1.34, -0.46));
     }
 
-    // Outlet pipes (side)
-    g.add(voxel(0.2, 0.2, 0.8, mats.blueMetal, 1.3, 0.5, 0.8));
-    g.add(voxel(0.3, 0.3, 0.5, mats.metal, 1.5, 0.4, 1.2));
-
-    // Water level gauge
-    g.add(voxel(0.08, 0.8, 0.08, mats.glass, 1.35, 0.7, -0.8));
+    g.add(voxel(0.22, 0.22, 1.0, mats.blueMetal, 1.22, 0.58, 0.84));
+    g.add(voxel(0.36, 0.34, 0.58, mats.metal, 1.46, 0.48, 1.22));
+    g.add(voxel(0.1, 0.96, 0.1, mats.glass, 1.34, 0.76, -0.86));
     if (!opts?.isUnderConstruction) {
-        g.add(voxel(0.1, 0.3, 0.1, isPowered ? mats.emissiveCyan : mats.metal, 1.35, 1.1, -0.8));
+        g.add(voxel(0.12, 0.34, 0.12, isPowered ? mats.emissiveCyan : mats.metal, 1.34, 1.16, -0.86));
     }
 
-    // Warning signage
-    g.add(voxel(0.4, 0.3, 0.05, mats.hazard, 0, 1.0, 1.43));
+    g.add(voxel(0.46, 0.34, 0.06, mats.hazard, 0, 1.16, 1.42));
+    g.add(voxel(0.1, 1.28, 0.18, mats.metal, 0.84, 0.66, 1.34));
+    g.add(voxel(0.48, 0.06, 0.48, mats.metalLight, 1.08, 0.38, 1.08));
 
-    // Ladder access
-    g.add(voxel(0.08, 1.2, 0.15, mats.metal, 0.8, 0.6, 1.35));
-
-    // Overflow drain grate
-    g.add(voxel(0.4, 0.05, 0.4, mats.metalLight, 1.1, 0.35, 1.1));
+    g.add(cylinder(0.16, 1.24, mats.concreteLight, -1.38, 0.34, 1.06));
+    g.add(cylinder(0.16, 1.24, mats.concreteLight, 1.38, 0.34, -1.06));
+    g.add(voxel(0.18, 0.18, 0.18, isPowered ? mats.emissiveGreen : mats.emissiveRed, -1.38, 1.56, 1.06));
+    g.add(voxel(0.18, 0.18, 0.18, isPowered ? mats.emissiveGreen : mats.emissiveRed, 1.38, 1.56, -1.06));
 
     return g;
 };

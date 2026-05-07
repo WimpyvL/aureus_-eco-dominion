@@ -1,38 +1,32 @@
-
 import * as THREE from 'three';
 import { mats } from '../../../../render/materials/VoxelMaterials';
-import { voxel, FactoryOptions } from '../../../../render/utils/VoxelBuilder';
+import { cylinder, FactoryOptions, taperedCylinder, voxel } from '../../../../render/utils/VoxelBuilder';
 
 export const GeothermalPlantFactory = (opts?: FactoryOptions) => {
     const g = new THREE.Group();
-    // Base platform
-    g.add(voxel(2.0, 0.25, 2.0, mats.concrete, 0, 0, 0));
-    // Main turbine building
-    g.add(voxel(1.4, 1.2, 1.4, mats.metal, 0, 0.25, 0));
-    // Steam vents
-    g.add(voxel(0.3, 0.8, 0.3, mats.darkPipe, -0.65, 1.45, -0.65));
-    g.add(voxel(0.3, 0.8, 0.3, mats.darkPipe, 0.65, 1.45, 0.65));
 
-    // Steam caps (glowing hot when active)
+    g.add(voxel(2.0, 0.28, 2.0, mats.concrete, 0, 0, 0));
+    g.add(voxel(1.78, 0.1, 1.78, mats.concreteLight, 0, 0.28, 0));
+    g.add(voxel(1.42, 1.36, 1.42, mats.metal, 0, 0.28, 0));
+
+    g.add(cylinder(0.18, 1.12, mats.darkPipe, -0.7, 1.46, -0.7));
+    g.add(cylinder(0.18, 1.12, mats.darkPipe, 0.7, 1.46, 0.7));
     if (!opts?.isUnderConstruction) {
-        g.add(voxel(0.35, 0.1, 0.35, mats.emissiveRed, -0.65, 2.25, -0.65));
-        g.add(voxel(0.35, 0.1, 0.35, mats.emissiveRed, 0.65, 2.25, 0.65));
+        g.add(voxel(0.36, 0.12, 0.36, mats.emissiveRed, -0.7, 2.54, -0.7));
+        g.add(voxel(0.36, 0.12, 0.36, mats.emissiveRed, 0.7, 2.54, 0.7));
     }
 
-    // Cooling towers
-    g.add(voxel(0.5, 0.6, 0.5, mats.concrete, -0.7, 0.25, 0.7));
-    g.add(voxel(0.5, 0.6, 0.5, mats.concrete, 0.7, 0.25, -0.7));
-    // Pipes going into ground
-    g.add(voxel(0.2, 0.25, 0.2, mats.darkPipe, 0, 0, 0));
-    // Control panel
-    g.add(voxel(0.4, 0.6, 0.15, mats.metal, 0, 0.6, 0.73));
-
-    // Status light
+    g.add(taperedCylinder(0.18, 0.28, 0.84, mats.concrete, -0.74, 0.28, 0.76));
+    g.add(taperedCylinder(0.18, 0.28, 0.84, mats.concrete, 0.74, 0.28, -0.76));
+    g.add(voxel(0.24, 0.28, 0.24, mats.darkPipe, 0, 0, 0));
+    g.add(voxel(0.44, 0.68, 0.16, mats.metal, 0, 0.72, 0.76));
     if (!opts?.isUnderConstruction) {
-        g.add(voxel(0.2, 0.3, 0.05, mats.emissiveGreen, 0, 0.8, 0.78));
+        g.add(voxel(0.18, 0.26, 0.06, mats.emissiveGreen, 0, 0.96, 0.82));
     }
 
-    // Power cables out
-    g.add(voxel(0.8, 0.1, 0.1, mats.darkPipe, 0.6, 0.8, 0));
+    g.add(voxel(0.92, 0.12, 0.12, mats.darkPipe, 0.58, 0.92, 0));
+    g.add(voxel(0.12, 0.62, 0.62, mats.darkPipe, -0.92, 0.62, 0.18));
+    g.add(voxel(0.12, 0.62, 0.62, mats.darkPipe, 0.92, 0.62, -0.18));
+
     return g;
 };
