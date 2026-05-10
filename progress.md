@@ -1,0 +1,52 @@
+Original prompt: Please fix the demo . It should build out all the buildings and their upgraded versions as well.
+
+- Investigated `TutorialDemoSystem`; demo path was not handling `START_DEMO` at the simulation-command layer.
+- Reworked demo flow to explicitly enter `GameStep.DEMO`, enable deterministic placement, and place every building tier as final-state showcase tiles.
+- Moved showcase origin near the randomized spawn instead of hardcoding distant world coordinates.
+- Next: build the app and sanity-check demo mode in-browser.
+- 
+pm run build passed after the demo rewrite.
+- Playwright transport died on first attempt; retrying after browser install/reset.
+- Ran the bundled web-game Playwright client against the local Vite server to exercise demo mode.
+- Restarting the local Vite server with log redirection after the first background launch died.
+- The bundled client hung in this environment, so verification is falling back to a direct Playwright script.
+- Tightened the showcase layout into a multi-column grid and added dry-ground origin selection near spawn.
+- Added a dev-only window.__aureusGetState() hook to inspect live engine state during browser verification.
+- Collapsed the demo scheduler so each row places in one burst and the showcase completes much faster.
+- Switched the showcase population to an immediate burst so demo completion is not gated by slow simulation throughput.
+- Restarting the dev server cleanly because the live checks were still showing stale demo behavior.
+- Fixed command ordering: demo now stays cheat-enabled long enough for the placement burst to clear the construction inventory gate.
+- Wired demo mode into the existing loading overlay state so the player only regains control after prebuild completes.
+- Replaced demo showcase command spam with a direct batched world write plus per-chunk refresh, which should remove the long loading delay.
+- Cleared persistent building chunk dirty flags after sync, added terrain update early-return when the camera is stable, and added road slope bridges for uphill neighbors.
+- Prototyped the live smooth-geometry render path by upgrading the actual `useAureusEngine` renderer config and `ThreeRenderAdapter` defaults to use antialiasing, shadows, ACES tone mapping, and real fog instead of the flatter runtime fallback.
+- Added reusable shared `dome(...)` and `torusRing(...)` primitives in `engine/render/utils/VoxelBuilder.ts`, keyed off the existing building `detailLevel` tiers so hybrid smooth/blocky assets can scale their segment cost with zoom.
+- Converted a small landmark set onto the shared smooth path: `SocialHub`, `MedicalBay`, `CommunityGarden`, `OreExtractor`, and `GreenTechLab`.
+- Verified with `npm run build`, then booted the real Vite runtime on `http://127.0.0.1:4173` and captured a live browser screenshot (`smooth-geometry-runtime-check.png`) without renderer errors.
+- Added adaptive renderer quality selection in `game/useAureusEngine.ts`, `game/bootstrap.ts`, and `engine/render/ThreeRenderAdapter.ts` so mobile/constrained devices no longer pay the full antialias + shadow-map budget by default.
+- Added template cloning in `game/render/systems/BuildingRenderSystem.ts` so dirty chunk refreshes and detail-tier rebuilds reuse cached building object graphs instead of regenerating full structures every time.
+- Removed per-chunk terrain build logging in `game/render/systems/TerrainRenderSystem.ts` to avoid hot-path console spam during streaming.
+- Removed the stripe-paint layer from `engine/render/materials/VoxelMaterials.ts` and replaced it with soft non-directional speckles because the repeated terrain texture was producing moving line shimmer in the live ground.
+- Disabled terrain shadow casting in `game/render/systems/TerrainRenderSystem.ts` and retuned light shadow bias in `game/render/systems/EnvironmentRenderSystem.ts` because the remaining moving bands are shadow-acne/self-shadow artifacts, not texture detail.
+- Updated `engine/data/voxels/buildings/era1/Road.ts` so road tiles pitch on both axes from their connected edge deltas, which should close the visible cracks when a sloped run changes direction.
+- Fixed shared building material fallbacks in `engine/render/materials/VoxelMaterials.ts` by defining a real `stone` material and replacing the flat `progressGreen` debug-looking material with a textured green surface.
+- Converted shared `blueMetal` in `engine/render/materials/VoxelMaterials.ts` to use the textured metal map with a blue tint, targeting the last slightly teal placeholder-looking building surfaces.
+- Reworked `engine/data/voxels/buildings/era2/Fence.ts` and `era2/WindTurbine.ts` so the remaining fence/turbine cyan slabs render as glass-and-metal assemblies with smaller emissive accents instead of placeholder-looking full-surface glow blocks.
+- Reduced the last oversized cyan hero pieces in `engine/data/voxels/buildings/era2/SecurityPost.ts`, `CommunityGarden.ts`, `Generator.ts`, `TrainingCenter.ts`, and `engine/data/voxels/buildings/era1/SolarArray.ts` by turning them into glass-housed or smaller emissive cores instead of full cyan blocks.
+- Split terrain and foliage rendering materials so ground chunks now use biome-aware procedural breakup while foliage keeps its own baked plant colors, fixing the black shrubs and making grass/sand/dirt/stone stop reading like the same surface.
+- Fixed the follow-up regressions by adding the missing generator level-1 emissive material, converting the remaining generator/warehouse/school screen slabs into proper panel assemblies, and replacing the broken terrain shader world-position hook after the ground disappeared in the live runtime.
+- Inspected the live browser console and fixed the actual terrain shader compile error in `engine/render/materials/VoxelMaterials.ts`: `terrainUv` was a `vec2` but the shader still referenced `.z`, which invalidated the terrain program and removed the ground entirely.
+- Added a real runtime quality governor in `engine/render/RuntimeQualityGovernor.ts`, wired through `game/useAureusEngine.ts` and `game/bootstrap.ts`, so renderer quality now steps between capped profiles from live FPS/render timings instead of making one startup-only quality guess.
+- Taught `engine/render/ThreeRenderAdapter.ts`, `game/AureusWorld.ts`, `game/render/systems/BuildingRenderSystem.ts`, and `game/render/systems/EnvironmentRenderSystem.ts` to apply runtime quality changes safely: pixel ratio and shadow maps adjust one rung at a time, shadow casting now obeys runtime quality, and smooth building detail is capped by the current governor level to reduce rounded geometry cost without visual thrash.
+- Reworked every prosperity/level-5 building factory in `engine/data/voxels/buildings/era5`: `SafariLodge`, `GreenTechLab`, `Monument`, and `Spaceport` now use larger silhouettes, more layered massing, and much denser landmark detail instead of the old placeholder-scale forms.
+- Verified the prosperity building overhaul with `npm run build`.
+- Expanded `Eco-Lodge Resort` and `Orbital Spaceport` from cosmetic hero models into real `7x7` footprint buildings in `engine/data/buildings.ts`, and rebuilt both factories to fill that larger campus area with denser detail rather than stretched empty pads.
+- Caught and fixed a bad `voxel(...)` argument order in the new `SafariLodge` path strip before closing the task, then re-verified with `npm run build`.
+- Expanded `Victory Monument` to a real `7x7` footprint in `engine/data/buildings.ts` and rebuilt `engine/data/voxels/buildings/era5/Monument.ts` as a full ceremonial plaza landmark with a much taller central tower, wider stepped base, perimeter spires, lighting, and plaza detailing.
+- Verified the monument expansion with `npm run build`.
+- Reworked `Research Biosphere` into a new `3x9` footprint layout in `engine/data/buildings.ts` and replaced the old compact square model in `engine/data/voxels/buildings/era5/GreenTechLab.ts` with a long linear campus: research spine, central dome, repeated towers, greenhouse ends, solar wings, pods, and bridge markers.
+- Verified the `3x9` biosphere redesign with `npm run build`.
+- Kept the `3x9` biosphere layout but added a connected annex in `engine/data/voxels/buildings/era5/GreenTechLab.ts`: a `1x1` link module feeding a new `3x3` side block with its own proper dome and interior planting detail.
+- Verified the biosphere annex pass with `npm run build`.
+- Reworked the full level-4 sustainability tier in `engine/data/voxels/buildings/era4`: `Reservoir`, `LocalSchool`, `WasteTreatment`, `NatureReserve`, `Hydroponics`, and `GeothermalPlant` now have stronger silhouettes and much denser functional detail instead of placeholder-grade forms.
+- Verified the era-4 sustainability overhaul with `npm run build`.

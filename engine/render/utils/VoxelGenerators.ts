@@ -6,8 +6,7 @@
 
 import * as THREE from 'three';
 import { NatureFactory } from '../../data/voxels/Nature';
-import { InfrastructureFactory } from '../../data/voxels/Infrastructure';
-import { BuildingsFactory } from '../../data/voxels/Buildings';
+import { BuildingsFactory } from '../../data/voxels/buildings';
 import { GrassTrees, SnowTrees, SandTrees, DirtTrees, StoneTrees } from '../../data/voxels/BiomeTrees';
 import { FactoryOptions } from './VoxelBuilder';
 
@@ -17,7 +16,6 @@ export { sharedBoxGeo } from './VoxelBuilder';
 
 export const BuildingFactory: Record<string, (opts?: FactoryOptions) => THREE.Group> = {
     ...NatureFactory,
-    ...InfrastructureFactory,
     ...BuildingsFactory,
     ...GrassTrees,
     ...SnowTrees,

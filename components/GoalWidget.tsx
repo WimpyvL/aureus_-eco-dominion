@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Target, CheckCircle, ChevronDown, ChevronUp, Gem, Coins } from 'lucide-react';
 import { Goal, Action } from '../types';
 
@@ -17,11 +17,28 @@ interface GoalWidgetProps {
 export const GoalWidget: React.FC<GoalWidgetProps> = ({ goal, dispatch, playSfx }) => {
     // Start collapsed for cleaner HUD - expand on click/tap
     const [isCollapsed, setIsCollapsed] = useState(true);
+    const [hasNew, setHasNew] = useState(false);
+    const prevProgressRef = useRef(0);
 
     // Only auto-expand when goal is completed (to show claim button)
     useEffect(() => {
-        if (goal?.completed) setIsCollapsed(false);
+        if (goal?.completed) {
+            if (isCollapsed) setHasNew(true);
+            else setIsCollapsed(false);
+        }
     }, [goal?.completed]);
+
+    useEffect(() => {
+        if (goal && isCollapsed) {
+            const progress = goal.currentValue / goal.targetValue;
+            if (progress > prevProgressRef.current + 0.01) {
+                setHasNew(true);
+            }
+            prevProgressRef.current = progress;
+        } else if (goal) {
+            prevProgressRef.current = goal.currentValue / goal.targetValue;
+        }
+    }, [goal?.currentValue, isCollapsed]);
 
     if (!goal) return null;
 
@@ -29,9 +46,16 @@ export const GoalWidget: React.FC<GoalWidgetProps> = ({ goal, dispatch, playSfx 
         return (
             <div className="pointer-events-auto animate-in slide-in-from-left-4">
                 <button
-                    onClick={() => { setIsCollapsed(false); playSfx('UI_CLICK'); }}
-                    className={`w-10 h-10 bg-slate-900 border-2 ${goal.completed ? 'border-emerald-500' : 'border-amber-600'} flex items-center justify-center hover:bg-slate-800 transition-colors shadow-lg`}
+                    onClick={() => {
+                        setIsCollapsed(false);
+                        setHasNew(false);
+                        playSfx('UI_CLICK');
+                    }}
+                    className={`w-10 h-10 bg-slate-900 border-2 ${goal.completed ? 'border-emerald-500' : 'border-amber-600'} flex items-center justify-center hover:bg-slate-800 transition-colors shadow-lg relative`}
                 >
+                    {hasNew && (
+                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900 animate-pulse z-10" />
+                    )}
                     {goal.completed ? <CheckCircle size={18} className="text-emerald-500" /> : <Target size={18} className="text-amber-500" />}
                 </button>
             </div>

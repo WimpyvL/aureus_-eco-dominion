@@ -3,6 +3,8 @@
  * Define all job types and their payloads here
  */
 
+export const ENGINE_SCHEMA_VERSION = 102;
+
 /** Available job types */
 export type JobKind =
     | 'MESH_CHUNK'
@@ -23,6 +25,8 @@ export interface BaseJob {
     queuedAt: number;
     /** Cancellation flag for deduplication */
     cancelled?: boolean;
+    /** Schema version for protocol validation */
+    schemaVersion: number;
 }
 
 export const JOB_PRIORITY = {
@@ -40,7 +44,7 @@ export interface MeshChunkJob extends BaseJob {
         cx: number;
         cz: number;
         tiles: any[]; // GridTile[] but can be loose for transfer
-        gridSize: number;
+        viewMode?: 'SURFACE' | 'UNDERGROUND';
         lod?: number;
     }
 }
@@ -94,15 +98,19 @@ export interface BaseJobResult {
     success: boolean;
     error?: string;
     completedAt: number;
+    queuedAt: number;
+    /** Schema version for protocol validation */
+    schemaVersion: number;
 }
 export interface MeshChunkResult extends BaseJobResult {
     kind: 'MESH_CHUNK';
     chunkId: string;
-    cx: number;
-    cz: number;
     solid: { p: Float32Array; n: Float32Array; c: Float32Array; u: Float32Array } | null;
     water: { p: Float32Array; n: Float32Array; c: Float32Array; u: Float32Array } | null;
+    ghost: { p: Float32Array; n: Float32Array; c: Float32Array; u: Float32Array } | null;
     foliage: any[];
+    cx: number;
+    cz: number;
     lod?: number;
 }
 
@@ -110,7 +118,7 @@ export interface MeshChunkResult extends BaseJobResult {
 export interface PathfindResult extends BaseJobResult {
     kind: 'PATHFIND';
     agentId: string;
-    path: number[] | null;
+    path: any[] | null; // PathStep[]
 }
 
 /** Terrain generation result */
@@ -145,13 +153,14 @@ export function generateJobId(): string {
  */
 export function createJob<T extends Job>(
     kind: T['kind'],
-    data: Omit<T, 'id' | 'kind' | 'queuedAt' | 'priority'> & { priority?: number }
+    data: Omit<T, 'id' | 'kind' | 'queuedAt' | 'priority' | 'schemaVersion'> & { priority?: number }
 ): T {
     return {
         id: generateJobId(),
         kind,
         priority: data.priority ?? 0,
         queuedAt: Date.now(),
+        schemaVersion: ENGINE_SCHEMA_VERSION,
         ...data,
     } as T;
 }

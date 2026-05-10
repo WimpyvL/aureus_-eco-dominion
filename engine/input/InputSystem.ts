@@ -6,7 +6,6 @@
 
 import * as THREE from 'three';
 import { ThreeRenderAdapter } from '../render/ThreeRenderAdapter';
-import { GRID_SIZE } from '../utils/GameUtils';
 
 export class InputSystem {
     private raycaster: THREE.Raycaster;
@@ -24,25 +23,24 @@ export class InputSystem {
     // Dependencies
     private renderAdapter: ThreeRenderAdapter;
     private domElement: HTMLElement;
+    private getTerrainHeight: (worldX: number, worldZ: number) => number;
 
     // Callbacks provided by AureusWorld to dispatch to Redux/Engine
     // In a pure engine, we would dispatch actions directly, but we are bridging.
-    public onTileClick?: (index: number) => void;
-    public onTileRightClick?: (index: number) => void;
-    public onTileHover?: (index: number | null) => void;
+    public onTileClick?: (x: number, z: number, isTouch: boolean, clientX: number, clientY: number) => void;
+    public onTileRightClick?: (x: number, z: number, isTouch: boolean, clientX: number, clientY: number) => void;
+    public onTileHover?: (x: number | null, z: number | null, clientX: number, clientY: number) => void;
 
-    // We still assume 'surface' interaction at height 0 for now
-    // Future: Use heightmap from simulation state for accurate raycast
-
-    constructor(renderAdapter: ThreeRenderAdapter) {
+    constructor(renderAdapter: ThreeRenderAdapter, getTerrainHeight: (worldX: number, worldZ: number) => number) {
         this.renderAdapter = renderAdapter;
         this.domElement = renderAdapter.getCanvas();
+        this.getTerrainHeight = getTerrainHeight;
 
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
 
         // Invisible plane for raycasting against "ground"
-        const planeGeo = new THREE.PlaneGeometry(GRID_SIZE * 3, GRID_SIZE * 3);
+        const planeGeo = new THREE.PlaneGeometry(10000, 10000); // Large enough for most views
         const planeMat = new THREE.MeshBasicMaterial({ visible: false });
         this.interactionPlane = new THREE.Mesh(planeGeo, planeMat);
         this.interactionPlane.rotation.x = -Math.PI / 2;
@@ -145,10 +143,11 @@ export class InputSystem {
 
         if (!this.isDragging && !this.hadMultiTouchGesture) {
             // Click confirmed
+            const isTouch = e.pointerType === 'touch';
             if (this.isRightClick) {
-                this.handleClick(e.clientX, e.clientY, true);
+                this.handleClick(e.clientX, e.clientY, true, isTouch);
             } else {
-                this.handleClick(e.clientX, e.clientY, false);
+                this.handleClick(e.clientX, e.clientY, false, isTouch);
             }
         }
 
@@ -162,7 +161,11 @@ export class InputSystem {
         e.preventDefault();
     }
 
-    private getIntersection(clientX: number, clientY: number): { index: number, point: THREE.Vector3 } | null {
+    public setRayPlaneHeight(height: number) {
+        this.rayPlane.constant = -height;
+    }
+
+    private getIntersection(clientX: number, clientY: number): { x: number, z: number, point: THREE.Vector3 } | null {
         // Normalized Device Coordinates
         const rect = this.domElement.getBoundingClientRect();
         this.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
@@ -170,42 +173,55 @@ export class InputSystem {
 
         this.raycaster.setFromCamera(this.mouse, this.renderAdapter.getCamera());
 
-        // Intersect against mathematical plane y=0 for base grid
         const target = new THREE.Vector3();
-        const hit = this.raycaster.ray.intersectPlane(this.rayPlane, target);
+        let currentPlaneHeight = -this.rayPlane.constant;
 
-        if (hit) {
-            // Convert world pos to grid index
-            // Grid is centered? Let's check Utils.
-            // Assuming 0,0 is center or not? 
-            // In gameUtils: x = index % GRID_SIZE. 
-            // Usually we offset so world center is 0,0. 
-            // offset = (GRID_SIZE - 1) / 2
-            const offset = (GRID_SIZE - 1) / 2;
-            const x = Math.round(hit.x + offset);
-            const z = Math.round(hit.z + offset);
+        for (let iter = 0; iter < 3; iter++) {
+            const iterPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -currentPlaneHeight);
+            const hit = this.raycaster.ray.intersectPlane(iterPlane, target);
 
-            if (x >= 0 && x < GRID_SIZE && z >= 0 && z < GRID_SIZE) {
-                const index = z * GRID_SIZE + x;
-                return { index, point: hit };
+            if (!hit) return null;
+
+            const tileX = Math.round(hit.x);
+            const tileZ = Math.round(hit.z);
+
+            // Query actual terrain height at this XZ
+            const terrainHeight = this.getTerrainHeight(hit.x, hit.z);
+
+            // If we're close enough (within 0.1 units), accept this result
+            if (Math.abs(terrainHeight - currentPlaneHeight) < 0.1) {
+                hit.y = terrainHeight;
+                return { x: tileX, z: tileZ, point: hit };
             }
+
+            // Refine: use terrain height for next iteration
+            currentPlaneHeight = terrainHeight;
         }
-        return null;
+
+        // After max iterations, use last result
+        const tileX = Math.round(target.x);
+        const tileZ = Math.round(target.z);
+        target.y = this.getTerrainHeight(target.x, target.z);
+        return { x: tileX, z: tileZ, point: target };
     }
 
-    private handleClick(x: number, y: number, isRight: boolean) {
+    private handleClick(x: number, y: number, isRight: boolean, isTouch: boolean) {
         const hit = this.getIntersection(x, y);
         if (hit) {
             if (isRight) {
-                this.onTileRightClick?.(hit.index);
+                this.onTileRightClick?.(hit.x, hit.z, isTouch, x, y);
             } else {
-                this.onTileClick?.(hit.index);
+                this.onTileClick?.(hit.x, hit.z, isTouch, x, y);
             }
         }
     }
 
     private checkHover(x: number, y: number) {
         const hit = this.getIntersection(x, y);
-        this.onTileHover?.(hit ? hit.index : null);
+        if (hit) {
+            this.onTileHover?.(hit.x, hit.z, x, y);
+        } else {
+            this.onTileHover?.(null, null, x, y);
+        }
     }
 }

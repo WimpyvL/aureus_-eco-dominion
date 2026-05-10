@@ -11,18 +11,18 @@ import { BUILDINGS } from '../engine/data/VoxelConstants';
 
 export const MobileBuildingConfirmation: React.FC<{
     buildingType: BuildingType | null;
-    tileIndex: number | null;
+    tilePos: { x: number, z: number } | null;
     onConfirm: () => void;
     onCancel: () => void;
     playSfx: (type: any) => void;
-}> = ({ buildingType, tileIndex, onConfirm, onCancel, playSfx }) => {
-    if (!buildingType || tileIndex === null) return null;
+}> = ({ buildingType, tilePos, onConfirm, onCancel, playSfx }) => {
+    if (!buildingType || tilePos === null) return null;
 
     const building = BUILDINGS[buildingType];
     if (!building) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200 pointer-events-auto">
             <div className="bg-slate-900 border-2 border-amber-500 rounded-lg shadow-2xl w-80 max-w-[90vw] animate-in zoom-in-95 duration-200">
                 {/* Header */}
                 <div className="bg-amber-900/30 p-3 border-b-2 border-amber-500/50">
@@ -50,6 +50,7 @@ export const MobileBuildingConfirmation: React.FC<{
                     <div className="grid grid-cols-2 gap-2">
                         <button
                             onClick={() => {
+                                console.log("[MobileConfirm] Cancel clicked");
                                 playSfx('UI_CLICK');
                                 onCancel();
                             }}
@@ -59,6 +60,7 @@ export const MobileBuildingConfirmation: React.FC<{
                         </button>
                         <button
                             onClick={() => {
+                                console.log("[MobileConfirm] Build clicked");
                                 playSfx('BUILD_START');
                                 onConfirm();
                             }}

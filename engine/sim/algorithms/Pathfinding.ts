@@ -1,13 +1,13 @@
 /**
  * Engine Pathfinding Algorithm (A*)
+ * Surface-only 2D implementation.
  */
 
-import { GridTile, BuildingType } from '../../../types';
-import { GRID_SIZE } from '../../utils/GameUtils';
+import { GridTile, BuildingType, Chunk } from '../../../types';
+import { ChunkStore } from '../../space/ChunkStore';
 import { BinaryHeap } from '../../utils/BinaryHeap';
-export { GRID_SIZE };
+import { CHUNK_SIZE, worldToChunk, worldToLocal } from '../../utils/coords';
 
-// Costs for different terrains
 // Costs for different terrains
 export const COST = {
     ROAD: 0.5,
@@ -18,15 +18,14 @@ export const COST = {
 
 // Node wrapper for Heap
 interface PathNode {
-    index: number;
+    x: number;
+    z: number;
     f: number;
 }
 
-const getDistance = (a: number, b: number) => {
-    const ax = a % GRID_SIZE, ay = Math.floor(a / GRID_SIZE);
-    const bx = b % GRID_SIZE, by = Math.floor(b / GRID_SIZE);
-    // Chebyshev distance (8-way movement)
-    return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
+const getDistance2D = (ax: number, az: number, bx: number, bz: number) => {
+    // Chebyshev distance for 8-way movement
+    return Math.max(Math.abs(ax - bx), Math.abs(az - bz));
 };
 
 const getTileCost = (tile: GridTile): number => {
@@ -42,92 +41,88 @@ const getTileCost = (tile: GridTile): number => {
 };
 
 /**
- * A* Pathfinding (Optimized with BinaryHeap)
- * Returns array of tile indices
+ * A* Pathfinding (Surface 2D)
+ * Returns array of { x, z } steps
  */
-export function findPath(startIdx: number, endIdx: number, grid: GridTile[]): number[] | null {
-    if (startIdx === endIdx) return [endIdx];
+export function findPath(
+    startX: number, startZ: number,
+    endX: number, endZ: number,
+    chunks: Record<string, Chunk>
+): { x: number, z: number }[] | null {
+    if (startX === endX && startZ === endZ) {
+        return [{ x: endX, z: endZ }];
+    }
 
-    // Priority Queue (Min-Heap based on f-score)
     const openSet = new BinaryHeap<PathNode>((a, b) => a.f - b.f);
-    openSet.push({ index: startIdx, f: getDistance(startIdx, endIdx) });
+    openSet.push({ x: startX, z: startZ, f: getDistance2D(startX, startZ, endX, endZ) });
 
-    const cameFrom = new Map<number, number>();
-    const gScore = new Map<number, number>();
-    gScore.set(startIdx, 0);
+    const cameFrom = new Map<string, { x: number, z: number }>();
+    const gScore = new Map<string, number>();
 
-    const visited = new Set<number>();
+    const startKey = `${startX},${startZ}`;
+    gScore.set(startKey, 0);
+
+    const visited = new Set<string>();
 
     let iterations = 0;
-    const MAX_ITERATIONS = 5000; // Performance limit
+    const MAX_ITERATIONS = 5000;
 
     while (openSet.size > 0) {
         iterations++;
         if (iterations > MAX_ITERATIONS) return null;
 
         const current = openSet.pop()!;
-        const cIdx = current.index;
+        const { x: cx, z: cz } = current;
+        const currentKey = `${cx},${cz}`;
 
-        // Lazy deletion: if we extracted a node that we've already closed with a better path, skip
-        // Actually A* guarantees first expand is best, but with duplicates in heap we might see it again.
-        // We can just check if gScore is valid.
-
-        if (cIdx === endIdx) {
+        if (cx === endX && cz === endZ) {
             // Reconstruct
-            const path = [cIdx];
-            let curr = cIdx;
-            while (cameFrom.has(curr)) {
-                curr = cameFrom.get(curr)!;
-                path.unshift(curr);
+            const path = [{ x: cx, z: cz }];
+            let currKey = currentKey;
+            while (cameFrom.has(currKey)) {
+                const prev = cameFrom.get(currKey)!;
+                path.unshift(prev);
+                currKey = `${prev.x},${prev.z}`;
             }
             return path.slice(1);
         }
 
-        // Optimization: Don't expand if we closed it already
-        // (Standard A* doesn't need ClosedSet if monotone heuristic, but duplicates in heap require check if we strictly want to avoid work)
-        // With lazy heap, we might pop same node twice.
-        // We can use gScore to check validity if we wanted. 
-        // But simpler: just add to visited (ClosedSet).
-        if (visited.has(cIdx)) continue;
-        visited.add(cIdx);
+        if (visited.has(currentKey)) continue;
+        visited.add(currentKey);
 
-        // Neighbors (8-way)
-        const cx = cIdx % GRID_SIZE;
-        const cy = Math.floor(cIdx / GRID_SIZE);
-
-        for (let dy = -1; dy <= 1; dy++) {
+        // --- Lateral Neighbors ---
+        for (let dz = -1; dz <= 1; dz++) {
             for (let dx = -1; dx <= 1; dx++) {
-                if (dx === 0 && dy === 0) continue;
+                if (dx === 0 && dz === 0) continue;
 
-                const nx = cx + dx;
-                const ny = cy + dy;
+                const nx = cx + dx, nz = cz + dz;
+                const nKey = `${nx},${nz}`;
+                if (visited.has(nKey)) continue;
 
-                if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
-                    const neighbor = ny * GRID_SIZE + nx;
+                const { cx: ncx, cz: ncz } = worldToChunk(nx, nz, CHUNK_SIZE);
+                const nChunk = chunks[`${ncx},${ncz}`];
+                if (!nChunk) continue;
 
-                    if (visited.has(neighbor)) continue;
+                const { lx, lz } = worldToLocal(nx, nz, CHUNK_SIZE);
+                const neighborTile = nChunk.tiles[lx + lz * CHUNK_SIZE];
+                if (!neighborTile || neighborTile.locked) continue;
 
-                    const tile = grid[neighbor];
+                let cost = getTileCost(neighborTile);
 
-                    // Collision check
-                    if (tile.buildingType === BuildingType.POND) continue;
-                    if (tile.locked) continue;
-
-                    const moveCost = getTileCost(tile);
-                    // Diagonal movement cost slightly higher? (Euclidean approx: 1.414). 
-                    // Current logic uses Chebyshev, so diagonals are cost 1 (+ terrain).
-                    // If we want consistent movement, diagonals should perhaps cost more.
-                    // But sticking to existing logic:
-                    const tentativeG = (gScore.get(cIdx) ?? Infinity) + moveCost;
-
-                    if (tentativeG < (gScore.get(neighbor) ?? Infinity)) {
-                        cameFrom.set(neighbor, cIdx);
-                        gScore.set(neighbor, tentativeG);
-                        const f = tentativeG + getDistance(neighbor, endIdx);
-
-                        // Push to heap (even if already there, this new one is better and will pop first)
-                        openSet.push({ index: neighbor, f });
+                // Special case: Allow reaching the destination even if it's technically impassable (e.g. for construction)
+                if (cost === Infinity) {
+                    if (nx === endX && nz === endZ) {
+                        cost = COST.OBSTACLE;
+                    } else {
+                        continue;
                     }
+                }
+
+                const tentativeG = (gScore.get(currentKey) ?? Infinity) + cost;
+                if (tentativeG < (gScore.get(nKey) ?? Infinity)) {
+                    cameFrom.set(nKey, { x: cx, z: cz });
+                    gScore.set(nKey, tentativeG);
+                    openSet.push({ x: nx, z: nz, f: tentativeG + getDistance2D(nx, nz, endX, endZ) });
                 }
             }
         }

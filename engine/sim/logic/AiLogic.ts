@@ -4,18 +4,27 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import { GameState, Goal, GlobalEvent, NewsItem, GridTile, Agent, BuildingType } from '../../../types';
+import { GameState, Goal, GlobalEvent, NewsItem, GridTile, Agent, BuildingType, Chunk } from '../../../types';
 import { createColonist } from './SimulationLogic';
+import { FixedContext } from '../../kernel';
+import { ChunkStore } from '../../space/ChunkStore';
+import { toChunkKey, worldToChunk } from '../../utils/coords';
+import { CHUNK_SIZE } from '../../space/ChunkStore';
 
-const getBuildingCount = (state: GameState, type: BuildingType) => state.grid.filter(t => t.buildingType === type && !t.isUnderConstruction).length;
 
-export function generateGoal(state: GameState): Goal {
-    const r = Math.random();
+
+
+const getBuildingCount = (state: GameState, type: BuildingType) =>
+    Object.values(state.chunks).flatMap(c => c.tiles).filter(t => t.buildingType === type && !t.isUnderConstruction).length;
+
+
+export function generateGoal(ctx: FixedContext, state: GameState): Goal {
+    const r = ctx.random?.next() || Math.random();
 
     // Basic progression goals
     if (state.resources.agt < 1000) {
         return {
-            id: `goal_${Date.now()}`,
+            id: ctx.getNextId?.('goal') || `goal_${Date.now()}`,
             title: 'Initial Capital',
             description: 'Accumulate wealth to fund expansion.',
             type: 'RESOURCE',
@@ -29,7 +38,7 @@ export function generateGoal(state: GameState): Goal {
 
     if (r > 0.6) {
         return {
-            id: `goal_${Date.now()}`,
+            id: ctx.getNextId?.('goal') || `goal_${Date.now()}`,
             title: 'Expansion Protocol',
             description: 'Construct more housing for workforce.',
             type: 'BUILD',
@@ -41,7 +50,7 @@ export function generateGoal(state: GameState): Goal {
         };
     } else if (r > 0.3) {
         return {
-            id: `goal_${Date.now()}`,
+            id: ctx.getNextId?.('goal') || `goal_${Date.now()}`,
             title: 'Stockpile Ore',
             description: 'Gather raw minerals for export.',
             type: 'RESOURCE',
@@ -53,7 +62,7 @@ export function generateGoal(state: GameState): Goal {
         };
     } else {
         return {
-            id: `goal_${Date.now()}`,
+            id: ctx.getNextId?.('goal') || `goal_${Date.now()}`,
             title: 'Public Trust',
             description: 'Improve colony reputation.',
             type: 'RESOURCE',
@@ -66,16 +75,19 @@ export function generateGoal(state: GameState): Goal {
     }
 }
 
-export function checkAndGenerateEvent(state: GameState): { event: GlobalEvent | null, news: NewsItem | null, newGrid: GridTile[] | null, newAgents: Agent[] | null } {
+export function checkAndGenerateEvent(ctx: FixedContext, state: GameState): { event: GlobalEvent | null, news: NewsItem | null, newChunks: Record<string, Chunk> | null, newAgents: Agent[] | null } {
+
     let event: GlobalEvent | null = null;
     let news: NewsItem | null = null;
-    let newGrid: GridTile[] | null = null;
+    let newChunks: Record<string, Chunk> | null = null;
+
     let newAgents: Agent[] | null = null;
 
     // Do not overlap events if possible, or very rare
-    if (state.activeEvents.length > 0) return { event, news, newGrid, newAgents };
+    if (state.activeEvents.length > 0) return { event, news, newChunks, newAgents };
 
-    const r = Math.random();
+
+    const r = ctx.random?.next() || Math.random();
     const eco = state.resources.eco;
 
     // 1. TOXIC ACID RAIN (High chance if Eco is low)
@@ -83,23 +95,27 @@ export function checkAndGenerateEvent(state: GameState): { event: GlobalEvent | 
     const acidRainChance = eco < 50 ? 0.3 + ((50 - eco) / 100) : 0;
 
     if (r < acidRainChance) {
-        newGrid = [...state.grid];
+        newChunks = { ...state.chunks };
         let affected = 0;
-        state.grid.forEach((t, i) => {
-            // Damage foliage
-            if (t.foliage && t.foliage.startsWith('TREE_') && Math.random() > 0.8) {
-                newGrid![i] = { ...t, foliage: 'TREE_DEAD', biome: 'DIRT' };
-                affected++;
-            }
-            // Grass dies
-            else if (t.biome === 'GRASS' && t.buildingType === BuildingType.EMPTY && Math.random() > 0.9) {
-                newGrid![i] = { ...t, biome: 'DIRT', foliage: 'NONE' };
-                affected++;
-            }
+        Object.keys(newChunks).forEach(chunkKey => {
+            const chunk = { ...newChunks![chunkKey], tiles: [...newChunks![chunkKey].tiles] };
+            chunk.tiles.forEach((t, i) => {
+                // Damage foliage
+                if (t.foliage && t.foliage.startsWith('TREE_') && (ctx.random?.next() || Math.random()) > 0.8) {
+                    chunk.tiles[i] = { ...t, foliage: 'TREE_DEAD', biome: 'DIRT' };
+                    affected++;
+                }
+                // Grass dies
+                else if (t.biome === 'GRASS' && t.buildingType === BuildingType.EMPTY && (ctx.random?.next() || Math.random()) > 0.9) {
+                    chunk.tiles[i] = { ...t, biome: 'DIRT', foliage: 'NONE' };
+                    affected++;
+                }
+            });
+            if (chunk.simDirty) newChunks![chunkKey] = chunk;
         });
 
         event = {
-            id: `evt_acid_${Date.now()}`,
+            id: ctx.getNextId?.('evt_acid') || `evt_acid_${Date.now()}`,
             name: "Toxic Acid Rain",
             type: 'WEATHER',
             description: "High pollution levels have triggered acidic precipitation. Flora is decaying.",
@@ -107,14 +123,15 @@ export function checkAndGenerateEvent(state: GameState): { event: GlobalEvent | 
             visualTheme: 'TOXIC',
             modifiers: { ecoRegenMult: 0.1, productionMult: 0.8 }
         };
-        news = { id: `news_acid_${Date.now()}`, headline: "WARNING: Toxic Rain detected. Shelter advised.", type: 'NEGATIVE', timestamp: Date.now() };
-        return { event, news, newGrid, newAgents };
+        news = { id: ctx.getNextId?.('news_acid') || `news_acid_${Date.now()}`, headline: "WARNING: Toxic Rain detected. Shelter advised.", type: 'NEGATIVE', timestamp: state.tickCount };
+        return { event, news, newChunks, newAgents };
     }
+
 
     // 2. HEATWAVE (Random, mostly in summer/hot biomes conceptually, but here just random)
     if (r < 0.45) {
         event = {
-            id: `evt_heat_${Date.now()}`,
+            id: ctx.getNextId?.('evt_heat') || `evt_heat_${Date.now()}`,
             name: "Solar Flare / Heatwave",
             type: 'WEATHER',
             description: "Intense solar activity. Energy consumption increased. Solar output maxed.",
@@ -122,14 +139,15 @@ export function checkAndGenerateEvent(state: GameState): { event: GlobalEvent | 
             visualTheme: 'HEAT',
             modifiers: { energyDecayMult: 2.0, productionMult: 1.2 } // Solar panels work better, bots drain faster
         };
-        news = { id: `news_heat_${Date.now()}`, headline: "WEATHER: Severe Heatwave. Cooling systems critical.", type: 'NEUTRAL', timestamp: Date.now() };
-        return { event, news, newGrid, newAgents };
+        news = { id: ctx.getNextId?.('news_heat') || `news_heat_${Date.now()}`, headline: "WEATHER: Severe Heatwave. Cooling systems critical.", type: 'NEUTRAL', timestamp: state.tickCount };
+        return { event, news, newChunks: null, newAgents: null };
     }
+
 
     // 3. ECONOMIC BOOM (Random)
     if (r < 0.6) {
         event = {
-            id: `evt_boom_${Date.now()}`,
+            id: ctx.getNextId?.('evt_boom') || `evt_boom_${Date.now()}`,
             name: "Global Market Boom",
             type: 'ECONOMIC',
             description: "Off-world demand for resources has skyrocketed.",
@@ -137,50 +155,72 @@ export function checkAndGenerateEvent(state: GameState): { event: GlobalEvent | 
             visualTheme: 'GOLDEN',
             modifiers: { sellPriceMult: 2.5 }
         };
-        news = { id: `news_boom_${Date.now()}`, headline: "ECONOMY: Market Surge! Mineral prices at all-time high.", type: 'POSITIVE', timestamp: Date.now() };
-        return { event, news, newGrid, newAgents };
+        news = { id: ctx.getNextId?.('news_boom') || `news_boom_${Date.now()}`, headline: "ECONOMY: Market Surge! Mineral prices at all-time high.", type: 'POSITIVE', timestamp: state.tickCount };
+        return { event, news, newChunks: null, newAgents: null };
     }
+
 
     // 4. GEOLOGICAL SHIFT (Spawns resources)
     if (r < 0.75) {
-        const candidates = state.grid.filter(t => t.biome === 'STONE' && t.buildingType === BuildingType.EMPTY && t.foliage === 'NONE');
+        const allTiles = Object.values(state.chunks).flatMap(c => c.tiles);
+        const candidates = allTiles.filter(t => t.biome === 'STONE' && t.buildingType === BuildingType.EMPTY && t.foliage === 'NONE');
         if (candidates.length > 0) {
-            newGrid = [...state.grid];
-            const num = Math.min(candidates.length, Math.ceil(Math.random() * 5) + 2);
+            newChunks = { ...state.chunks };
+            const num = Math.min(candidates.length, Math.ceil((ctx.random?.next() || Math.random()) * 5) + 2);
             for (let k = 0; k < num; k++) {
-                const c = candidates[Math.floor(Math.random() * candidates.length)];
-                newGrid[c.id] = { ...newGrid[c.id], foliage: Math.random() > 0.6 ? 'GOLD_VEIN' : 'CRYSTAL_SPIKE' };
+                const c = candidates[Math.floor((ctx.random?.next() || Math.random()) * candidates.length)];
+                // Find chunk for this candidate
+                const { cx, cz } = worldToChunk(c.x, c.z, CHUNK_SIZE);
+                const chunkId = toChunkKey(cx, cz);
+                const chunk = { ...newChunks[chunkId], tiles: [...newChunks[chunkId].tiles] };
+                const tIdx = chunk.tiles.findIndex(t => t.x === c.x && t.z === c.z);
+                if (tIdx !== -1) {
+                    chunk.tiles[tIdx] = { ...chunk.tiles[tIdx], foliage: (ctx.random?.next() || Math.random()) > 0.6 ? 'GOLD_VEIN' : 'CRYSTAL_SPIKE' };
+                    newChunks[chunkId] = chunk;
+                }
             }
             // Just an event notification, no duration effects
-            event = { id: `evt_quake_${Date.now()}`, name: "Seismic Shift", type: 'GEOLOGICAL', description: "Tremors reveal new deposits.", duration: 100, visualTheme: 'NORMAL' };
-            news = { id: `news_quake_${Date.now()}`, headline: "GEOLOGY: Seismic shift revealed new veins in the mountains.", type: 'NEUTRAL', timestamp: Date.now() };
-            return { event, news, newGrid, newAgents };
+            event = { id: ctx.getNextId?.('evt_quake') || `evt_quake_${Date.now()}`, name: "Seismic Shift", type: 'GEOLOGICAL', description: "Tremors reveal new deposits.", duration: 100, visualTheme: 'NORMAL' };
+            news = { id: ctx.getNextId?.('news_quake') || `news_quake_${Date.now()}`, headline: "GEOLOGY: Seismic shift revealed new veins in the mountains.", type: 'NEUTRAL', timestamp: state.tickCount };
+            return { event, news, newChunks, newAgents: null };
         }
     }
 
+
+
     // 5. INCURSION (Rare)
     if (r > 0.95) {
-        const borderTiles = state.grid.filter(t => t.locked && t.foliage === 'NONE');
+        const allTiles = Object.values(state.chunks).flatMap(c => c.tiles);
+        const borderTiles = allTiles.filter(t => t.locked && t.foliage === 'NONE');
         if (borderTiles.length > 3) {
-            newGrid = [...state.grid];
+            newChunks = { ...state.chunks };
             newAgents = [...state.agents];
             for (let i = 0; i < 3; i++) {
-                const tile = borderTiles[Math.floor(Math.random() * borderTiles.length)];
-                newGrid[tile.id] = { ...tile, foliage: 'ILLEGAL_CAMP' };
-                newAgents.push(createColonist(tile.x, tile.y, 'ILLEGAL_MINER'));
+                const tile = borderTiles[Math.floor((ctx.random?.next() || Math.random()) * borderTiles.length)];
+                const { cx, cz } = worldToChunk(tile.x, tile.z, CHUNK_SIZE);
+                const chunkId = toChunkKey(cx, cz);
+                const chunk = { ...newChunks[chunkId], tiles: [...newChunks[chunkId].tiles] };
+                const tIdx = chunk.tiles.findIndex(t => t.x === tile.x && t.z === tile.z);
+                if (tIdx !== -1) {
+                    chunk.tiles[tIdx] = { ...chunk.tiles[tIdx], foliage: 'ILLEGAL_CAMP' };
+                    newChunks[chunkId] = chunk;
+                }
+                newAgents.push(createColonist(tile.x, tile.z, 'ILLEGAL_MINER'));
             }
             event = {
-                id: `evt_inc_${Date.now()}`,
+                id: ctx.getNextId?.('evt_inc') || `evt_inc_${Date.now()}`,
                 name: "Resource Incursion",
                 type: 'INCURSION',
                 description: "Unauthorized miners are harvesting your claims.",
                 duration: 300,
                 visualTheme: 'NORMAL'
             };
-            news = { id: `news_inc_${Date.now()}`, headline: "SECURITY ALERT: Illegal mining operation detected.", type: 'CRITICAL', timestamp: Date.now() };
-            return { event, news, newGrid, newAgents };
+            news = { id: ctx.getNextId?.('news_inc') || `news_inc_${Date.now()}`, headline: "SECURITY ALERT: Illegal mining operation detected.", type: 'CRITICAL', timestamp: state.tickCount };
+            return { event, news, newChunks, newAgents };
         }
     }
 
-    return { event, news, newGrid, newAgents };
+    return { event, news, newChunks, newAgents };
 }
+
+

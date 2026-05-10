@@ -4,7 +4,7 @@
  * Note: Worker script itself is separate - this manages the pool
  */
 
-import { Job, JobResult } from './jobs.types';
+import { Job, JobResult, ENGINE_SCHEMA_VERSION } from './jobs.types';
 import { JobSystem } from './JobSystem';
 
 /** Worker pool configuration */
@@ -59,6 +59,15 @@ export class WorkerPool {
                 // Persistent message handler
                 worker.onmessage = (e: MessageEvent) => {
                     const result = e.data as JobResult;
+
+                    // Protocol validation
+                    if (result.schemaVersion !== ENGINE_SCHEMA_VERSION) {
+                        console.error(`[WorkerPool] CRITICAL: Schema version mismatch in result from worker. Expected ${ENGINE_SCHEMA_VERSION}, got ${result.schemaVersion}. Killing worker.`);
+                        worker.terminate();
+                        this.workers = this.workers.filter(w => w.worker !== worker);
+                        return;
+                    }
+
                     const pending = this.jobCallbackMap.get(result.jobId);
 
                     if (pending) {

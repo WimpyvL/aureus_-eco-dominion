@@ -32,6 +32,10 @@ const ROLE_ICONS: Record<AgentRole, { icon: string; color: string }> = {
     'SECURITY': { icon: '🛡️', color: '#e11d48' },
     'WORKER': { icon: '👷', color: '#f59e0b' },
     'ILLEGAL_MINER': { icon: '👤', color: '#0f172a' },
+    'CITIZEN': { icon: '🏙️', color: '#94a3b8' },
+    'LUMBERJACK': { icon: '🪓', color: '#78350f' },
+    'QUARRYMAN': { icon: '⚒️', color: '#4b5563' },
+    'UNEMPLOYED': { icon: '❓', color: '#d1d5db' },
 };
 
 const WARNING_ICONS = {
@@ -42,7 +46,6 @@ const WARNING_ICONS = {
 
 export class AgentRenderSystem {
     private scene: THREE.Scene;
-    private gridSize: number;
     private getHeightAt: (x: number, z: number) => number;
 
     private agentMeshes: Map<string, THREE.Group> = new Map();
@@ -58,11 +61,9 @@ export class AgentRenderSystem {
 
     constructor(
         scene: THREE.Scene,
-        gridSize: number,
         getHeightAt: (x: number, z: number) => number
     ) {
         this.scene = scene;
-        this.gridSize = gridSize;
         this.getHeightAt = getHeightAt;
 
         // Selection Ring
@@ -136,7 +137,6 @@ export class AgentRenderSystem {
     // =========================================================================
 
     private syncMeshes(agents: Agent[]) {
-        const offset = (this.gridSize - 1) / 2;
         const seen = new Set<string>();
 
         agents.forEach(agent => {
@@ -168,10 +168,8 @@ export class AgentRenderSystem {
             }
 
             // Calculate Position
-            const x = agent.visualX ?? agent.x;
-            const z = agent.visualZ ?? agent.z;
-            const worldX = x - offset;
-            const worldZ = z - offset;
+            const worldX = agent.visualX ?? agent.x;
+            const worldZ = agent.visualZ ?? agent.z;
 
             // Target Rotation Logic
             let targetRot = meshGroup.userData.targetRot ?? meshGroup.rotation.y;
@@ -181,8 +179,8 @@ export class AgentRenderSystem {
             if (agent.state === 'MOVING') {
                 if (agent.path && agent.path.length > 0) {
                     const nextWaypoint = agent.path[0];
-                    const nextX = (nextWaypoint % this.gridSize) - offset;
-                    const nextZ = Math.floor(nextWaypoint / this.gridSize) - offset;
+                    const nextX = nextWaypoint.x;
+                    const nextZ = nextWaypoint.z;
                     targetRot = Math.atan2(nextX - worldX, nextZ - worldZ);
                 } else {
                     const dx = worldX - prevX;
@@ -191,9 +189,9 @@ export class AgentRenderSystem {
                         targetRot = Math.atan2(dx, dz);
                     }
                 }
-            } else if ((agent.state === 'WORKING' || agent.state === 'SOCIALIZING') && agent.targetTileId !== null) {
-                const tx = (agent.targetTileId % this.gridSize) - offset;
-                const tz = Math.floor(agent.targetTileId / this.gridSize) - offset;
+            } else if ((agent.state === 'WORKING' || agent.state === 'SOCIALIZING') && agent.targetX !== null && agent.targetZ !== null) {
+                const tx = agent.targetX;
+                const tz = agent.targetZ;
                 targetRot = Math.atan2(tx - worldX, tz - worldZ);
             }
 
@@ -238,14 +236,19 @@ export class AgentRenderSystem {
         // Agents
         this.agentMeshes.forEach((meshGroup, agentId) => {
             const targetPos = meshGroup.userData.targetPos;
-
+            const agentData = meshGroup.userData.agentData as Agent;
             // Pos Lerp
             if (targetPos) {
-                meshGroup.position.x = THREE.MathUtils.lerp(meshGroup.position.x, targetPos.x, 0.15);
-                meshGroup.position.z = THREE.MathUtils.lerp(meshGroup.position.z, targetPos.z, 0.15);
-                const h = this.getHeightAt(meshGroup.position.x, meshGroup.position.z);
-                meshGroup.position.y = THREE.MathUtils.lerp(meshGroup.position.y, h + 0.05, 0.3);
+                meshGroup.position.x = THREE.MathUtils.lerp(meshGroup.position.x, targetPos.x, 0.08); // Softened from 0.15
+                meshGroup.position.z = THREE.MathUtils.lerp(meshGroup.position.z, targetPos.z, 0.08); // Softened from 0.15
+
+                // Get terrain height at agent position
+                const terrainHeight = this.getHeightAt(meshGroup.position.x, meshGroup.position.z);
+                meshGroup.position.y = THREE.MathUtils.lerp(meshGroup.position.y, terrainHeight, 0.15); // Softened from 0.3
             }
+
+            // Always visible on surface
+            meshGroup.visible = true;
 
             // Rot Lerp
             const targetRot = meshGroup.userData.targetRot;
@@ -253,7 +256,7 @@ export class AgentRenderSystem {
                 let diff = targetRot - meshGroup.rotation.y;
                 while (diff > Math.PI) diff -= Math.PI * 2;
                 while (diff < -Math.PI) diff += Math.PI * 2;
-                meshGroup.rotation.y += THREE.MathUtils.lerp(0, diff, 0.12);
+                meshGroup.rotation.y += THREE.MathUtils.lerp(0, diff, 0.06); // Softened from 0.12
             }
 
             // Status Indicators
@@ -263,21 +266,21 @@ export class AgentRenderSystem {
                 if (meshGroup.userData.agentData) {
                     this.updateStatusIndicators(meshGroup.userData.agentData, statusGroup, time);
                 }
-                statusGroup.visible = zoomLevel <= 130;
+                statusGroup.visible = meshGroup.visible && zoomLevel <= 130;
             }
 
             // Selection Ring
             if (this.selectedAgentId === agentId) {
                 this.agentSelectionRing.position.set(meshGroup.position.x, meshGroup.position.y + 0.02, meshGroup.position.z);
                 this.agentSelectionRing.scale.setScalar(1 + Math.sin(time * 10) * 0.05);
-                this.agentSelectionRing.visible = true;
+                this.agentSelectionRing.visible = meshGroup.visible;
             }
 
             // Animations (Simple/LOD aware)
             this.updateAgentAnimation(meshGroup, time, zoomLevel, agentId);
         });
 
-        if (!this.agentMeshes.has(this.selectedAgentId || '')) {
+        if (!this.agentMeshes.has(this.selectedAgentId || '') || !this.agentMeshes.get(this.selectedAgentId!)?.visible) {
             this.agentSelectionRing.visible = false;
         }
     }
@@ -293,25 +296,25 @@ export class AgentRenderSystem {
         if (zoomLevel > 140) return; // Static when far
 
         if (state === 'MOVING') {
-            const speed = 12;
+            const speed = 7; // Reduced from 12
             const walk = Math.sin(localTime * speed);
 
             // Legs
-            if (parts.legL) parts.legL.rotation.x = -walk * 0.6;
-            if (parts.legR) parts.legR.rotation.x = walk * 0.6;
+            if (parts.legL) parts.legL.rotation.x = -walk * 0.5; // Slightly reduced amplitude 0.6->0.5
+            if (parts.legR) parts.legR.rotation.x = walk * 0.5;
 
             // Arms (opposite to legs)
-            if (parts.armL) parts.armL.rotation.x = walk * 0.4;
-            if (parts.armR) parts.armR.rotation.x = -walk * 0.4;
+            if (parts.armL) parts.armL.rotation.x = walk * 0.3; // Reduced from 0.4
+            if (parts.armR) parts.armR.rotation.x = -walk * 0.3;
 
             // Subtle body bobbing
-            mesh.position.y += Math.abs(walk) * 0.02;
+            mesh.position.y += Math.abs(walk) * 0.01; // Reduced from 0.02
         } else if (state === 'WORKING') {
-            const speed = 15;
+            const speed = 9; // Reduced from 15
             const work = Math.sin(localTime * speed);
 
             // Hammering/working motion with right arm
-            if (parts.armR) parts.armR.rotation.x = -0.5 + work * 0.8;
+            if (parts.armR) parts.armR.rotation.x = -0.5 + work * 0.6; // Reduced amplitude 0.8->0.6
             if (parts.armL) parts.armL.rotation.x = 0.2;
 
             // Reset legs
@@ -319,11 +322,11 @@ export class AgentRenderSystem {
             if (parts.legR) parts.legR.rotation.x = 0;
         } else {
             // Idle breathing / bobbing
-            const breathe = Math.sin(localTime * 2);
+            const breathe = Math.sin(localTime * 1.2); // Reduced from 2
 
             // Very subtle arm movement
-            if (parts.armL) parts.armL.rotation.x = breathe * 0.05;
-            if (parts.armR) parts.armR.rotation.x = breathe * 0.05;
+            if (parts.armL) parts.armL.rotation.x = breathe * 0.03; // Reduced from 0.05
+            if (parts.armR) parts.armR.rotation.x = breathe * 0.03;
 
             // Reset legs
             if (parts.legL) parts.legL.rotation.x = 0;

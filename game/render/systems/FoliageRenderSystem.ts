@@ -6,15 +6,15 @@
 
 import * as THREE from 'three';
 import { BuildingFactory } from '../../../engine/render/utils/VoxelGenerators';
-import { matMaster } from '../../../engine/render/materials/VoxelMaterials';
+import { foliageInstancedMaterial } from '../../../engine/render/materials/VoxelMaterials';
 import { mergeGroupGeometry } from '../../../engine/render/utils/VoxelUtils';
-import { GRID_SIZE } from '../../../engine/utils/GameUtils';
 
 export interface FoliageItem {
     x: number;
     y: number;
     z: number;
     type: string;
+    marked?: boolean;
 }
 
 export class FoliageRenderSystem {
@@ -83,7 +83,6 @@ export class FoliageRenderSystem {
 
         // 2. Sync Meshes
         const activeKeys = new Set<string>();
-        const offset = (GRID_SIZE - 1) / 2;
         const dummy = new THREE.Object3D();
 
         Object.entries(buckets).forEach(([type, items]) => {
@@ -104,15 +103,16 @@ export class FoliageRenderSystem {
                     return;
                 }
 
-                const group = BuildingFactory[type]();
+                const group = BuildingFactory[type]({ seed: 42 });
                 const geometry = mergeGroupGeometry(group);
 
                 // Allocate with some buffer to avoid frequent re-alloc
                 const capacity = Math.ceil(count * 1.5);
-                mesh = new THREE.InstancedMesh(geometry, matMaster, capacity);
+                mesh = new THREE.InstancedMesh(geometry, foliageInstancedMaterial, capacity);
 
                 mesh.castShadow = true;
                 mesh.receiveShadow = true;
+                mesh.frustumCulled = false; // CRITICAL: This is a global pool across all chunks
                 // Allow updates
                 mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
@@ -123,22 +123,35 @@ export class FoliageRenderSystem {
             // Update Instances
             let idx = 0;
             items.forEach((item) => {
-                // Deterministic rotation based on position
-                const seed = Math.abs(item.x * 31 + item.z * 17);
-                const rotY = (seed % 4) * (Math.PI / 2);
+                // Deterministic rotation and scale based on position
+                const rotSeed = Math.abs(item.x * 31 + item.z * 17);
+                const rotY = (rotSeed % 4) * (Math.PI / 2);
+
+                const scaleSeed = Math.abs(item.x * 7.11 + item.z * 3.45);
+                const scale = 0.85 + (scaleSeed % 10) * 0.03;
 
                 // Position is absolute world coordinate from worker
-                dummy.position.set(item.x - offset, item.y, item.z - offset);
+                dummy.position.set(item.x, item.y, item.z);
                 dummy.rotation.set(0, rotY, 0);
-                dummy.scale.setScalar(1.0);
+                dummy.scale.setScalar(scale);
                 dummy.updateMatrix();
+                dummy.updateMatrixWorld(true);
 
                 mesh!.setMatrixAt(idx, dummy.matrix);
+
+                // Tint if marked for harvest
+                if (item.marked) {
+                    mesh!.setColorAt(idx, new THREE.Color(1, 0.3, 0.3)); // Red tint
+                } else {
+                    mesh!.setColorAt(idx, new THREE.Color(1, 1, 1)); // White (Normal)
+                }
+
                 idx++;
             });
 
             mesh.count = count;
             mesh.instanceMatrix.needsUpdate = true;
+            if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
         });
 
         // 3. Cleanup Unused

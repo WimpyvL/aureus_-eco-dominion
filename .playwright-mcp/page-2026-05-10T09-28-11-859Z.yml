@@ -1,0 +1,312 @@
+- generic [ref=e3]:
+  - generic:
+    - generic:
+      - generic:
+        - button [ref=e81]:
+          - img [ref=e83]
+        - button [ref=e89]:
+          - img [ref=e91]
+        - button [ref=e97]:
+          - img [ref=e100]
+        - button [ref=e106]:
+          - img [ref=e109]
+        - button [ref=e113]:
+          - img [ref=e116]
+        - button [ref=e119]:
+          - img [ref=e121]
+        - button [ref=e127]:
+          - img [ref=e130]
+        - button [ref=e134]:
+          - img [ref=e136]
+        - button [ref=e141]:
+          - img [ref=e143]
+      - button "Open Minimap" [ref=e147]:
+        - img [ref=e148]
+      - generic:
+        - button [ref=e338]:
+          - img [ref=e339]
+        - button [ref=e161]:
+          - img [ref=e163]
+      - generic:
+        - button "Ops" [ref=e166]:
+          - img [ref=e167]
+          - generic [ref=e168]: Ops
+        - generic [ref=e169]:
+          - button [active] [ref=e170]:
+            - img [ref=e171]
+          - button [ref=e173]:
+            - img [ref=e174]
+        - button "Build" [ref=e177]:
+          - img [ref=e178]
+          - generic [ref=e182]: Build
+      - generic [ref=e183]:
+        - generic [ref=e184]:
+          - generic [ref=e185]:
+            - img [ref=e187]
+            - heading "Operations" [level=2] [ref=e188]
+          - button [ref=e189]:
+            - img [ref=e190]
+        - generic [ref=e192]:
+          - button "Stats" [ref=e193]:
+            - img [ref=e194]
+            - generic [ref=e196]: Stats
+          - button "Crew" [ref=e197]:
+            - img [ref=e198]
+            - generic [ref=e203]: Crew
+          - button "Office" [ref=e204]:
+            - img [ref=e205]
+            - generic [ref=e207]: Office
+          - button "Tech" [ref=e208]:
+            - img [ref=e209]
+            - generic [ref=e211]: Tech
+        - generic [ref=e213]:
+          - generic [ref=e214]:
+            - generic [ref=e215]:
+              - img [ref=e216]
+              - heading "Market Terminal" [level=3] [ref=e219]
+            - generic [ref=e220]:
+              - generic [ref=e221]:
+                - generic [ref=e222]:
+                  - generic [ref=e223]: Ore Stockpile
+                  - generic [ref=e224]: 41 tons
+                - generic [ref=e225]:
+                  - generic [ref=e226]: Market Value
+                  - generic [ref=e227]: ~626 AGT
+              - button "Export Minerals" [ref=e228]:
+                - img [ref=e229]
+                - text: Export Minerals
+          - generic [ref=e232]:
+            - heading "Colony Vitals" [level=3] [ref=e234]
+            - generic [ref=e235]:
+              - generic [ref=e236]:
+                - generic [ref=e237]: Housing
+                - generic [ref=e238]: 3 / 68
+              - generic [ref=e239]:
+                - generic [ref=e240]: Eco Status
+                - generic [ref=e241]: PRISTINE
+              - generic [ref=e242]:
+                - generic [ref=e243]: Global Yield
+                - generic [ref=e244]: x1.00
+              - generic [ref=e245]:
+                - generic [ref=e246]: Public Trust
+                - generic [ref=e247]: 100%
+      - generic [ref=e249]:
+        - generic [ref=e250]:
+          - generic [ref=e251]:
+            - img [ref=e253]
+            - generic [ref=e256]:
+              - heading "Global Market Exchange" [level=2] [ref=e257]
+              - paragraph [ref=e258]: Global Trade Network
+          - button [ref=e259]:
+            - img [ref=e260]
+        - generic [ref=e261]:
+          - generic [ref=e262]:
+            - generic [ref=e263]:
+              - generic [ref=e264]:
+                - heading "Raw Minerals Index" [level=3] [ref=e265]
+                - generic [ref=e266]:
+                  - generic [ref=e267]: "10.0"
+                  - generic [ref=e268]: AGT / ton
+              - generic [ref=e269]: STABLE
+            - img [ref=e271]
+            - generic [ref=e272]:
+              - button "SELL (41)" [ref=e343]
+              - button "BUY 100 (1250)" [disabled] [ref=e274]
+          - generic [ref=e275]:
+            - generic [ref=e276]:
+              - generic [ref=e277]:
+                - heading "Thundergems Index" [level=3] [ref=e278]
+                - generic [ref=e279]:
+                  - generic [ref=e280]: "38.0"
+                  - generic [ref=e281]: AGT / Gem
+              - generic [ref=e282]: STABLE
+            - img [ref=e284]
+            - generic [ref=e285]:
+              - generic [ref=e286]:
+                - generic [ref=e287]: Recipient Wallet Address
+                - textbox "Enter 0x..." [ref=e288]
+              - generic [ref=e289]:
+                - button "DEPOSIT (10)" [disabled] [ref=e290]
+                - button "BUY 10 (475)" [disabled] [ref=e344]
+          - generic [ref=e292]:
+            - generic [ref=e293]:
+              - heading "Wood Market" [level=3] [ref=e294]
+              - generic [ref=e295]:
+                - generic [ref=e296]: 10.5 AGT
+                - generic [ref=e297]: FALLING
+              - img [ref=e299]
+              - generic [ref=e301]:
+                - button "SELL" [ref=e302]
+                - button "BUY 50 (656)" [disabled] [ref=e345]
+            - generic [ref=e304]:
+              - heading "Stone Market" [level=3] [ref=e305]
+              - generic [ref=e306]:
+                - generic [ref=e307]: 14.0 AGT
+                - generic [ref=e308]: FALLING
+              - img [ref=e310]
+              - generic [ref=e311]:
+                - button "SELL" [ref=e312]
+                - button "BUY 50 (875)" [disabled] [ref=e346]
+          - generic [ref=e314]:
+            - generic [ref=e315]:
+              - img [ref=e316]
+              - heading "Active Contracts" [level=3] [ref=e319]
+            - generic [ref=e320]:
+              - img [ref=e321]
+              - paragraph [ref=e326]: No Contracts Available
+              - paragraph [ref=e327]: Check back next cycle
+      - generic:
+        - generic [ref=e348]:
+          - generic [ref=e349]:
+            - generic [ref=e350]:
+              - img [ref=e352]
+              - heading "System Monitor" [level=2] [ref=e354]
+            - generic [ref=e355]:
+              - generic [ref=e356]: 49 FPS
+              - button [ref=e357]:
+                - img [ref=e358]
+          - generic [ref=e361]:
+            - generic [ref=e362]:
+              - heading "Real-Time Workload" [level=3] [ref=e363]:
+                - img [ref=e364]
+                - text: Real-Time Workload
+              - generic [ref=e366]:
+                - generic [ref=e368]:
+                  - generic [ref=e369]: Main Thread (CPU)
+                  - generic [ref=e370]: 0.0ms
+                - generic [ref=e373]:
+                  - generic [ref=e374]: Total Frame (GPU+Wait)
+                  - generic [ref=e375]: 20.4ms
+            - generic [ref=e378]:
+              - heading "System Memory" [level=3] [ref=e379]:
+                - img [ref=e380]
+                - text: System Memory
+              - generic [ref=e383]:
+                - generic [ref=e384]:
+                  - generic [ref=e385]:
+                    - img [ref=e386]
+                    - generic [ref=e388]: Used Heap
+                  - generic [ref=e389]: 325 MB
+                - generic [ref=e390]:
+                  - generic [ref=e391]:
+                    - img [ref=e392]
+                    - generic [ref=e396]: Allocated
+                  - generic [ref=e397]: 397 MB
+            - generic [ref=e398]:
+              - heading "Rasterizer Pipeline" [level=3] [ref=e399]:
+                - img [ref=e400]
+                - text: Rasterizer Pipeline
+              - generic [ref=e403]:
+                - generic [ref=e404]:
+                  - generic [ref=e405]:
+                    - img [ref=e406]
+                    - generic [ref=e410]: Draw Calls
+                  - generic [ref=e411]: "676"
+                - generic [ref=e412]:
+                  - generic [ref=e413]:
+                    - img [ref=e414]
+                    - generic [ref=e416]: Triangles
+                  - generic [ref=e417]: 1,264,834
+            - generic [ref=e418]:
+              - heading "GPU Resources" [level=3] [ref=e419]:
+                - img [ref=e420]
+                - text: GPU Resources
+              - generic [ref=e424]:
+                - generic [ref=e425]:
+                  - generic [ref=e426]:
+                    - img [ref=e427]
+                    - generic [ref=e430]: Geometries
+                  - generic [ref=e431]: "1392"
+                - generic [ref=e432]:
+                  - generic [ref=e433]:
+                    - img [ref=e434]
+                    - generic [ref=e438]: Textures
+                  - generic [ref=e439]: "23"
+                - generic [ref=e440]:
+                  - generic [ref=e441]:
+                    - img [ref=e442]
+                    - generic [ref=e447]: Shader Progs
+                  - generic [ref=e448]: "11"
+            - generic [ref=e449]:
+              - heading "Active Instances" [level=3] [ref=e450]:
+                - img [ref=e451]
+                - text: Active Instances
+              - generic [ref=e456]:
+                - generic [ref=e457]:
+                  - generic [ref=e458]:
+                    - img [ref=e459]
+                    - generic [ref=e463]: Terrain Chunks
+                  - generic [ref=e464]: "3125"
+                - generic [ref=e465]:
+                  - generic [ref=e466]:
+                    - img [ref=e467]
+                    - generic [ref=e470]: Structures
+                  - generic [ref=e471]: "17980"
+                - generic [ref=e472]:
+                  - generic [ref=e473]:
+                    - img [ref=e474]
+                    - generic [ref=e479]: Colonists
+                  - generic [ref=e480]: "3"
+                - generic [ref=e481]:
+                  - generic [ref=e482]:
+                    - img [ref=e483]
+                    - generic [ref=e485]: FX Particles
+                  - generic [ref=e486]: "0"
+            - generic [ref=e487]:
+              - heading "Developer Tools" [level=3] [ref=e488]:
+                - img [ref=e489]
+                - text: Developer Tools
+              - button "Creative Mode" [ref=e492]:
+                - generic [ref=e493]: Creative Mode
+                - img [ref=e494]
+              - paragraph [ref=e497]: Bypasses all building costs, eco requirements, and tech locks.
+              - button "Switch to Underground" [ref=e498]:
+                - img [ref=e499]
+                - text: Switch to Underground
+            - generic [ref=e506]: Aureus Engine v3.14
+        - generic [ref=e508]:
+          - generic [ref=e509] [cursor=pointer]:
+            - generic [ref=e510]:
+              - img [ref=e512]
+              - generic [ref=e517]: Agent Debug
+            - generic [ref=e518]:
+              - generic [ref=e519]: 0/3 active
+              - img [ref=e520]
+          - generic [ref=e522]:
+            - generic [ref=e523]:
+              - generic [ref=e524]:
+                - generic [ref=e525]: Idle
+                - generic [ref=e526]: "0"
+              - generic [ref=e527]:
+                - generic [ref=e528]: Moving
+                - generic [ref=e529]: "3"
+              - generic [ref=e530]:
+                - generic [ref=e531]: Working
+                - generic [ref=e532]: "0"
+              - generic [ref=e533]:
+                - generic [ref=e534]: Jobs
+                - generic [ref=e535]: "0"
+            - generic [ref=e536]:
+              - button "ALL" [ref=e537]
+              - button "WORKING" [ref=e538]
+              - button "IDLE" [ref=e539]
+              - button "MOVING" [ref=e540]
+            - generic [ref=e541]:
+              - generic [ref=e543] [cursor=pointer]:
+                - generic [ref=e544]:
+                  - img [ref=e546]
+                  - generic [ref=e551]: Marcus
+                - generic [ref=e553]: MOVING
+              - generic [ref=e555] [cursor=pointer]:
+                - generic [ref=e556]:
+                  - img [ref=e558]
+                  - generic [ref=e563]: Elena
+                - generic [ref=e565]: MOVING
+              - generic [ref=e567] [cursor=pointer]:
+                - generic [ref=e568]:
+                  - img [ref=e570]
+                  - generic [ref=e575]: Kofi
+                - generic [ref=e577]: MOVING
+            - generic [ref=e578]:
+              - img [ref=e579]
+              - generic [ref=e582]: "Tick: 1035"

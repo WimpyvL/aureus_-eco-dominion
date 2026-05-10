@@ -1,0 +1,18 @@
+engine/sim/systems/EconomySystem.ts(49,34): error TS2339: Property 'grid' does not exist on type 'GameState'.
+engine/sim/systems/EraSystem.ts(56,33): error TS2339: Property 'grid' does not exist on type 'GameState'.
+engine/sim/systems/EventSystem.ts(29,34): error TS2339: Property 'newGrid' does not exist on type '{ event: GlobalEvent; news: NewsItem; newChunks: Record<string, Chunk>; newAgents: Agent[]; }'.
+engine/sim/systems/EventSystem.ts(35,45): error TS2322: Type '"GRID_UPDATE"' is not assignable to type '"CHUNK_UPDATE" | "FX" | "AUDIO"'.
+engine/sim/systems/EventSystem.ts(35,98): error TS2339: Property 'grid' does not exist on type 'GameState'.
+engine/sim/systems/EventSystem.ts(36,23): error TS2339: Property 'grid' does not exist on type 'GameState'.
+engine/sim/systems/PowerGridSystem.ts(29,20): error TS2339: Property 'grid' does not exist on type 'GameState'.
+engine/sim/systems/PowerGridSystem.ts(29,49): error TS2339: Property 'grid' does not exist on type 'GameState'.
+engine/sim/systems/PowerGridSystem.ts(37,28): error TS2339: Property 'grid' does not exist on type 'GameState'.
+engine/sim/systems/ProductionSystem.ts(25,28): error TS2339: Property 'grid' does not exist on type 'GameState'.
+engine/sim/systems/TutorialDemoSystem.ts(4,10): error TS2305: Module '"../../utils/GameUtils"' has no exported member 'GRID_SIZE'.
+engine/sim/systems/WaterNetworkSystem.ts(29,20): error TS2339: Property 'grid' does not exist on type 'GameState'.
+engine/sim/systems/WaterNetworkSystem.ts(29,49): error TS2339: Property 'grid' does not exist on type 'GameState'.
+engine/sim/systems/WaterNetworkSystem.ts(37,28): error TS2339: Property 'grid' does not exist on type 'GameState'.
+engine/utils/ChunkUtils.ts(7,10): error TS2305: Module '"./GameUtils"' has no exported member 'GRID_SIZE'.
+engine/worldgen/GridGenerator.ts(12,10): error TS2305: Module '"../utils/GameUtils"' has no exported member 'GRID_SIZE'.
+engine/worldgen/GridGenerator.ts(17,5): error TS2322: Type '{ id: number; x: number; y: number; buildingType: BuildingType.EMPTY | BuildingType.POND; level: number; terrainHeight: number; biome: BiomeType; foliage: FoliageType; locked: false; explored: true; underground: {}; markedForHarvest: false; }[]' is not assignable to type 'GridTile[]'.
+  Property 'z' is missing in type '{ id: number; x: number; y: number; buildingType: BuildingType.EMPTY | BuildingType.POND; level: number; terrainHeight: number; biome: BiomeType; foliage: FoliageType; locked: false; explored: true; underground: {}; markedForHarvest: false; }' but required in type 'GridTile'.

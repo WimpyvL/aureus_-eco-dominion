@@ -17,9 +17,19 @@ interface NewsTickerProps {
 export const NewsTicker: React.FC<NewsTickerProps> = ({ news, playSfx }) => {
     // Start collapsed for cleaner HUD - expand on click/tap
     const [isCollapsed, setIsCollapsed] = useState(true);
+    const [hasNew, setHasNew] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const lastCountRef = useRef(news.length);
 
     const logItems = [...news].reverse();
+
+    useEffect(() => {
+        // If news items increased while collapsed, mark as new
+        if (isCollapsed && news.length > lastCountRef.current) {
+            setHasNew(true);
+        }
+        lastCountRef.current = news.length;
+    }, [news.length, isCollapsed]);
 
     useEffect(() => {
         if (scrollRef.current && !isCollapsed) {
@@ -44,10 +54,14 @@ export const NewsTicker: React.FC<NewsTickerProps> = ({ news, playSfx }) => {
         return (
             <div className="pointer-events-auto animate-in slide-in-from-left-4">
                 <button
-                    onClick={() => { setIsCollapsed(false); playSfx('UI_CLICK'); }}
+                    onClick={() => {
+                        setIsCollapsed(false);
+                        setHasNew(false);
+                        playSfx('UI_CLICK');
+                    }}
                     className="w-10 h-10 bg-slate-900 border-2 border-slate-600 flex items-center justify-center hover:bg-slate-800 transition-colors shadow-lg relative"
                 >
-                    <span className="w-1.5 h-1.5 bg-amber-500 inline-block animate-pulse absolute top-1.5 right-1.5"></span>
+                    {hasNew && <span className="w-1.5 h-1.5 bg-amber-500 inline-block animate-pulse absolute top-1.5 right-1.5"></span>}
                     <FileText size={18} className="text-slate-400" />
                 </button>
             </div>

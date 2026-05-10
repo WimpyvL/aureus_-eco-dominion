@@ -8,7 +8,7 @@
  */
 
 import { WorldHost, Runtime } from '../engine';
-import { ThreeRenderAdapter } from '../engine/render';
+import { RuntimeQualityGovernor, ThreeRenderAdapter, getRecommendedRenderQuality } from '../engine/render';
 import { DebugHud } from '../engine/tools';
 import { AureusWorld } from './AureusWorld';
 
@@ -18,6 +18,7 @@ export interface BootstrapResult {
     world: AureusWorld;
     renderer: ThreeRenderAdapter;
     debugHud: DebugHud;
+    qualityGovernor: RuntimeQualityGovernor;
 }
 
 export async function bootstrap(container: HTMLElement): Promise<BootstrapResult> {
@@ -26,9 +27,12 @@ export async function bootstrap(container: HTMLElement): Promise<BootstrapResult
     console.log('╚════════════════════════════════════════╝');
 
     // Create renderer
+    const renderQuality = getRecommendedRenderQuality();
     const renderer = new ThreeRenderAdapter({
-        antialias: true,
-        shadowMap: true,
+        antialias: renderQuality.antialias,
+        shadowMap: renderQuality.shadowMap,
+        pixelRatio: renderQuality.pixelRatio,
+        shadowMapSize: renderQuality.shadowMapSize,
         fogEnabled: true,
         fogNear: 40,
         fogFar: 120,
@@ -52,12 +56,14 @@ export async function bootstrap(container: HTMLElement): Promise<BootstrapResult
     // Create debug HUD
     const debugHud = new DebugHud({ position: 'top-right' });
     debugHud.init(container, runtime, () => renderer.getStats());
+    const qualityGovernor = new RuntimeQualityGovernor(runtime, renderer);
 
     // Update HUD periodically
     setInterval(() => debugHud.update(), 100);
 
     // Start engine
     runtime.start();
+    qualityGovernor.start();
 
     console.log('[Bootstrap] Engine started');
 
@@ -67,6 +73,7 @@ export async function bootstrap(container: HTMLElement): Promise<BootstrapResult
         world,
         renderer,
         debugHud,
+        qualityGovernor,
     };
 }
 
@@ -74,6 +81,7 @@ export async function bootstrap(container: HTMLElement): Promise<BootstrapResult
  * Cleanup function for when app unmounts
  */
 export function cleanup(result: BootstrapResult): void {
+    result.qualityGovernor.stop();
     result.runtime.stop();
     result.renderer.dispose();
     result.debugHud.dispose();

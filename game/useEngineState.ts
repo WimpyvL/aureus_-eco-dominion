@@ -40,31 +40,31 @@ export function useEngineState(world: AureusWorld | null) {
  * Replaces React dispatch({ type: ... })
  */
 export interface EngineActions {
-    placeBuilding: (index: number, type?: string) => void;
-    bulldozeTile: (index: number) => void;
+    placeBuilding: (x: number, z: number, type?: string) => void;
+    bulldozeTile: (x: number, z: number) => void;
     selectBuilding: (type: string | null) => void;
     selectAgent: (id: string | null) => void;
-    commandAgent: (agentId: string, tileId: number) => void;
-    setInteractionMode: (mode: 'BUILD' | 'BULLDOZE' | 'INSPECT') => void;
+    commandAgent: (agentId: string, x: number, z: number) => void;
+    setInteractionMode: (mode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG') => void;
     sellMinerals: () => void;
     setAutoSell: (enabled: boolean, threshold: number) => void;
     researchTech: (techId: string) => void;
     toggleDebug: () => void;
     saveGame: () => void;
     loadGame: (data: string) => void;
-    speedUpConstruction: (index: number) => void;
+    speedUpConstruction: (x: number, z: number) => void;
     acceptContract: (contractId: string) => void;
     deliverContract: (contractId: string) => void;
 }
 
 export function useEngineActions(world: AureusWorld | null): EngineActions {
     return {
-        placeBuilding: useCallback((index: number, type?: string) => {
-            world?.placeBuilding(index, type);
+        placeBuilding: useCallback((x: number, z: number, type?: string) => {
+            world?.placeBuilding(x, z, type);
         }, [world]),
 
-        bulldozeTile: useCallback((index: number) => {
-            world?.bulldozeTile(index);
+        bulldozeTile: useCallback((x: number, z: number) => {
+            world?.bulldozeTile(x, z);
         }, [world]),
 
         selectBuilding: useCallback((type: string | null) => {
@@ -75,8 +75,8 @@ export function useEngineActions(world: AureusWorld | null): EngineActions {
             world?.selectAgent(id);
         }, [world]),
 
-        commandAgent: useCallback((agentId: string, tileId: number) => {
-            world?.commandAgent(agentId, tileId);
+        commandAgent: useCallback((agentId: string, x: number, z: number) => {
+            world?.commandAgent(agentId, x, z);
         }, [world]),
 
         setInteractionMode: useCallback((mode: 'BUILD' | 'BULLDOZE' | 'INSPECT') => {
@@ -107,8 +107,8 @@ export function useEngineActions(world: AureusWorld | null): EngineActions {
             world?.loadGame(data);
         }, [world]),
 
-        speedUpConstruction: useCallback((index: number) => {
-            world?.speedUpConstruction(index);
+        speedUpConstruction: useCallback((x: number, z: number) => {
+            world?.speedUpConstruction(x, z);
         }, [world]),
 
         acceptContract: useCallback((contractId: string) => {

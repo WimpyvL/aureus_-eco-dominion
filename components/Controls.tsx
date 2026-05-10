@@ -4,28 +4,39 @@
 */
 
 import React from 'react';
-import { Menu, Layers, Hammer, X, Activity, TrendingUp } from 'lucide-react';
-import { BuildingType, Action, GameStep } from '../types';
+import { Menu, Layers, Hammer, X, Activity, TrendingUp, Pickaxe, ArrowUp, ArrowDown, Eye } from 'lucide-react';
+import { BuildingType, Action, GameStep, SidebarMode } from '../types';
 import { BUILDINGS } from '../engine/data/VoxelConstants';
+import '../components/ViewSwitchButton.css';
 
 interface ControlsProps {
     selectedBuilding: BuildingType | null;
     dispatch: React.Dispatch<Action>;
-    setSidebarOpen: (mode: 'NONE' | 'OPS' | 'SHOP' | 'TRADE' | 'CREW' | 'TECH') => void;
-    viewMode: string;
+    setSidebarOpen: (mode: SidebarMode) => void;
     playSfx: (type: any) => void;
     step: GameStep;
     debugMode: boolean;
+    interactionMode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'TEST_DESTRUCT';
+    dungeonUnlocked: boolean;
+    activeView: 'SURFACE' | 'DUNGEON';
+    onToggleView: () => void;
+    selectedAgentId: string | null;
 }
 
-export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding, dispatch, setSidebarOpen, viewMode, playSfx, step, debugMode }) => {
+export const Controls: React.FC<ControlsProps> = React.memo(({
+    selectedBuilding, dispatch, setSidebarOpen, playSfx, step,
+    debugMode, interactionMode, dungeonUnlocked, activeView, onToggleView,
+    selectedAgentId
+}) => {
     // ... (keep existing render logic for selectedBuilding)
     if (selectedBuilding) {
         return (
             <div className="absolute bottom-20 sm:bottom-12 left-4 right-4 z-50 animate-in slide-in-from-bottom-4 pointer-events-auto flex flex-col gap-2 max-w-sm mx-auto items-center">
-                <div className="bg-amber-500 text-amber-950 px-4 py-2.5 rounded-[4px] border-2 border-amber-800 shadow-[4px_4px_0_0_rgba(0,0,0,0.4)] font-bold flex items-center justify-center gap-2 text-xs">
+                <div className="px-4 py-2.5 rounded-[4px] border-2 shadow-[4px_4px_0_0_rgba(0,0,0,0.4)] font-bold flex items-center justify-center gap-2 text-xs bg-amber-500 text-amber-950 border-amber-800">
                     <Hammer size={16} className="animate-pulse" />
-                    <span className="font-['Rajdhani'] uppercase tracking-wider">Deploy: {BUILDINGS[selectedBuilding].name}</span>
+                    <span className="font-['Rajdhani'] uppercase tracking-wider">
+                        {`Deploy: ${BUILDINGS[selectedBuilding!].name}`}
+                    </span>
                 </div>
                 <button
                     onClick={() => {
@@ -82,22 +93,7 @@ export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding,
                 >
                     <Activity size={18} className={debugMode ? 'text-white' : 'text-slate-400'} />
                 </button>
-                <button
-                    onClick={() => {
-                        dispatch({ type: 'TOGGLE_VIEW' });
-                        playSfx('UI_CLICK');
-                    }}
-                    className={`
-                    w-12 h-12 rounded-[4px] flex items-center justify-center transition-all
-                    border-2 border-b-[4px] 
-                    ${viewMode === 'UNDERGROUND'
-                            ? 'bg-purple-600 border-purple-900 border-b-2 translate-y-[2px]'
-                            : 'bg-slate-800 border-slate-950 hover:-translate-y-0.5'
-                        }
-                    `}
-                >
-                    <Layers size={20} className={viewMode === 'UNDERGROUND' ? 'text-white' : 'text-slate-400'} />
-                </button>
+
                 <button
                     onClick={() => {
                         setSidebarOpen('TRADE');
@@ -110,6 +106,32 @@ export const Controls: React.FC<ControlsProps> = React.memo(({ selectedBuilding,
                 >
                     <TrendingUp size={20} className="text-blue-400" />
                 </button>
+
+                {selectedAgentId && (
+                    <button
+                        onClick={() => {
+                            dispatch({ type: 'ENTER_FPS', payload: selectedAgentId });
+                            playSfx('UI_CLICK');
+                        }}
+                        className={`
+                        w-12 h-12 rounded-[4px] flex items-center justify-center transition-all bg-indigo-600 border-indigo-900 hover:-translate-y-0.5
+                        border-2 border-b-[4px]
+                        `}
+                        title="First Person View"
+                    >
+                        <Eye size={20} className="text-white" />
+                    </button>
+                )}
+
+                {dungeonUnlocked && (
+                    <button
+                        onClick={onToggleView}
+                        className={`view-switch-button ${activeView === 'DUNGEON' ? 'is-dungeon' : 'is-surface'} w-12 h-12 !p-0`}
+                        title={activeView === 'DUNGEON' ? 'Return to Surface (U)' : 'Enter Dungeon (U)'}
+                    >
+                        {activeView === 'DUNGEON' ? <ArrowUp size={20} /> : <ArrowDown size={20} />}
+                    </button>
+                )}
             </div>
 
             {/* Build Button (Right) */}

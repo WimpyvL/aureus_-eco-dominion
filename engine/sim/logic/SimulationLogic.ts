@@ -1,16 +1,14 @@
 
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
-*/
-
 import { GameState, Agent, BuildingType, GridTile, SimulationEffect, NewsItem, AgentRole } from '../../../types';
-import { GRID_SIZE } from '../../utils/GameUtils';
 import { BUILDINGS } from '../../data/VoxelConstants';
+import { FixedContext } from '../../kernel';
 
 // --- CONFIGURATION ---
 export const MAX_AGENTS = 30;
 export const CAPACITY_PER_QUARTERS = 4;
+export const BASE_STORAGE_CAPACITY = 1000;
+export const DEPOT_CAPACITY_BONUS = 500;
+export const STOCKPILE_CAPACITY_BONUS = 2000;
 
 
 const NAMES = ["Cass", "Jax", "Val", "Rya", "Kael", "Nyx", "Zane", "Mira", "Leo", "Sora", "Elara", "Teron", "Muna", "Vael", "Koda", "Orin", "Tali", "Vex"];
@@ -22,8 +20,9 @@ interface Point { x: number; y: number; }
 // --- BEHAVIOR TREE / UTILITY AI ---
 
 // Generate random personality with role-based tendencies
-function generatePersonality(role: AgentRole): { diligence: number; sociability: number; bravery: number; patience: number } {
-    const base = () => 0.3 + Math.random() * 0.4; // 0.3-0.7 base
+function generatePersonality(ctx: FixedContext | undefined, role: AgentRole): { diligence: number; sociability: number; bravery: number; patience: number } {
+    const random = ctx?.random;
+    const base = () => 0.3 + (random ? random.next() : Math.random()) * 0.4; // 0.3-0.7 base
 
     let personality = {
         diligence: base(),
@@ -52,8 +51,17 @@ function generatePersonality(role: AgentRole): { diligence: number; sociability:
             break;
         case 'ILLEGAL_MINER':
             personality.bravery += 0.4;
-            personality.diligence = 0.9; // Very driven
-            personality.sociability = 0.1; // Loner
+            personality.diligence = 0.9;
+            personality.sociability = 0.1;
+            break;
+        case 'LUMBERJACK':
+        case 'QUARRYMAN':
+            personality.diligence += 0.2;
+            personality.patience += 0.1;
+            break;
+        case 'CITIZEN':
+            personality.sociability += 0.3;
+            personality.diligence -= 0.1;
             break;
     }
 
@@ -67,9 +75,10 @@ function generatePersonality(role: AgentRole): { diligence: number; sociability:
 }
 
 // Generate role-appropriate skills
-function generateSkills(role: AgentRole): { mining: number; construction: number; plants: number; intelligence: number } {
-    const base = () => Math.floor(Math.random() * 3) + 1; // 1-3 base
-    const bonus = () => Math.floor(Math.random() * 3) + 2; // 2-4 bonus
+function generateSkills(ctx: FixedContext | undefined, role: AgentRole): { mining: number; construction: number; plants: number; intelligence: number } {
+    const random = ctx?.random;
+    const base = () => Math.floor((random ? random.next() : Math.random()) * 3) + 1; // 1-3 base
+    const bonus = () => Math.floor((random ? random.next() : Math.random()) * 3) + 2; // 2-4 bonus
 
     let skills = {
         mining: base(),
@@ -95,17 +104,26 @@ function generateSkills(role: AgentRole): { mining: number; construction: number
             skills.mining = bonus(); // Combat/strength
             break;
         case 'WORKER':
-            // Workers are generalists - boost one random skill
-            const skillKey = ['mining', 'construction', 'plants'][Math.floor(Math.random() * 3)] as keyof typeof skills;
+            const skillKey = ['mining', 'construction', 'plants'][Math.floor((random ? random.next() : Math.random()) * 3)] as keyof typeof skills;
             skills[skillKey] = bonus();
+            break;
+        case 'LUMBERJACK':
+            skills.mining = bonus() + 1; // Strength
+            break;
+        case 'QUARRYMAN':
+            skills.mining = bonus() + 1;
+            break;
+        case 'CITIZEN':
+            skills.intelligence = bonus();
             break;
     }
 
     return skills;
 }
 
-export function createColonist(x: number, z: number, role: AgentRole = 'WORKER'): Agent {
+export function createColonist(x: number, z: number, role: AgentRole = 'WORKER', ctx?: FixedContext): Agent {
     const isIllegal = role === 'ILLEGAL_MINER';
+    const random = ctx?.random;
 
     // Assign shift based on role
     let shift: 'DAY' | 'NIGHT' | 'FLEXIBLE' = 'FLEXIBLE';
@@ -115,27 +133,29 @@ export function createColonist(x: number, z: number, role: AgentRole = 'WORKER')
         shift = 'NIGHT'; // Security patrols at night
     } else if (role === 'MINER' || role === 'ENGINEER') {
         // Mix of shifts for essential workers
-        shift = Math.random() > 0.5 ? 'DAY' : 'NIGHT';
+        shift = (random ? random.next() : Math.random()) > 0.5 ? 'DAY' : 'NIGHT';
     }
 
     return {
-        id: `col_${Math.random().toString(36).substr(2, 9)}`,
-        name: isIllegal ? "Infiltrator" : NAMES[Math.floor(Math.random() * NAMES.length)],
+        id: ctx?.getNextId?.('col') || `col_${Math.random().toString(36).substr(2, 9)}`,
+        name: isIllegal ? "Infiltrator" : NAMES[Math.floor((random ? random.next() : Math.random()) * NAMES.length)],
         type: role,
         x, z,
         visualX: x,
         visualZ: z,
-        targetTileId: null,
+        targetX: null,
+        targetZ: null,
         path: null,
         state: 'IDLE',
         energy: isIllegal ? 800 : 100,
         hunger: 100,
-        mood: 80 + Math.random() * 20, // Start with good mood (80-100)
-        skills: generateSkills(role),
+        mood: 80 + (random ? random.next() : Math.random()) * 20, // Start with good mood (80-100)
+        skills: generateSkills(ctx, role),
         currentJobId: null,
+        layer: 0,
 
         // New intelligence features
-        personality: generatePersonality(role),
+        personality: generatePersonality(ctx, role),
         memory: {
             knownBuildings: new Map(),
             favoriteSpots: [],
@@ -155,7 +175,7 @@ export function createColonist(x: number, z: number, role: AgentRole = 'WORKER')
             plantsProgress: 0
         },
         workEfficiency: 1.0,
-        moveSpeed: 0.9 + Math.random() * 0.2, // 0.9-1.1 individual variation
+        moveSpeed: 0.9 + (random ? random.next() : Math.random()) * 0.2, // 0.9-1.1 individual variation
 
         // Shift system
         shift: isIllegal ? 'FLEXIBLE' : shift,
@@ -164,6 +184,18 @@ export function createColonist(x: number, z: number, role: AgentRole = 'WORKER')
 
         // No active request initially
         activeRequest: undefined,
-        lastAbandonedJobId: null
+        lastAbandonedJobId: null,
+
+        // Inventory
+        inventory: {
+            type: null,
+            amount: 0,
+            capacity: 20 // Small capacity as requested
+        },
+
+        // Employment System
+        profession: role === 'WORKER' ? 'UNEMPLOYED' : role,
+        workPlaceX: null,
+        workPlaceZ: null
     };
 }

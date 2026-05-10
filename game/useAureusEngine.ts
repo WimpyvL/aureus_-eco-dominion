@@ -11,10 +11,10 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 
 import { WorldHost, Runtime } from '../engine';
-import { ThreeRenderAdapter } from '../engine/render';
+import { RuntimeQualityGovernor, ThreeRenderAdapter, getRecommendedRenderQuality } from '../engine/render';
 import { DebugHud } from '../engine/tools';
 import { AureusWorld, AureusWorldConfig } from './AureusWorld';
-import { GameState } from '../types';
+import { GameState, SfxType } from '../types';
 
 export interface LoadingProgress {
     stage: string;
@@ -27,10 +27,11 @@ export interface UseAureusEngineOptions {
     container: HTMLElement | null;
 
     /** Callbacks for external game interactions (optional, for compatibility) */
-    onTileClick?: (index: number) => void;
-    onTileRightClick?: (index: number) => void;
+    onTileClick?: (x: number, z: number, isTouch?: boolean) => void;
+    onTileRightClick?: (x: number, z: number, isTouch?: boolean) => void;
     onAgentClick?: (id: string | null) => void;
-    onTileHover?: (index: number | null) => void;
+    onTileHover?: (x: number | null, z: number | null) => void;
+    onSfx?: (type: SfxType) => void;
 
     /** Whether the game is paused (e.g., on home page) */
     paused?: boolean;
@@ -60,6 +61,9 @@ export interface AureusEngineHandle {
 
     /** Get debug stats */
     getDebugStats: () => any;
+
+    /** Dispatch action */
+    dispatch: (action: any) => void;
 }
 
 /**
@@ -73,6 +77,7 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
         onTileRightClick,
         onAgentClick,
         onTileHover,
+        onSfx,
         paused = false,
     } = options;
 
@@ -98,10 +103,10 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
     }, [state]);
 
     // Callback refs - these capture the latest callbacks without triggering re-init
-    const callbacksRef = useRef({ onTileClick, onTileRightClick, onAgentClick, onTileHover });
+    const callbacksRef = useRef({ onTileClick, onTileRightClick, onAgentClick, onTileHover, onSfx });
     useEffect(() => {
-        callbacksRef.current = { onTileClick, onTileRightClick, onAgentClick, onTileHover };
-    }, [onTileClick, onTileRightClick, onAgentClick, onTileHover]);
+        callbacksRef.current = { onTileClick, onTileRightClick, onAgentClick, onTileHover, onSfx };
+    }, [onTileClick, onTileRightClick, onAgentClick, onTileHover, onSfx]);
 
     // Initialize engine
     useEffect(() => {
@@ -122,9 +127,12 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                 setLoading({ stage: 'Initializing renderer...', percent: 10 });
                 console.log('[useAureusEngine] Creating render adapter...');
 
+                const renderQuality = getRecommendedRenderQuality();
                 const render = new ThreeRenderAdapter({
-                    antialias: true,
-                    shadowMap: true,
+                    antialias: renderQuality.antialias,
+                    shadowMap: renderQuality.shadowMap,
+                    pixelRatio: renderQuality.pixelRatio,
+                    shadowMapSize: renderQuality.shadowMapSize,
                     fogEnabled: true,
                 });
                 render.init(container);
@@ -147,10 +155,11 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                 // Use refs for callbacks to avoid stale closures
                 const config: AureusWorldConfig = {
                     container,
-                    onTileClick: (idx) => callbacksRef.current.onTileClick?.(idx),
-                    onTileRightClick: (idx) => callbacksRef.current.onTileRightClick?.(idx),
+                    onTileClick: (x, z, isTouch) => callbacksRef.current.onTileClick?.(x, z, isTouch),
+                    onTileRightClick: (x, z, isTouch) => callbacksRef.current.onTileRightClick?.(x, z, isTouch),
                     onAgentClick: (id) => callbacksRef.current.onAgentClick?.(id),
-                    onTileHover: (idx) => callbacksRef.current.onTileHover?.(idx),
+                    onTileHover: (x, z) => callbacksRef.current.onTileHover?.(x, z),
+                    onSfx: (type) => callbacksRef.current.onSfx?.(type),
                 };
 
                 try {
@@ -194,6 +203,7 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                     maxSimStepsPerFrame: 3, // Reduced from 5
                     profilerEnabled: true,
                 });
+                const qualityGovernor = new RuntimeQualityGovernor(runtimeInstance, render);
                 setRuntime(runtimeInstance);
 
                 if (cancelled) {
@@ -205,10 +215,12 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                 setLoading({ stage: 'Initializing debug tools...', percent: 50 });
                 console.log('[useAureusEngine] Creating DebugHud...');
 
-                // Stage 5: Create debug HUD
+                // Stage 5: Create debug HUD (Disabled to remove black square in top right)
+                /*
                 const debugHudInstance = new DebugHud({ position: 'top-right' });
                 debugHudInstance.init(container, runtimeInstance, () => render.getStats());
                 setDebugHud(debugHudInstance);
+                */
 
                 if (cancelled) {
                     unsubscribe();
@@ -238,9 +250,11 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                 setLoading({ stage: 'Starting simulation...', percent: 80 });
                 // Stage 7: Start runtime
                 runtimeInstance.start();
+                qualityGovernor.start();
 
                 if (cancelled) {
                     unsubscribe();
+                    qualityGovernor.stop();
                     runtimeInstance.stop();
                     return;
                 }
@@ -259,11 +273,31 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                 // NOW set state - this triggers the loading screen to hide
                 setState(worldInstance.getState());
 
+                if (import.meta.env.DEV) {
+                    (window as any).__aureusWorld = worldInstance;
+                    (window as any).__aureusGetState = () => worldInstance.getState();
+                }
+
+                /* 
+                // AUTO-LOAD: If a save exists, load it automatically
+                const savedGame = localStorage.getItem('aureus_save_v2');
+                if (savedGame) {
+                    console.log('[useAureusEngine] Found saved game, auto-loading...');
+                    worldInstance.loadGame(savedGame);
+                    setState(worldInstance.getState());
+                }
+                */
+
                 // Store cleanup function
                 (window as any).__aureusCleanup = () => {
+                    if (import.meta.env.DEV) {
+                        delete (window as any).__aureusWorld;
+                        delete (window as any).__aureusGetState;
+                    }
                     unsubscribe();
+                    qualityGovernor.stop();
                     runtimeInstance.stop();
-                    debugHudInstance.dispose();
+                    // debugHudInstance.dispose();
                     worldInstance.teardown();
                     render.dispose();
                 };
@@ -293,7 +327,7 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
 
             setWorld(null);
             setRuntime(null);
-            setDebugHud(null);
+            // setDebugHud(null);
             setState(null);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -324,7 +358,10 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                 ...worldStats,
                 cpuTime
             };
-        }, [world, runtime])
+        }, [world, runtime]),
+        dispatch: useCallback((action: any) => {
+            world?.dispatch(action);
+        }, [world])
     };
 }
 

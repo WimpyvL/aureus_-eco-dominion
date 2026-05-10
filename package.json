@@ -6,8 +6,11 @@
   "author": "Klaasvaakie (|/)",
   "license": "PROPRIETARY",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "node scripts/intro.js",
+    "start": "node scripts/intro.js",
+    "vite": "vite",
+    "build": "node scripts/build.js",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -15,6 +18,7 @@
     "lucide-react": "^0.553.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-router-dom": "^6.30.3",
     "three": "^0.181.1"
   },
   "devDependencies": {

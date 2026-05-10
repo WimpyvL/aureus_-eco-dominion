@@ -3,6 +3,8 @@
  * Central type definitions for the engine runtime
  */
 
+import { Random } from './Random';
+
 /** Context passed to per-frame callbacks */
 export interface FrameContext {
     /** Delta time since last frame (seconds) */
@@ -21,6 +23,36 @@ export interface FixedContext {
     stepIndex: number;
     /** Total elapsed time (seconds) */
     time: number;
+    /** Deterministic random number generator */
+    random?: Random;
+    /** Deterministic ID generator */
+    getNextId?: (prefix: string) => string;
+}
+
+/** 
+ * Command Execution Result
+ */
+export enum CommandErrorCode {
+    INSUFFICIENT_RESOURCES = 'INSUFFICIENT_RESOURCES',
+    INVALID_TARGET = 'INVALID_TARGET',
+    TILE_OCCUPIED = 'TILE_OCCUPIED',
+    OUT_OF_RANGE = 'OUT_OF_RANGE',
+    INVALID_STATE = 'INVALID_STATE',
+    ALREADY_PROCESSING = 'ALREADY_PROCESSING',
+    FORBIDDEN = 'FORBIDDEN',
+    UNKNOWN = 'UNKNOWN'
+}
+
+export type CommandResult =
+    | { ok: true }
+    | { ok: false; code: CommandErrorCode; reason: string };
+
+/** 
+ * Context specifically for command processing 
+ */
+export interface CommandContext extends FixedContext {
+    tick: number;
+    reportResult: (commandId: string, result: CommandResult) => void;
 }
 
 /** Engine configuration */

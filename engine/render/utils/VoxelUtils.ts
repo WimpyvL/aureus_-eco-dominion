@@ -16,7 +16,13 @@ export function mergeGroupGeometry(group: THREE.Group): THREE.BufferGeometry {
     group.traverse((child) => {
         if (child instanceof THREE.Mesh) {
             let geom = child.geometry.clone();
-            
+
+            // RoundedBoxGeometry and some Three primitives are indexed while legacy voxel
+            // meshes are not. Normalize before merge so foliage batching can combine both.
+            if (geom.index) {
+                geom = geom.toNonIndexed();
+            }
+
             // Apply transform
             geom.applyMatrix4(child.matrixWorld);
 
@@ -29,8 +35,8 @@ export function mergeGroupGeometry(group: THREE.Group): THREE.BufferGeometry {
             // Bake material color into vertex colors
             const colors = geom.getAttribute('color');
             const mat = child.material;
-            let r=1, g=1, b=1;
-            
+            let r = 1, g = 1, b = 1;
+
             if (mat && (mat as any).color) {
                 r = (mat as any).color.r;
                 g = (mat as any).color.g;
@@ -41,16 +47,16 @@ export function mergeGroupGeometry(group: THREE.Group): THREE.BufferGeometry {
                 const existingR = colors.getX(i);
                 const existingG = colors.getY(i);
                 const existingB = colors.getZ(i);
-                
+
                 if (existingR === 0 && existingG === 0 && existingB === 0) {
                     colors.setXYZ(i, r, g, b);
                 } else {
                     if (r !== 1 || g !== 1 || b !== 1) {
-                         colors.setXYZ(i, r, g, b);
+                        colors.setXYZ(i, r, g, b);
                     }
                 }
             }
-            
+
             geometries.push(geom);
         }
     });
@@ -58,5 +64,7 @@ export function mergeGroupGeometry(group: THREE.Group): THREE.BufferGeometry {
     if (geometries.length === 0) return new THREE.BoxGeometry();
 
     const merged = BufferGeometryUtils.mergeGeometries(geometries);
+    merged.computeBoundingBox();
+    merged.computeBoundingSphere();
     return merged;
 }

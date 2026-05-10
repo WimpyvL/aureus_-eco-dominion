@@ -12,14 +12,23 @@ import { buildVoxelGroup, FactoryOptions } from '../../render/utils/VoxelBuilder
 type VoxelData = { x: number, y: number, z: number, c: string };
 
 function addVoxel(list: VoxelData[], x: number, y: number, z: number, c: string) {
-    // Simple dedupe could go here, but usually procedural logic handles it
     list.push({ x: Math.round(x), y: Math.round(y), z: Math.round(z), c });
+}
+
+function pseudoRandom(seed: number) {
+    let s = seed % 2147483647;
+    if (s <= 0) s += 2147483646;
+    return () => {
+        s = (s * 16807) % 2147483647;
+        return (s - 1) / 2147483646;
+    };
 }
 
 // Material Keys for the Builder
 const MAT_MAP: Record<string, THREE.Material> = {
     'wood': mats.wood,
     'leaf': mats.leaf,
+    'leafDark': mats.leafDark,
     'birch': mats.birchWood,
     'birchLeaf': mats.birchLeaf,
     'willow': mats.willowLeaf,
@@ -27,9 +36,13 @@ const MAT_MAP: Record<string, THREE.Material> = {
     'pine': mats.pine,
     'snow': mats.snowLeaf, // used for frosted tips
     'cactus': mats.cactus,
+    'cactusFlower': mats.cactusFlower,
+    'savanna': mats.savannaGreen,
+    'driedGrass': mats.driedGrass,
     'palmTrunk': mats.palmTrunk,
     'palmLeaf': mats.palmLeaf,
     'dead': mats.deadWood,
+    'deadLight': mats.deadWoodLight,
     'stem': mats.mushroomStem,
     'cap': mats.mushroomCap,
     'bone': mats.bone,
@@ -47,8 +60,9 @@ const MAT_MAP: Record<string, THREE.Material> = {
 
 const Generators = {
     // Blobby Tree (Oak)
-    basicTree: (height: number, leafRad: number, trunkMat: string, leafMat: string, fruitMat?: string) => {
+    basicTree: (height: number, leafRad: number, trunkMat: string, leafMat: string, fruitMat?: string, seed: number = 42) => {
         const voxels: VoxelData[] = [];
+        const rng = pseudoRandom(seed);
         // Trunk
         for (let y = 0; y < height; y++) {
             addVoxel(voxels, 0, y, 0, trunkMat);
@@ -64,16 +78,18 @@ const Generators = {
 
         // Leaves (Sphere-ish)
         const center = { x: 0, y: height - 1, z: 0 };
+        const leafVariants = [leafMat, 'leafDark'];
         for (let x = -leafRad; x <= leafRad; x++) {
             for (let y = -leafRad; y <= leafRad; y++) {
                 for (let z = -leafRad; z <= leafRad; z++) {
                     const d = Math.sqrt(x * x + y * y + z * z);
                     if (d <= leafRad) {
                         // Noise to break up sphere
-                        if (Math.random() > 0.2) {
-                            addVoxel(voxels, center.x + x, center.y + y + 1, center.z + z, leafMat);
+                        if (rng() > 0.2) {
+                            const lMat = rng() > 0.7 ? leafVariants[1] : leafVariants[0];
+                            addVoxel(voxels, center.x + x, center.y + y + 1, center.z + z, lMat);
                             // Fruit
-                            if (fruitMat && d >= leafRad - 1 && Math.random() > 0.95) {
+                            if (fruitMat && d >= leafRad - 1 && rng() > 0.95) {
                                 addVoxel(voxels, center.x + x, center.y + y + 1, center.z + z, fruitMat);
                             }
                         }
@@ -85,8 +101,9 @@ const Generators = {
     },
 
     // Pine Tree (Conical layers)
-    pineTree: (height: number, width: number, trunkMat: string, leafMat: string, frostMat?: string) => {
+    pineTree: (height: number, width: number, trunkMat: string, leafMat: string, frostMat?: string, seed: number = 42) => {
         const voxels: VoxelData[] = [];
+        const rng = pseudoRandom(seed);
         // Trunk
         for (let y = 0; y < height; y++) addVoxel(voxels, 0, y, 0, trunkMat);
 
@@ -97,7 +114,7 @@ const Generators = {
             for (let x = -currentW; x <= currentW; x++) {
                 for (let z = -currentW; z <= currentW; z++) {
                     if (Math.abs(x) + Math.abs(z) <= currentW + 0.5) {
-                        const mat = (frostMat && startY > height * 0.6 && Math.random() > 0.6) ? frostMat : leafMat;
+                        const mat = (frostMat && startY > height * 0.6 && rng() > 0.6) ? frostMat : leafMat;
                         addVoxel(voxels, x, startY, z, mat);
                     }
                 }
@@ -140,8 +157,9 @@ const Generators = {
     },
 
     // Cactus (Column + Arms)
-    cactus: (height: number, arms: boolean, mat: string) => {
+    cactus: (height: number, arms: boolean, mat: string, flowerMat?: string, seed: number = 42) => {
         const voxels: VoxelData[] = [];
+        const rng = pseudoRandom(seed);
         // Main
         for (let y = 0; y < height; y++) {
             addVoxel(voxels, 0, y, 0, mat);
@@ -153,6 +171,12 @@ const Generators = {
             }
         }
 
+        // Flower on top
+        if (flowerMat && rng() > 0.3) {
+            addVoxel(voxels, 0, height, 0, flowerMat);
+            addVoxel(voxels, 1, height, 1, flowerMat);
+        }
+
         if (arms) {
             // Arm 1
             const armY = Math.floor(height * 0.4);
@@ -160,26 +184,29 @@ const Generators = {
             addVoxel(voxels, 3, armY, 0, mat);
             addVoxel(voxels, 3, armY + 1, 0, mat);
             addVoxel(voxels, 3, armY + 2, 0, mat);
+            if (flowerMat && rng() > 0.5) addVoxel(voxels, 3, armY + 3, 0, flowerMat);
 
             // Arm 2
             const armY2 = Math.floor(height * 0.6);
             addVoxel(voxels, -1, armY2, 1, mat);
             addVoxel(voxels, -2, armY2, 1, mat);
             addVoxel(voxels, -2, armY2 + 1, 1, mat);
+            if (flowerMat && rng() > 0.5) addVoxel(voxels, -2, armY2 + 2, 1, flowerMat);
         }
         return voxels;
     },
 
     // Rock/Boulder (Noise Blob)
-    rock: (radius: number, mat: string, accentMat?: string) => {
+    rock: (radius: number, mat: string, accentMat?: string, seed: number = 42) => {
         const voxels: VoxelData[] = [];
+        const rng = pseudoRandom(seed);
         for (let x = -radius; x <= radius; x++) {
             for (let y = 0; y <= radius * 1.5; y++) {
                 for (let z = -radius; z <= radius; z++) {
                     const d = x * x + (y * 0.8) * (y * 0.8) + z * z;
                     if (d <= radius * radius) {
-                        if (Math.random() > 0.1) {
-                            const m = (accentMat && y === Math.floor(radius * 1.5) && Math.random() > 0.5) ? accentMat : mat;
+                        if (rng() > 0.1) {
+                            const m = (accentMat && y === Math.floor(radius * 1.5) && rng() > 0.5) ? accentMat : mat;
                             addVoxel(voxels, x, y, z, m);
                         }
                     }
@@ -216,23 +243,25 @@ function finalize(voxels: VoxelData[], scale: number = 0.1) {
 // --- EXPORTS ---
 
 export const GrassTrees = {
-    'TREE_OAK': () => finalize(Generators.basicTree(14, 5, 'wood', 'leaf')),
-    'TREE_BIRCH': () => {
+    'TREE_OAK': (opts?: FactoryOptions) => finalize(Generators.basicTree(14, 5, 'wood', 'leaf', undefined, opts?.seed)),
+    'TREE_BIRCH': (opts?: FactoryOptions) => {
         const v: VoxelData[] = [];
+        const rng = pseudoRandom(opts?.seed || 42);
         // Tall trunk
         for (let y = 0; y < 18; y++) addVoxel(v, 0, y, 0, 'birch');
         // Sparse leaves
         for (let y = 8; y < 19; y += 2) {
             for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) {
-                if (Math.abs(x) + Math.abs(z) <= 2 && Math.random() > 0.4) {
+                if (Math.abs(x) + Math.abs(z) <= 2 && rng() > 0.4) {
                     addVoxel(v, x, y, z, 'birchLeaf');
                 }
             }
         }
         return finalize(v, 0.08);
     },
-    'TREE_WILLOW': () => {
+    'TREE_WILLOW': (opts?: FactoryOptions) => {
         const v: VoxelData[] = [];
+        const rng = pseudoRandom(opts?.seed || 42);
         // Wide Trunk
         for (let y = 0; y < 8; y++) {
             addVoxel(v, 0, y, 0, 'wood');
@@ -244,16 +273,16 @@ export const GrassTrees = {
             const d = Math.sqrt(x * x + z * z);
             if (d < 4) {
                 addVoxel(v, x, crownY, z, 'willow');
-                if (d > 2 && Math.random() > 0.3) {
-                    const droop = Math.floor(Math.random() * 5) + 2;
+                if (d > 2 && rng() > 0.3) {
+                    const droop = Math.floor(rng() * 5) + 2;
                     for (let i = 1; i <= droop; i++) addVoxel(v, x, crownY - i, z, 'willow');
                 }
             }
         }
         return finalize(v, 0.08);
     },
-    'TREE_APPLE': () => finalize(Generators.basicTree(12, 4, 'wood', 'leaf', 'apple')),
-    'BUSH_OAK': () => finalize(Generators.rock(3, 'leaf'), 0.08),
+    'TREE_APPLE': (opts?: FactoryOptions) => finalize(Generators.basicTree(12, 4, 'wood', 'leaf', 'apple', opts?.seed)),
+    'BUSH_OAK': (opts?: FactoryOptions) => finalize(Generators.rock(3, 'leaf', undefined, opts?.seed), 0.08),
     'FLOWER_YELLOW': () => {
         const v: VoxelData[] = [];
         addVoxel(v, 0, 0, 0, 'leaf'); addVoxel(v, 0, 1, 0, 'leaf');
@@ -265,9 +294,9 @@ export const GrassTrees = {
 };
 
 export const SnowTrees = {
-    'TREE_PINE': () => finalize(Generators.pineTree(16, 4, 'wood', 'pine')),
-    'TREE_FROSTED_PINE': () => finalize(Generators.pineTree(16, 4, 'wood', 'pine', 'snow')),
-    'TREE_TALL_PINE': () => finalize(Generators.pineTree(24, 3, 'wood', 'pine')),
+    'TREE_PINE': (opts?: FactoryOptions) => finalize(Generators.pineTree(16, 4, 'wood', 'pine', undefined, opts?.seed)),
+    'TREE_FROSTED_PINE': (opts?: FactoryOptions) => finalize(Generators.pineTree(16, 4, 'wood', 'pine', 'snow', opts?.seed)),
+    'TREE_TALL_PINE': (opts?: FactoryOptions) => finalize(Generators.pineTree(24, 3, 'wood', 'pine', undefined, opts?.seed)),
     'SHRUB_WINTER': () => {
         const v: VoxelData[] = [];
         // Dead sticks
@@ -276,19 +305,36 @@ export const SnowTrees = {
         addVoxel(v, 0, 2, 0, 'snow'); // Snow cap
         return finalize(v, 0.1);
     },
-    'ROCK_ICY': () => finalize(Generators.rock(3, 'rock', 'glass'), 0.1)
+    'ROCK_ICY': (opts?: FactoryOptions) => finalize(Generators.rock(3, 'rock', 'glass', opts?.seed), 0.1)
 };
 
 export const SandTrees = {
-    'CACTUS_SAGUARO': () => finalize(Generators.cactus(18, true, 'cactus'), 0.08),
-    'CACTUS_BARREL': () => finalize(Generators.cactus(5, false, 'cactus'), 0.1),
-    'TREE_PALM': () => finalize(Generators.palmTree(18, 'palmTrunk', 'palmLeaf'), 0.09),
-    'SHRUB_DRY': () => {
+    'CACTUS_SAGUARO': (opts?: FactoryOptions) => finalize(Generators.cactus(18, true, 'cactus', 'cactusFlower', opts?.seed || 42), 0.08),
+    'CACTUS_SAGUARO_VAR': (opts?: FactoryOptions) => finalize(Generators.cactus(14, true, 'cactus', 'cactusFlower', opts?.seed || 123), 0.08),
+    'CACTUS_BARREL': (opts?: FactoryOptions) => finalize(Generators.cactus(5, false, 'cactus', 'cactusFlower', opts?.seed || 42), 0.1),
+    'TREE_PALM': (opts?: FactoryOptions) => finalize(Generators.palmTree(18, 'palmTrunk', 'savanna'), 0.09),
+    'TREE_PALM_TALL': (opts?: FactoryOptions) => finalize(Generators.palmTree(24, 'palmTrunk', 'savanna'), 0.08),
+    'SHRUB_DRY': (opts?: FactoryOptions) => {
         const v: VoxelData[] = [];
-        for (let i = 0; i < 10; i++) addVoxel(v, (Math.random() - 0.5) * 4, (Math.random()) * 3, (Math.random() - 0.5) * 4, 'dead');
+        const rng = pseudoRandom(opts?.seed || 42);
+        const matsPool = ['dead', 'deadLight', 'driedGrass', 'savanna'];
+        for (let i = 0; i < 20; i++) { // Increased density
+            const m = matsPool[Math.floor(rng() * matsPool.length)];
+            addVoxel(v, (rng() - 0.5) * 6, (rng()) * 5, (rng() - 0.5) * 6, m);
+        }
         return finalize(v, 0.1);
     },
-    'ROCK_SANDSTONE': () => finalize(Generators.rock(4, 'sandstone'), 0.1)
+    'SHRUB_DRY_VAR': (opts?: FactoryOptions) => {
+        const v: VoxelData[] = [];
+        const rng = pseudoRandom(opts?.seed || 999);
+        const matsPool = ['dead', 'deadLight', 'driedGrass', 'savanna'];
+        for (let i = 0; i < 15; i++) {
+            const m = matsPool[Math.floor(rng() * matsPool.length)];
+            addVoxel(v, (rng() - 0.5) * 4, (rng()) * 6, (rng() - 0.5) * 4, m);
+        }
+        return finalize(v, 0.1);
+    },
+    'ROCK_SANDSTONE': (opts?: FactoryOptions) => finalize(Generators.rock(4, 'sandstone', undefined, opts?.seed), 0.1)
 };
 
 export const DirtTrees = {
@@ -335,9 +381,9 @@ export const DirtTrees = {
 };
 
 export const StoneTrees = {
-    'ROCK_BOULDER': () => finalize(Generators.rock(5, 'rock'), 0.1),
-    'ROCK_PEBBLE': () => finalize(Generators.rock(1, 'rock'), 0.1),
-    'ROCK_MOSSY': () => finalize(Generators.rock(4, 'rock', 'moss'), 0.1),
+    'ROCK_BOULDER': (opts?: FactoryOptions) => finalize(Generators.rock(5, 'rock', undefined, opts?.seed), 0.1),
+    'ROCK_PEBBLE': (opts?: FactoryOptions) => finalize(Generators.rock(1, 'rock', undefined, opts?.seed), 0.1),
+    'ROCK_MOSSY': (opts?: FactoryOptions) => finalize(Generators.rock(4, 'rock', 'moss', opts?.seed), 0.1),
     'FLOWER_ALPINE': () => {
         const v: VoxelData[] = [];
         addVoxel(v, 0, 0, 0, 'leaf'); addVoxel(v, 0, 1, 0, 'leaf');

@@ -14,14 +14,19 @@ import { computeTwoFingerGesture, type GestureSnapshot } from './mobileGestureMa
 export class IsoCameraSystem {
     private camera: THREE.OrthographicCamera;
     private domElement: HTMLElement;
-    private enabled = true;
+    public enabled = false;
+    private adapter: ThreeRenderAdapter;
 
     // Camera State - Public for read access
     public cameraZoom: number;
-    public zoomLevel = 7; // Max zoom out (7 steps)
+    public zoomLevel = 5; // Mid-range
+    public maxZoomLevel = 7; // User requested reduction
+    private targetZoomLevel = 5; // Target for smooth zooming
     public cameraFocus = new THREE.Vector3(0, 0, 0);
     public cameraAngle = Math.PI / 4;  // 45 degrees - isometric view
     public cameraElevation = Math.PI / 3.5;  // ~51 degrees
+    public targetFocusY = 0;
+    public currentFocusY = 0;
 
     // Input State
     private isDragging = false;
@@ -43,6 +48,7 @@ export class IsoCameraSystem {
     private boundContextMenu: (e: Event) => void;
 
     constructor(adapter: ThreeRenderAdapter) {
+        this.adapter = adapter;
         this.camera = adapter.getCamera() as THREE.OrthographicCamera;
         this.cameraZoom = 15 + (this.zoomLevel * 10);
         this.domElement = adapter.getCanvas();
@@ -60,7 +66,9 @@ export class IsoCameraSystem {
     public setEnabled(enabled: boolean): void {
         this.enabled = enabled;
         if (enabled) {
+            this.adapter.setCamera(this.camera);
             this.bindEvents();
+            this.updateCameraTransform();
         } else {
             this.unbindEvents();
         }
@@ -177,7 +185,7 @@ export class IsoCameraSystem {
 
         // Scroll up (negative deltaY) = zoom in (smaller frustum)
         // Scroll down (positive deltaY) = zoom out (larger frustum)
-        const delta = e.deltaY * 0.1;
+        const delta = e.deltaY * 0.005; // Reduced sensitivity
         this.zoom(delta);
     }
 
@@ -231,18 +239,58 @@ export class IsoCameraSystem {
     private createGestureSnapshot(): GestureSnapshot | null {
         if (this.activeTouchPointers.size < 2) return null;
 
-        const [first, second] = Array.from(this.activeTouchPointers.values());
-        const dx = second.x - first.x;
-        const dy = second.y - first.y;
+        const pointers = Array.from(this.activeTouchPointers.values());
+        const p0 = pointers[0];
+        const p1 = pointers[1];
+
+        const dx = p1.x - p0.x;
+        const dy = p1.y - p0.y;
 
         return {
             distance: Math.hypot(dx, dy),
             angle: Math.atan2(dy, dx),
             midpoint: {
-                x: (first.x + second.x) / 2,
-                y: (first.y + second.y) / 2,
+                x: (p0.x + p1.x) / 2,
+                y: (p0.y + p1.y) / 2,
             },
         };
+    }
+
+    public setTargetHeight(y: number): void {
+        this.targetFocusY = y;
+    }
+
+    public update(dt: number): void {
+        // Smoothly interpolate vertical focus
+        const lerpSpeed = 5.0; // Adjust for transition speed
+        const dy = this.targetFocusY - this.currentFocusY;
+
+        if (Math.abs(dy) > 0.01) {
+            this.currentFocusY += dy * Math.min(1, dt * lerpSpeed);
+            this.cameraFocus.y = this.currentFocusY;
+            this.updateCameraTransform();
+        }
+
+        // Smooth Zoom Lerp
+        const zoomDiff = this.targetZoomLevel - this.zoomLevel;
+        if (Math.abs(zoomDiff) > 0.001) {
+            const zoomLerpSpeed = 8.0;
+            this.zoomLevel += zoomDiff * Math.min(1, dt * zoomLerpSpeed);
+
+            // COMPATIBILITY: Use centralized zoom calculation
+            this.calculateAndSetZoom();
+        }
+    }
+
+    /**
+     * Centralized zoom calculation based on mode and current zoomLevel
+     */
+    private calculateAndSetZoom(): void {
+        const base = 10;
+        const stepSize = 8;
+
+        this.cameraZoom = base + (this.zoomLevel * stepSize);
+        this.updateCameraTransform();
     }
 
     // --- Camera Actions (Based on legacy SceneManager) ---
@@ -274,19 +322,26 @@ export class IsoCameraSystem {
 
     public zoom(delta: number, smooth: boolean = false): void {
         if (smooth) {
+            // Direct zoom for pinch gesture - real-time feedback
             this.cameraZoom = Math.max(15, Math.min(85, this.cameraZoom + delta));
             this.zoomLevel = Math.round((this.cameraZoom - 15) / 10);
+            this.targetZoomLevel = this.zoomLevel;
+            this.updateCameraTransform();
         } else {
-            const direction = delta > 0 ? 1 : -1;
-            this.zoomLevel = Math.max(0, Math.min(7, this.zoomLevel + direction));
-            this.cameraZoom = 15 + (this.zoomLevel * 10);
+            // Continuous target update for wheel scroll - lerped in update()
+            this.targetZoomLevel = Math.max(0, Math.min(this.maxZoomLevel, this.targetZoomLevel + delta));
         }
-        this.updateCameraTransform();
     }
 
     public updateCameraTransform(): void {
         const aspect = window.innerWidth / window.innerHeight;
         const frustumSize = this.cameraZoom;
+        const dist = 100;
+
+        // Keep the depth range tight around the active play space.
+        // A huge orthographic near/far span murders precision and makes coplanar surfaces shimmer.
+        this.camera.near = 1;
+        this.camera.far = dist + 220;
 
         // Update orthographic frustum
         this.camera.left = -frustumSize * aspect / 2;
@@ -296,7 +351,6 @@ export class IsoCameraSystem {
         this.camera.updateProjectionMatrix();
 
         // Position camera at an offset from focus point
-        const dist = 100;
         const y = dist * Math.sin(this.cameraElevation);
         const h = dist * Math.cos(this.cameraElevation);
         const x = h * Math.sin(this.cameraAngle);
@@ -308,6 +362,7 @@ export class IsoCameraSystem {
             this.cameraFocus.z + z
         );
         this.camera.lookAt(this.cameraFocus);
+        this.camera.updateMatrixWorld();
     }
 
     // --- Intro Animation ---
@@ -341,5 +396,27 @@ export class IsoCameraSystem {
 
     public getZoom(): number {
         return this.cameraZoom;
+    }
+
+    /**
+     * Instantly jumps the camera to a specific world position
+     */
+    public jumpTo(worldX: number, worldZ: number): void {
+        this.cameraFocus.set(worldX, this.cameraFocus.y, worldZ);
+        this.targetFocusY = this.cameraFocus.y;
+        this.currentFocusY = this.cameraFocus.y;
+        this.updateCameraTransform();
+    }
+
+    /**
+     * Zoom camera to focus on a specific world position
+     * Used for game start to focus on an agent
+     */
+    public zoomToPosition(worldX: number, worldZ: number, zoomLevel: number = 2): void {
+        this.cameraFocus.set(worldX, this.cameraFocus.y, worldZ);
+        this.zoomLevel = Math.max(0, Math.min(this.maxZoomLevel, zoomLevel));
+        this.targetZoomLevel = this.zoomLevel;
+
+        this.calculateAndSetZoom();
     }
 }

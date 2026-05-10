@@ -1,0 +1,42 @@
+.view-switch-button {
+    pointer-events: auto;
+    background: #0f172a;
+    /* bg-slate-900 */
+    border: 2px solid #334155;
+    /* border-slate-700 */
+    border-bottom: 5px solid #020617;
+    /* border-slate-950 */
+    border-radius: 4px;
+    padding: 6px 12px;
+    color: #f8fafc;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.4);
+}
+
+.view-switch-button:hover {
+    background: #1e293b;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 rgba(0, 0, 0, 0.3);
+}
+
+.view-switch-button:active {
+    transform: translateY(2px);
+    border-bottom-width: 2px;
+    box-shadow: none;
+}
+
+.view-switch-button.is-dungeon {
+    background: #1e1b4b;
+    /* dark indigo */
+    border-color: #3730a3;
+    border-bottom-color: #0c0a09;
+    color: #c7d2fe;
+}
+
+.view-switch-button.is-dungeon:hover {
+    background: #312e81;
+}

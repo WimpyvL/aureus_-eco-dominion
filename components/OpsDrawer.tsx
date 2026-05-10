@@ -8,6 +8,7 @@ import React, { useState } from 'react';
 import { Menu, ArrowLeft, TrendingUp, FlaskConical, BarChart3, Users, Zap, Utensils, Smile, Briefcase, Shield, Leaf, Wrench, Pickaxe } from 'lucide-react';
 import { GameState, Action, Agent, AgentRole } from '../types';
 import { ResearchTree } from './ResearchTree';
+import { BureaucracyOffice } from './BureaucracyOffice';
 import { MAX_AGENTS, CAPACITY_PER_QUARTERS } from '../engine/sim/logic/SimulationLogic';
 import { BuildingType } from '../types';
 
@@ -27,6 +28,9 @@ const RoleIcon = ({ role, size = 14 }: { role: AgentRole, size?: number }) => {
         case 'ENGINEER': return <Zap size={size} className="text-blue-400" />;
         case 'SECURITY': return <Shield size={size} className="text-rose-500" />;
         case 'ILLEGAL_MINER': return <Briefcase size={size} className="text-slate-700" />;
+        case 'CITIZEN': return <Users size={size} className="text-slate-400" />;
+        case 'LUMBERJACK': return <Pickaxe size={size} className="text-orange-600" />;
+        case 'QUARRYMAN': return <Pickaxe size={size} className="text-slate-500" />;
         default: return <Briefcase size={size} className="text-amber-400" />;
     }
 };
@@ -103,20 +107,21 @@ const TabButton = ({ id, label, icon: Icon, activeTab, setActiveTab, playSfx }: 
 };
 
 export const OpsDrawer: React.FC<OpsDrawerProps> = ({ isOpen, onClose, state, dispatch, financials, ecoMult, trustMult, playSfx }) => {
-    const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'RESEARCH' | 'COLONISTS'>('OVERVIEW');
+    const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'RESEARCH' | 'COLONISTS' | 'BUREAUCRACY'>('OVERVIEW');
 
     // Reset tab when drawer opens
     React.useEffect(() => {
         if (isOpen) setActiveTab('OVERVIEW');
     }, [isOpen]);
 
-    const quartersCount = state.grid.filter(t => t.buildingType === BuildingType.STAFF_QUARTERS && !t.isUnderConstruction).length;
+    const quartersCount = Object.values(state.chunks).flatMap(c => c.tiles).filter(t => t.buildingType === BuildingType.STAFF_QUARTERS && !t.isUnderConstruction).length;
     const currentCapacity = (quartersCount * CAPACITY_PER_QUARTERS) + 4;
     const colonistCount = state.agents.filter(a => a.type !== 'ILLEGAL_MINER').length;
 
     return (
         <div
-            className={`absolute inset-y-0 left-0 w-full sm:w-[500px] max-w-[100vw] bg-slate-950 border-r-2 border-slate-700 shadow-2xl transform transition-transform duration-300 z-50 flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+            className={`absolute inset-y-0 left-0 w-full sm:w-[500px] max-w-[100vw] bg-slate-950 border-r-2 border-slate-700 shadow-2xl transform transition-transform duration-300 z-50 flex flex-col pointer-events-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+            onClick={(e) => e.stopPropagation()}
         >
             {/* Header */}
             <div className="p-3 border-b-2 border-slate-700 bg-slate-800 flex justify-between items-center shadow-md z-10">
@@ -135,9 +140,10 @@ export const OpsDrawer: React.FC<OpsDrawerProps> = ({ isOpen, onClose, state, di
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b-2 border-slate-700 px-3 pt-3 bg-slate-900 gap-1">
+            <div className="flex border-b-2 border-slate-700 px-3 pt-3 bg-slate-900 gap-1 overflow-x-auto no-scrollbar">
                 <TabButton id="OVERVIEW" label="Stats" icon={BarChart3} activeTab={activeTab} setActiveTab={setActiveTab} playSfx={playSfx} />
                 <TabButton id="COLONISTS" label="Crew" icon={Users} activeTab={activeTab} setActiveTab={setActiveTab} playSfx={playSfx} />
+                <TabButton id="BUREAUCRACY" label="Office" icon={Shield} activeTab={activeTab} setActiveTab={setActiveTab} playSfx={playSfx} />
                 <TabButton id="RESEARCH" label="Tech" icon={FlaskConical} activeTab={activeTab} setActiveTab={setActiveTab} playSfx={playSfx} />
             </div>
 
@@ -211,6 +217,11 @@ export const OpsDrawer: React.FC<OpsDrawerProps> = ({ isOpen, onClose, state, di
                 {activeTab === 'RESEARCH' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
                         <ResearchTree research={state.research} resources={state.resources} dispatch={dispatch} playSfx={playSfx} />
+                    </div>
+                )}
+                {activeTab === 'BUREAUCRACY' && (
+                    <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                        <BureaucracyOffice state={state} dispatch={dispatch} playSfx={playSfx} />
                     </div>
                 )}
             </div>

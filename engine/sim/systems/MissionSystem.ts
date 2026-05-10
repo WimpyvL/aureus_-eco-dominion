@@ -19,27 +19,28 @@ export class MissionSystem extends BaseSimSystem {
         // 1. Goal Generation (Every 30s if none active)
         if (!state.activeGoal && ctx.time - this.lastGoalCheck > 30) {
             this.lastGoalCheck = ctx.time;
-            state.activeGoal = generateGoal(state);
+            state.activeGoal = generateGoal(ctx, state);
         }
 
         // 2. Contract Management (Every 60s)
         if (ctx.time - this.lastContractCheck > 60) {
             this.lastContractCheck = ctx.time;
-            this.updateContracts(state);
+            this.updateContracts(ctx, state);
         }
 
         // 3. Contract Timers
-        this.processContractTimers(ctx.fixedDt, state);
+        this.processContractTimers(ctx, state);
     }
 
-    private updateContracts(state: GameState) {
+    private updateContracts(ctx: FixedContext, state: GameState) {
         if (state.contracts.length < 3) {
-            const isGem = Math.random() > 0.7;
-            const amount = isGem ? Math.floor(Math.random() * 5) + 2 : Math.floor(Math.random() * 100) + 50;
+            const nextRand = () => ctx.random ? ctx.random.next() : Math.random();
+            const isGem = nextRand() > 0.7;
+            const amount = isGem ? Math.floor(nextRand() * 5) + 2 : Math.floor(nextRand() * 100) + 50;
             const reward = isGem ? amount * 1000 : amount * 25;
 
             state.contracts.push({
-                id: `cont_${Date.now()}`,
+                id: ctx.getNextId?.('cont') || `cont_${Date.now()}`,
                 description: `Economic Demand: Needs ${amount} ${isGem ? 'Gems' : 'Minerals'} immediately.`,
                 resource: isGem ? 'GEMS' : 'MINERALS',
                 amount,
@@ -50,7 +51,8 @@ export class MissionSystem extends BaseSimSystem {
         }
     }
 
-    private processContractTimers(dt: number, state: GameState) {
+    private processContractTimers(ctx: FixedContext, state: GameState) {
+        const dt = ctx.fixedDt;
         for (let i = 0; i < state.contracts.length; i++) {
             const contract = state.contracts[i];
             contract.timeLeft -= dt;
@@ -61,10 +63,10 @@ export class MissionSystem extends BaseSimSystem {
                 i--;
                 state.resources.agt = Math.max(0, state.resources.agt - contract.penalty);
                 state.newsFeed.push({
-                    id: `fail_${Date.now()}`,
+                    id: ctx.getNextId?.('fail') || `fail_${Date.now()}`,
                     headline: `Contract Failed: Penalized ${contract.penalty} AGT.`,
                     type: 'CRITICAL',
-                    timestamp: Date.now()
+                    timestamp: state.tickCount
                 });
             }
         }

@@ -8,6 +8,8 @@ import { BaseSimSystem } from '../Simulation';
 import { FixedContext } from '../../kernel';
 import { GameState, BuildingType } from '../../../types';
 import { BUILDINGS } from '../../data/VoxelConstants';
+import { ChunkStore } from '../../space/ChunkStore';
+
 
 export class WaterNetworkSystem extends BaseSimSystem {
     readonly id = 'waterNetwork';
@@ -25,50 +27,107 @@ export class WaterNetworkSystem extends BaseSimSystem {
             state.waterNetwork = { totalProduced: 0, totalConsumed: 0, deficit: 0 };
         }
 
-        // Safety check for grid
-        if (!state.grid || !Array.isArray(state.grid)) return;
 
         let totalProduced = 0;
         let totalConsumed = 0;
 
-        for (const tile of state.grid) {
-            if (!tile) continue; // Skip undefined tiles
+        // 1. Identify Sources and reset network state
+        const openSet: { x: number, z: number }[] = []; // Tiles with water
+        const suppliedTiles = new Set<string>(); // Tiles that have received water
 
-            // Skip empty or under construction
-            if (tile.buildingType === BuildingType.EMPTY || tile.isUnderConstruction) continue;
+        // Pre-scan to reset status and find sources
+        for (const chunk of Object.values(state.chunks)) {
+            for (const tile of chunk.tiles) {
+                if (!tile) continue;
 
-            // Skip multi-tile tails (only process head)
-            if (tile.structureHeadIndex !== undefined && tile.id !== tile.structureHeadIndex) continue;
+                const def = BUILDINGS[tile.buildingType];
+                if (!def) continue;
 
-            const def = BUILDINGS[tile.buildingType];
-            if (!def) continue;
+                // Reset status primarily for Pipes and Consumers
+                // Sources start connected
+                if (def.water?.produces) {
+                    // Determine actual production
+                    let production = def.water.produces;
 
-            // Water Production
-            if (def.water?.produces) {
-                let production = def.water.produces;
-
-                // Ponds produce more during rainy weather
-                if (tile.buildingType === BuildingType.POND) {
-                    if (state.weather?.current === 'RAINY' || state.weather?.current === 'STORM') {
-                        production = Math.floor(def.water.produces * 1.5);
-                    } else if (state.weather?.current === 'DUST_STORM') {
-                        production = Math.floor(def.water.produces * 0.5); // Evaporation
+                    // Weather effects
+                    if (tile.buildingType === BuildingType.POND) {
+                        if (state.weather?.current === 'RAINY' || state.weather?.current === 'STORM') {
+                            production = Math.floor(def.water.produces * 1.5);
+                        } else if (state.weather?.current === 'DUST_STORM') {
+                            production = Math.floor(def.water.produces * 0.5);
+                        }
                     }
+
+                    // Power dependency for Reservoirs
+                    if (tile.buildingType === BuildingType.RESERVOIR && state.powerGrid?.deficit > 0) {
+                        production = Math.floor(def.water.produces * 0.25);
+                    }
+
+                    totalProduced += production;
+
+                    // Mark as a source for BFS
+                    openSet.push({ x: tile.x, z: tile.z });
+                    suppliedTiles.add(`${tile.x},${tile.z}`);
+                    tile.waterStatus = 'CONNECTED';
+                } else if (tile.buildingType === BuildingType.PIPE || def.water?.consumes) {
+                    // Default to disconnected, will be set to CONNECTED if reached by BFS
+                    tile.waterStatus = 'DISCONNECTED';
                 }
-
-                // Reservoirs need power to pump - if power deficit, reduced output
-                if (tile.buildingType === BuildingType.RESERVOIR && state.powerGrid?.deficit > 0) {
-                    production = Math.floor(def.water.produces * 0.25);
-                }
-
-                totalProduced += production;
-            }
-
-            // Water Consumption
-            if (def.water?.consumes) {
-                totalConsumed += def.water.consumes;
             }
         }
+
+
+        // 2. BFS Propagation
+        // Flows from Sources -> Pipes -> Pipes/Consumers
+        let head = 0;
+        while (head < openSet.length) {
+            const { x, z } = openSet[head++];
+
+            // Get neighbors (NSEW)
+            const neighbors = [
+                { nx: x, nz: z - 1 }, // North
+                { nx: x, nz: z + 1 }, // South
+                { nx: x + 1, nz: z }, // East
+                { nx: x - 1, nz: z }  // West
+            ];
+
+            // Validate and process neighbors
+            for (const { nx, nz } of neighbors) {
+                const key = `${nx},${nz}`;
+                if (suppliedTiles.has(key)) continue;
+
+                const neighbor = ChunkStore.getTile(state.chunks, nx, nz);
+                if (!neighbor) continue;
+
+                const nDef = BUILDINGS[neighbor.buildingType];
+                if (!nDef) continue;
+
+                // If it's a Pipe, it accepts water and continues the flow
+                if (neighbor.buildingType === BuildingType.PIPE) {
+                    neighbor.waterStatus = 'CONNECTED';
+                    suppliedTiles.add(key);
+                    openSet.push({ x: nx, z: nz }); // Continue flow
+                }
+                // If it's a Consumer, it accepts water but STOPS flow (terminal node)
+                else if (nDef.water?.consumes) {
+                    neighbor.waterStatus = 'CONNECTED';
+                    suppliedTiles.add(key);
+                    // Do NOT push to openSet; consumers don't output water to neighbors
+                }
+            }
+        }
+
+        // 3. Calculate Consumption & Deficit
+        for (const chunk of Object.values(state.chunks)) {
+            for (const tile of chunk.tiles) {
+                if (!tile) continue;
+                const def = BUILDINGS[tile.buildingType];
+                if (def && def.water?.consumes) {
+                    totalConsumed += def.water.consumes;
+                }
+            }
+        }
+
 
         // Update state
         state.waterNetwork = {

@@ -12,6 +12,7 @@ export interface ThreeRenderConfig {
     antialias: boolean;
     shadowMap: boolean;
     pixelRatio: number;
+    shadowMapSize: number;
     clearColor: number;
     fogEnabled: boolean;
     fogColor: number;
@@ -19,12 +20,104 @@ export interface ThreeRenderConfig {
     fogFar: number;
 }
 
+export interface RenderQualityProfile {
+    antialias: boolean;
+    shadowMap: boolean;
+    pixelRatio: number;
+    shadowMapSize: number;
+}
+
+export type SmoothDetailLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface RuntimeRenderQualityProfile extends RenderQualityProfile {
+    level: number;
+    label: string;
+    smoothDetail: SmoothDetailLevel;
+}
+
+export function getRecommendedRenderQuality(): RenderQualityProfile {
+    const nav = navigator as Navigator & { deviceMemory?: number };
+    const cores = nav.hardwareConcurrency ?? 4;
+    const memory = nav.deviceMemory ?? 4;
+    const dpr = window.devicePixelRatio || 1;
+    const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+    const touchDevice = coarsePointer || 'ontouchstart' in window;
+    const constrainedDevice = touchDevice || cores <= 4 || memory <= 4;
+    const veryConstrainedDevice = cores <= 2 || memory <= 2;
+
+    return {
+        antialias: !constrainedDevice,
+        shadowMap: !touchDevice && !veryConstrainedDevice,
+        pixelRatio: Math.min(dpr, touchDevice ? 1 : constrainedDevice ? 1.25 : 1.5),
+        shadowMapSize: veryConstrainedDevice ? 512 : constrainedDevice ? 1024 : 1536,
+    };
+}
+
+export function buildRuntimeRenderQualityLadder(baseQuality: RenderQualityProfile = getRecommendedRenderQuality()): RuntimeRenderQualityProfile[] {
+    const basePixelRatio = THREE.MathUtils.clamp(baseQuality.pixelRatio, 0.85, 1.5);
+    const baseShadowSize = Math.max(512, Math.round(baseQuality.shadowMapSize / 256) * 256);
+
+    const ladder: RuntimeRenderQualityProfile[] = [
+        {
+            level: 0,
+            label: 'LOW',
+            antialias: baseQuality.antialias,
+            shadowMap: false,
+            pixelRatio: Math.max(0.8, Math.min(basePixelRatio, 0.9)),
+            shadowMapSize: 512,
+            smoothDetail: 'LOW',
+        },
+        {
+            level: 1,
+            label: 'MEDIUM',
+            antialias: baseQuality.antialias,
+            shadowMap: baseQuality.shadowMap,
+            pixelRatio: Math.max(0.95, Math.min(basePixelRatio, 1.0)),
+            shadowMapSize: Math.min(baseShadowSize, 1024),
+            smoothDetail: 'MEDIUM',
+        },
+        {
+            level: 2,
+            label: 'HIGH',
+            antialias: baseQuality.antialias,
+            shadowMap: baseQuality.shadowMap,
+            pixelRatio: Math.max(1.0, Math.min(basePixelRatio, 1.25)),
+            shadowMapSize: Math.min(baseShadowSize, 1536),
+            smoothDetail: 'HIGH',
+        },
+        {
+            level: 3,
+            label: 'ULTRA',
+            antialias: baseQuality.antialias,
+            shadowMap: baseQuality.shadowMap,
+            pixelRatio: basePixelRatio,
+            shadowMapSize: baseShadowSize,
+            smoothDetail: 'HIGH',
+        },
+    ];
+
+    return ladder
+        .map((profile, index) => ({ ...profile, level: index }))
+        .filter((profile, index, arr) => {
+            const prev = arr[index - 1];
+            return !prev
+                || prev.pixelRatio !== profile.pixelRatio
+                || prev.shadowMap !== profile.shadowMap
+                || prev.shadowMapSize !== profile.shadowMapSize
+                || prev.smoothDetail !== profile.smoothDetail;
+        })
+        .map((profile, index) => ({ ...profile, level: index }));
+}
+
+const DEFAULT_QUALITY = getRecommendedRenderQuality();
+
 const DEFAULT_CONFIG: ThreeRenderConfig = {
-    antialias: true,
-    shadowMap: true,
-    pixelRatio: window.devicePixelRatio || 1,
+    antialias: DEFAULT_QUALITY.antialias,
+    shadowMap: DEFAULT_QUALITY.shadowMap,
+    pixelRatio: DEFAULT_QUALITY.pixelRatio,
+    shadowMapSize: DEFAULT_QUALITY.shadowMapSize,
     clearColor: 0x0f172a,
-    fogEnabled: false,
+    fogEnabled: true,
     fogColor: 0x1a1a2e,
     fogNear: 40,
     fogFar: 120,
@@ -33,19 +126,36 @@ const DEFAULT_CONFIG: ThreeRenderConfig = {
 export class ThreeRenderAdapter implements RenderAdapter {
     private renderer!: THREE.WebGLRenderer;
     private scene: THREE.Scene;
-    private camera: THREE.OrthographicCamera;
+    private orthoCamera: THREE.OrthographicCamera;
+    private perspectiveCamera: THREE.PerspectiveCamera;
+    private activeCamera: THREE.Camera;
     private container: HTMLElement | null = null;
     private resizeObserver: ResizeObserver | null = null;
     private config: ThreeRenderConfig;
+    private runtimeQualityLadder: RuntimeRenderQualityProfile[];
+    private runtimeQuality: RuntimeRenderQualityProfile;
 
     constructor(config: Partial<ThreeRenderConfig> = {}) {
-        this.config = { ...DEFAULT_CONFIG, ...config, fogEnabled: false };
+        this.config = { ...DEFAULT_CONFIG, ...config };
+        this.runtimeQualityLadder = buildRuntimeRenderQualityLadder({
+            antialias: this.config.antialias,
+            shadowMap: this.config.shadowMap,
+            pixelRatio: this.config.pixelRatio,
+            shadowMapSize: this.config.shadowMapSize,
+        });
+        this.runtimeQuality = this.runtimeQualityLadder[this.runtimeQualityLadder.length - 1];
         this.scene = new THREE.Scene();
 
         // Orthographic to match legacy engine
-        this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 2000);
-        this.camera.position.set(0, 40, 50);
-        this.camera.lookAt(0, 0, 0);
+        this.orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 2000);
+        this.orthoCamera.position.set(0, 40, 50);
+        this.orthoCamera.lookAt(0, 0, 0);
+
+        // Perspective for FPV
+        this.perspectiveCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.perspectiveCamera.position.set(0, 5, 10);
+
+        this.activeCamera = this.orthoCamera;
     }
 
     /**
@@ -64,6 +174,9 @@ export class ThreeRenderAdapter implements RenderAdapter {
         this.renderer.setPixelRatio(this.config.pixelRatio);
         this.renderer.setClearColor(this.config.clearColor, 0); // Transparent clear
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = 1.0;
+        this.renderer.localClippingEnabled = true; // Required for material clippingPlanes
 
         if (this.config.shadowMap) {
             this.renderer.shadowMap.enabled = true;
@@ -105,6 +218,7 @@ export class ThreeRenderAdapter implements RenderAdapter {
 
         // Add default lighting
         this.setupDefaultLighting();
+        this.applyRuntimeQuality(this.runtimeQuality);
     }
 
     public directionalLight: THREE.DirectionalLight | null = null;
@@ -114,22 +228,6 @@ export class ThreeRenderAdapter implements RenderAdapter {
      * Setup default scene lighting
      */
     private setupDefaultLighting(): void {
-        const cores = navigator.hardwareConcurrency || 4;
-        let shadowSize = 1024;
-        let shadowType = THREE.PCFShadowMap;
-
-        if (cores >= 8) {
-            shadowSize = 2048;
-            shadowType = THREE.PCFSoftShadowMap;
-        } else if (cores < 4) {
-            shadowSize = 512;
-            shadowType = THREE.BasicShadowMap;
-        }
-
-        if (this.renderer) {
-            this.renderer.shadowMap.type = shadowType;
-        }
-
         // Boosted ambient light for visibility
         this.ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
         this.scene.add(this.ambientLight);
@@ -137,21 +235,18 @@ export class ThreeRenderAdapter implements RenderAdapter {
         // Main directional light (sun)
         this.directionalLight = new THREE.DirectionalLight(0xfff5e0, 1.0);
         this.directionalLight.position.set(50, 80, 30);
-        this.directionalLight.castShadow = true;
-        this.directionalLight.shadow.mapSize.width = shadowSize;
-        this.directionalLight.shadow.mapSize.height = shadowSize;
-        this.directionalLight.shadow.camera.near = 10;
-        this.directionalLight.shadow.camera.far = 200;
-        this.directionalLight.shadow.camera.left = -60;
-        this.directionalLight.shadow.camera.right = 60;
-        this.directionalLight.shadow.camera.top = 60;
-        this.directionalLight.shadow.camera.bottom = -60;
-
-        // Bias helps prevent shadow acne on voxel surfaces
-        this.directionalLight.shadow.bias = -0.0005;
-        this.directionalLight.shadow.normalBias = 0.02;
-
+        this.directionalLight.castShadow = this.config.shadowMap;
+        if (this.config.shadowMap) {
+            this.directionalLight.shadow.mapSize.set(this.config.shadowMapSize, this.config.shadowMapSize);
+            this.directionalLight.shadow.camera.near = 1;
+            this.directionalLight.shadow.camera.far = 260;
+            this.directionalLight.shadow.camera.left = -90;
+            this.directionalLight.shadow.camera.right = 90;
+            this.directionalLight.shadow.camera.top = 90;
+            this.directionalLight.shadow.camera.bottom = -90;
+        }
         this.scene.add(this.directionalLight);
+        this.scene.add(this.directionalLight.target);
 
         // Hemisphere light for ambient variation
         const hemi = new THREE.HemisphereLight(0x87CEEB, 0x3d2817, 0.4);
@@ -170,7 +265,7 @@ export class ThreeRenderAdapter implements RenderAdapter {
      * Draw phase - render the scene
      */
     draw(_ctx: FrameContext): void {
-        this.renderer.render(this.scene, this.camera);
+        this.renderer.render(this.scene, this.activeCamera);
     }
 
     /**
@@ -179,9 +274,13 @@ export class ThreeRenderAdapter implements RenderAdapter {
     resize(width: number, height: number): void {
         if (width <= 0 || height <= 0) return;
 
-        // For orthographic, we will sync the bounds from legacy in draw()
-        // but we can set a base ratio here if needed.
         this.renderer.setSize(width, height, false);
+
+        // Update perspective camera aspect ratio
+        this.perspectiveCamera.aspect = width / height;
+        this.perspectiveCamera.updateProjectionMatrix();
+
+        // Update active camera if needed (ortho handling is in draw/camera systems)
     }
 
     /**
@@ -235,7 +334,19 @@ export class ThreeRenderAdapter implements RenderAdapter {
 
     /** Get the camera */
     getCamera(): THREE.Camera {
-        return this.camera;
+        return this.activeCamera;
+    }
+
+    setCamera(camera: THREE.Camera): void {
+        this.activeCamera = camera;
+    }
+
+    getOrthoCamera(): THREE.OrthographicCamera {
+        return this.orthoCamera;
+    }
+
+    getPerspectiveCamera(): THREE.PerspectiveCamera {
+        return this.perspectiveCamera;
     }
 
     /** Get the renderer */
@@ -246,5 +357,45 @@ export class ThreeRenderAdapter implements RenderAdapter {
     /** Get the DOM canvas element */
     getCanvas(): HTMLCanvasElement {
         return this.renderer.domElement;
+    }
+
+    getRuntimeQuality(): RuntimeRenderQualityProfile {
+        return this.runtimeQuality;
+    }
+
+    getRuntimeQualityLadder(): RuntimeRenderQualityProfile[] {
+        return this.runtimeQualityLadder;
+    }
+
+    setRuntimeQualityLevel(level: number): RuntimeRenderQualityProfile {
+        const clampedLevel = THREE.MathUtils.clamp(level, 0, this.runtimeQualityLadder.length - 1);
+        const nextQuality = this.runtimeQualityLadder[clampedLevel];
+        this.applyRuntimeQuality(nextQuality);
+        return this.runtimeQuality;
+    }
+
+    private applyRuntimeQuality(nextQuality: RuntimeRenderQualityProfile): void {
+        this.runtimeQuality = nextQuality;
+        this.config.shadowMap = nextQuality.shadowMap;
+        this.config.pixelRatio = nextQuality.pixelRatio;
+        this.config.shadowMapSize = nextQuality.shadowMapSize;
+
+        if (!this.renderer) {
+            return;
+        }
+
+        this.renderer.setPixelRatio(nextQuality.pixelRatio);
+        this.renderer.shadowMap.enabled = nextQuality.shadowMap;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        if (this.container) {
+            this.resize(this.container.clientWidth || window.innerWidth, this.container.clientHeight || window.innerHeight);
+        }
+
+        if (this.directionalLight) {
+            this.directionalLight.castShadow = nextQuality.shadowMap;
+            this.directionalLight.shadow.mapSize.set(nextQuality.shadowMapSize, nextQuality.shadowMapSize);
+            this.directionalLight.shadow.needsUpdate = true;
+        }
     }
 }
