@@ -9,6 +9,7 @@ import './game/surveyDrillBuildingPatch';
 import './game/undergroundViewPatch';
 import './game/deepLedgerFoundationPatch';
 import './game/deepLedgerStatusOverlayPatch';
+import './game/surveyDrillAccessPatch';
 import ReactDOM from 'react-dom/client';
 import { Analytics } from "@vercel/analytics/react";
 import { BrowserRouter } from 'react-router-dom';
