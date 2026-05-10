@@ -983,12 +983,12 @@ export class AureusWorld extends BaseWorld {
     toggleViewMode(): void {
         const state = this.stateManager.getState();
 
-        if (!state.dungeon.unlocked) {
+        if (!state.dungeon.unlocked && !state.cheatsEnabled) {
             return;
         }
 
         if (state.activeView === 'SURFACE') {
-            if (state.resources.trust < 50) {
+            if (!state.cheatsEnabled && state.resources.trust < 50) {
                 state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
                 state.newsFeed.push({
                     id: `dungeon_locked_${Date.now()}`,
