@@ -5,6 +5,7 @@
 
 import React from 'react';
 import './index.css';
+import './game/surveyDrillBuildingPatch';
 import './game/undergroundViewPatch';
 import './game/deepLedgerFoundationPatch';
 import ReactDOM from 'react-dom/client';

@@ -25,6 +25,7 @@ import { Minimap } from './components/Minimap';
 import { WeatherOverlay } from './components/WeatherOverlay';
 import { DungeonHUD } from './components/DungeonHUD';
 import { UndergroundHUD } from './components/UndergroundHUD';
+import { SurveyDrillQuickBuild } from './components/SurveyDrillQuickBuild';
 import { DialogueOverlay } from './components/DialogueOverlay';
 import { MobileBuildingConfirmation } from './components/MobileBuildingConfirmation';
 import { DebugMenu } from './components/DebugMenu';
@@ -270,6 +271,14 @@ const App: React.FC = () => {
                                                 playSfx={playSfx}
                                                 step={state.step}
                                             />
+
+                                            {state.activeView === 'SURFACE' && (
+                                                <SurveyDrillQuickBuild
+                                                    state={state}
+                                                    dispatch={dispatch}
+                                                    playSfx={playSfx}
+                                                />
+                                            )}
 
                                             <Controls
                                                 selectedBuilding={state.selectedBuilding}

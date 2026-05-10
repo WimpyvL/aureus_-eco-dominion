@@ -4,19 +4,21 @@ import {
     ensureUndergroundState,
     revealUndergroundArea
 } from '../engine/underground/UndergroundGenerator';
+import { SURVEY_DRILL } from './surveyDrillBuildingPatch';
 
 /**
  * Phase 1 Deep Ledger foundation.
  *
  * This keeps the first underground survey slice scoped and safe:
  * - Backfills underground state for new games and old saves.
- * - Reveals deterministic Sector B1 tiles around completed mining access buildings.
- * - Uses existing mine access points until the dedicated Survey Drill is surfaced in the shop UI.
+ * - Reveals deterministic Sector B1 tiles around completed survey/mining access buildings.
+ * - Prefers Survey Drill as the canonical scanner, with mining structures retained as fallback emitters.
  */
 const proto = AureusWorld.prototype as any;
 
 const SURVEY_RADIUS = 4;
 const SURVEY_BUILDINGS = new Set<string>([
+    SURVEY_DRILL,
     BuildingType.MINE_SHAFT,
     BuildingType.MINING_HEADFRAME
 ]);
