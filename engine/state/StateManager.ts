@@ -289,6 +289,13 @@ export class StateManager {
         }
     }
 
+    markDirty(...keys: Array<keyof GameState>): void {
+        this.dirtyFlag = true;
+        for (const key of keys) {
+            this.dirtyKeys.add(key);
+        }
+    }
+
 
 
     setMutableContext(context: "simTick" | "none"): void {
@@ -301,11 +308,10 @@ export class StateManager {
         }
     }
 
-    getMutableState(): GameState {
+    getMutableState(dirtyKey?: keyof GameState): GameState {
         this.assertMutableContext("simTick");
         this.dirtyFlag = true;
-        // Mark chunks as dirty since most mutations affect the world state
-        this.dirtyKeys.add('chunks');
+        this.dirtyKeys.add(dirtyKey ?? 'chunks');
         return this.state;
     }
 

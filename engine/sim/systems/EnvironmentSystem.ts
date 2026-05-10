@@ -19,7 +19,6 @@ export class EnvironmentSystem extends BaseSimSystem {
 
     tick(ctx: FixedContext, state: GameState): void {
         const totalTime = ctx.time;
-        state.tickCount++;
 
         state.dayNightCycle = buildDayNightCycle(totalTime);
 

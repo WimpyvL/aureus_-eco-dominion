@@ -6,13 +6,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Gem, AlertTriangle, RefreshCw, Lock, ArrowRight, Radio, XCircle, CheckCircle2, ArrowUp, ChevronDown, ChevronUp, Leaf, Hammer, X, Zap, Droplets, Trash2, Info } from 'lucide-react';
-import { GameStep, Action, GameState, BuildingType, Chunk, Agent } from '../types';
+import { GameStep, Action, GameState, BuildingType, Chunk, Agent, SidebarMode } from '../types';
 import { BUILDINGS } from '../engine/data/VoxelConstants';
 
 interface TutorialOverlayProps {
     step: GameStep;
     dispatch: React.Dispatch<Action>;
-    setSidebarOpen: (mode: 'NONE' | 'OPS' | 'SHOP') => void;
+    setSidebarOpen: (mode: SidebarMode) => void;
     playSfx: (type: any) => void;
 }
 

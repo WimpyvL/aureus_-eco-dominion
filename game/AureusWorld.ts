@@ -52,6 +52,7 @@ import {
 } from './world';
 import { ChunkStore } from '../engine/space/ChunkStore';
 import { worldToChunk, worldToLocal, CHUNK_SIZE } from '../engine/utils/coords';
+import { confirmMobilePlacement } from './mobilePlacement';
 
 
 export interface AureusWorldConfig {
@@ -330,7 +331,7 @@ export class AureusWorld extends BaseWorld {
 
     confirmMobileBuildingPlacement(index: number): boolean {
         return confirmMobilePlacement(
-            (placementIndex) => this.placeBuilding(placementIndex),
+            () => false,
             () => this.clearPinnedBuilding(),
             index
         );
@@ -414,7 +415,7 @@ export class AureusWorld extends BaseWorld {
     }
 
     exitFPS(): void {
-        const state = this.stateManager.getMutableState();
+        const state = this.stateManager.getState();
         if (state.selectedAgentId) {
             const agent = state.agents.find(a => a.id === state.selectedAgentId);
             if (agent) {
@@ -425,6 +426,7 @@ export class AureusWorld extends BaseWorld {
                 this.cameraSystem.jumpTo(agent.x, agent.z);
             }
         }
+        this.stateManager.markDirty('agents');
         this.fpsCameraSystem.setEnabled(false);
         this.stateManager.update({ isFPS: false });
     }
@@ -452,7 +454,7 @@ export class AureusWorld extends BaseWorld {
     }
 
     deliverContract(contractId: string): void {
-        const state = this.stateManager.getMutableState();
+        const state = this.stateManager.getState();
         const contract = state.contracts.find(c => c.id === contractId);
         if (contract && contract.amount > 0) {
             // Check if we have the resources
@@ -461,6 +463,7 @@ export class AureusWorld extends BaseWorld {
                 state.resources[resource] -= contract.amount;
                 state.resources.agt += contract.reward;
                 state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.COMPLETE });
+                this.stateManager.markDirty('contracts', 'resources', 'pendingEffects');
             }
         }
     }
@@ -977,11 +980,35 @@ export class AureusWorld extends BaseWorld {
     /**
      * Toggle between surface and dungeon views
      */
-    toggleView(): void {
+    toggleViewMode(): void {
         const state = this.stateManager.getState();
-        if (!state.dungeon.unlocked) return;
 
-        state.activeView = state.activeView === 'SURFACE' ? 'DUNGEON' : 'SURFACE';
+        if (!state.dungeon.unlocked) {
+            return;
+        }
+
+        if (state.activeView === 'SURFACE') {
+            if (state.resources.trust < 50) {
+                state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+                state.newsFeed.push({
+                    id: `dungeon_locked_${Date.now()}`,
+                    headline: 'Underground access requires Trust level 50.',
+                    type: 'NEGATIVE',
+                    timestamp: Date.now(),
+                });
+                this.stateManager.markDirty('pendingEffects', 'newsFeed');
+                return;
+            }
+
+            this.stateManager.mutate('activeView', 'DUNGEON');
+            return;
+        }
+
+        this.stateManager.mutate('activeView', 'SURFACE');
+    }
+
+    toggleView(): void {
+        this.toggleViewMode();
     }
 
     /**
@@ -1053,6 +1080,9 @@ export class AureusWorld extends BaseWorld {
                 break;
             case 'TOGGLE_CHEATS':
                 this.toggleCheats();
+                break;
+            case 'TOGGLE_VIEW':
+                this.toggleViewMode();
                 break;
             case 'SAVE_GAME':
                 this.saveGame();

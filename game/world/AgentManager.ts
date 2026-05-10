@@ -15,15 +15,16 @@ export class AgentManager {
      * Select an agent by ID
      */
     selectAgent(id: string | null): void {
-        const state = this.stateManager.getMutableState();
+        const state = this.stateManager.getState();
         state.selectedAgentId = id;
+        this.stateManager.markDirty('selectedAgentId');
     }
 
     /**
      * Command an agent to move to a specific location
      */
     commandAgent(agentId: string, x: number, z: number): void {
-        const state = this.stateManager.getMutableState();
+        const state = this.stateManager.getState();
         const agent = state.agents.find(a => a.id === agentId);
         if (!agent) return;
 
@@ -32,6 +33,7 @@ export class AgentManager {
         agent.targetX = x;
         agent.targetZ = z;
         agent.state = 'IDLE'; // Will trigger pathfinding on next think
+        this.stateManager.markDirty('agents');
     }
 
     /**

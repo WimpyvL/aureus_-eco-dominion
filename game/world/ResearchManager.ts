@@ -18,7 +18,7 @@ export class ResearchManager {
      * Research a technology
      */
     researchTech(techId: string): void {
-        const state = this.stateManager.getMutableState();
+        const state = this.stateManager.getState();
 
         // 1. Validate Tech
         const tech = TECHNOLOGIES[techId as TechId];
@@ -58,6 +58,7 @@ export class ResearchManager {
             type: 'POSITIVE',
             timestamp: Date.now()
         });
+        this.stateManager.markDirty('research', 'resources', 'pendingEffects', 'newsFeed');
 
         console.log(`[ResearchManager] Unlocked tech: ${id}`);
     }

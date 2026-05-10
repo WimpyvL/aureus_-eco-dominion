@@ -58,7 +58,6 @@ export class EconomySystem extends BaseSimSystem {
 
                 if (tile.buildingType === BuildingType.STORAGE_DEPOT) cap += 500;
                 else if (tile.buildingType === BuildingType.STOCKPILE) cap += 2000;
-                else if (tile.buildingType === BuildingType.STORAGE_EXTENSION) cap += 250;
             }
         }
 

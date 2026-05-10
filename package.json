@@ -9,7 +9,8 @@
     "dev": "node scripts/intro.js",
     "start": "node scripts/intro.js",
     "vite": "vite",
-    "build": "vite build",
+    "build": "tsc --noEmit; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; vite build",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {

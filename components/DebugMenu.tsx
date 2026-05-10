@@ -204,7 +204,7 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ getDebugStats, state, onCl
               className={`w-full mt-3 py-1.5 px-2 rounded-[2px] font-bold text-[9px] flex items-center justify-center gap-2 transition-all border border-emerald-600/50 bg-emerald-950/20 text-emerald-400 hover:bg-emerald-900/30 uppercase tracking-widest font-['Rajdhani']`}
             >
               <Layers size={12} />
-              {state.viewMode === 'SURFACE' ? 'Switch to Underground' : 'Return to Surface'}
+              {state.activeView === 'SURFACE' ? 'Switch to Underground' : 'Return to Surface'}
             </button>
           </div>
 

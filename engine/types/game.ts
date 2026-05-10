@@ -147,6 +147,7 @@ export interface GameState {
     selectedAgentId: string | null;
     interactionMode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'TEST_DESTRUCT';
     step: GameStep;
+    gameOver: boolean;
     tickCount: number;
     idCounter: number;
     seed: number;
@@ -239,6 +240,8 @@ export interface LogisticsState {
     sellThreshold: number;
 }
 
+export type SidebarMode = 'NONE' | 'OPS' | 'SHOP' | 'TRADE' | 'CREW' | 'TECH';
+
 export type Action =
     | { type: 'TICK' }
     | { type: 'SELL_MINERALS' }
@@ -264,6 +267,7 @@ export type Action =
     | { type: 'RESET_GAME' }
     | { type: 'TOGGLE_DEBUG' }
     | { type: 'TOGGLE_CHEATS' }
+    | { type: 'TOGGLE_VIEW' }
     | { type: 'ENTER_FPS', payload?: string }
     | { type: 'EXIT_FPS' }
     | { type: 'CLAIM_GOAL' }

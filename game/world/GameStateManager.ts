@@ -41,7 +41,7 @@ export class GameStateManager {
      * Advance the tutorial to the next step
      */
     advanceTutorial(): void {
-        const state = this.stateManager.getMutableState();
+        const state = this.stateManager.getState();
         const steps = [
             GameStep.INTRO,
             GameStep.TUTORIAL_MINE,
@@ -55,6 +55,7 @@ export class GameStateManager {
         if (idx !== -1 && idx < steps.length - 1) {
             state.step = steps[idx + 1];
             state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.UI_COIN });
+            this.stateManager.markDirty('step', 'pendingEffects');
         }
     }
 
@@ -62,15 +63,17 @@ export class GameStateManager {
      * Toggle debug mode
      */
     toggleDebug(): void {
-        const state = this.stateManager.getMutableState();
+        const state = this.stateManager.getState();
         state.debugMode = !state.debugMode;
+        this.stateManager.markDirty('debugMode');
     }
 
     /**
-     * Set interaction mode (BUILD, BULLDOZE, INSPECT, DIG)
+     * Set interaction mode (BUILD, BULLDOZE, INSPECT, TEST_DESTRUCT)
      */
-    setInteractionMode(mode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'DIG'): void {
-        const state = this.stateManager.getMutableState();
+    setInteractionMode(mode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'TEST_DESTRUCT'): void {
+        const state = this.stateManager.getState();
         state.interactionMode = mode;
+        this.stateManager.markDirty('interactionMode');
     }
 }

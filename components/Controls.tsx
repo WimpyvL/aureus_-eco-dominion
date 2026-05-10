@@ -5,14 +5,14 @@
 
 import React from 'react';
 import { Menu, Layers, Hammer, X, Activity, TrendingUp, Pickaxe, ArrowUp, ArrowDown, Eye } from 'lucide-react';
-import { BuildingType, Action, GameStep } from '../types';
+import { BuildingType, Action, GameStep, SidebarMode } from '../types';
 import { BUILDINGS } from '../engine/data/VoxelConstants';
 import '../components/ViewSwitchButton.css';
 
 interface ControlsProps {
     selectedBuilding: BuildingType | null;
     dispatch: React.Dispatch<Action>;
-    setSidebarOpen: (mode: 'NONE' | 'OPS' | 'SHOP' | 'TRADE' | 'CREW' | 'TECH') => void;
+    setSidebarOpen: (mode: SidebarMode) => void;
     playSfx: (type: any) => void;
     step: GameStep;
     debugMode: boolean;

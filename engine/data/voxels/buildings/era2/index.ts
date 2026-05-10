@@ -21,5 +21,5 @@ export const Era2Buildings = {
     [BuildingType.GENERATOR]: GeneratorFactory,
     [BuildingType.MEDICAL_BAY]: MedicalBayFactory,
     [BuildingType.TRAINING_CENTER]: TrainingCenterFactory,
-    [BuildingType.ORE_EXTRACTOR]: OreExtractorFactory
+    [BuildingType.MINING_HEADFRAME]: OreExtractorFactory
 };

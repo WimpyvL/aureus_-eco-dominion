@@ -25,7 +25,7 @@ export class ContractManager {
      * Deliver resources for a contract
      */
     deliverContract(contractId: string): void {
-        const state = this.stateManager.getMutableState();
+        const state = this.stateManager.getState();
         const contract = state.contracts.find(c => c.id === contractId);
 
         if (contract && contract.amount > 0) {
@@ -35,6 +35,7 @@ export class ContractManager {
                 state.resources[resource] -= contract.amount;
                 state.resources.agt += contract.reward;
                 state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.COMPLETE });
+                this.stateManager.markDirty('contracts', 'resources', 'pendingEffects');
             }
         }
     }

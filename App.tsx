@@ -3,7 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { useAureusEngine } from './game/useAureusEngine';
 import { useEngineState } from './game/useEngineState';
-import { SfxType, BuildingType } from './types';
+import { SfxType, BuildingType, SidebarMode } from './types';
 import { HUD } from './components/HUD';
 import { Controls } from './components/Controls';
 import { SupplySidebar } from './components/SupplySidebar';
@@ -29,8 +29,6 @@ import { MobileBuildingConfirmation } from './components/MobileBuildingConfirmat
 import { DebugMenu } from './components/DebugMenu';
 import { AgentDebugOverlay } from './components/AgentDebugOverlay';
 import { LoadingOverlay } from './components/LoadingOverlay';
-
-export type SidebarOpen = 'NONE' | 'OPS' | 'SHOP' | 'TRADE' | 'CREW' | 'TECH';
 
 const App: React.FC = () => {
     // 1. Initialize Engine (Container-driven)
@@ -88,7 +86,7 @@ const App: React.FC = () => {
         console.log(`[SFX] ${type}`);
     }, []);
 
-    const [sidebarOpen, setSidebarOpen] = useState<SidebarOpen>('NONE');
+    const [sidebarOpen, setSidebarOpen] = useState<SidebarMode>('NONE');
     const [showHomePage, setShowHomePage] = useState(true);
     const [isIntroAnim, setIsIntroAnim] = useState(false);
     const [showWorldMap, setShowWorldMap] = useState(false);
@@ -118,9 +116,26 @@ const App: React.FC = () => {
         setActiveHUDBlock(id);
     };
 
-    const handleSidebarOpen = (mode: SidebarOpen) => {
+    const handleSidebarOpen = (mode: SidebarMode) => {
         setSidebarOpen(mode);
     };
+
+    const handleToggleView = useCallback(() => {
+        dispatch({ type: 'TOGGLE_VIEW' });
+        playSfx(SfxType.UI_CLICK);
+    }, [dispatch, playSfx]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!showHomePage && e.code === 'KeyU') {
+                e.preventDefault();
+                handleToggleView();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [showHomePage, handleToggleView]);
 
     const selectedAgent = useMemo(() => {
         if (!state?.selectedAgentId) return null;
@@ -263,10 +278,7 @@ const App: React.FC = () => {
                                                 dungeonUnlocked={state.dungeon.unlocked}
                                                 activeView={state.activeView}
                                                 selectedAgentId={state.selectedAgentId}
-                                                onToggleView={() => {
-                                                    world?.toggleView();
-                                                    playSfx(SfxType.UI_CLICK);
-                                                }}
+                                                onToggleView={handleToggleView}
                                             />
 
                                             <OpsDrawer
