@@ -1,5 +1,5 @@
 import React from 'react';
-import { UndergroundState } from '../types';
+import { UndergroundState, UndergroundTile } from '../types';
 
 interface UndergroundHUDProps {
     underground?: UndergroundState;
@@ -8,7 +8,7 @@ interface UndergroundHUDProps {
 export const UndergroundHUD: React.FC<UndergroundHUDProps> = ({ underground }) => {
     if (!underground) return null;
 
-    const visibleTiles = Object.values(underground.tiles).filter(tile => tile.status !== 'HIDDEN');
+    const visibleTiles = (Object.values(underground.tiles) as UndergroundTile[]).filter(tile => tile.status !== 'HIDDEN');
     const hazardCount = visibleTiles.filter(tile => tile.hazard !== 'NONE').length;
     const resourceCount = visibleTiles.filter(tile => tile.resourceType !== 'NONE').length;
 
