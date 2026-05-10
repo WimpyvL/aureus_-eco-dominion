@@ -24,6 +24,7 @@ import { WorldMap } from './components/WorldMap';
 import { Minimap } from './components/Minimap';
 import { WeatherOverlay } from './components/WeatherOverlay';
 import { DungeonHUD } from './components/DungeonHUD';
+import { UndergroundHUD } from './components/UndergroundHUD';
 import { DialogueOverlay } from './components/DialogueOverlay';
 import { MobileBuildingConfirmation } from './components/MobileBuildingConfirmation';
 import { DebugMenu } from './components/DebugMenu';
@@ -211,6 +212,9 @@ const App: React.FC = () => {
                             {!showHomePage && !isIntroAnim && (
                                 <div className="absolute inset-0">
                                     <WeatherOverlay weather={state.weather} />
+                                    {state.activeView === 'DUNGEON' && (
+                                        <UndergroundHUD underground={(state as any).underground} />
+                                    )}
                                     {/* Main Game Interface Overlay */}
                                     {!state.isFPS ? (
                                         <>
