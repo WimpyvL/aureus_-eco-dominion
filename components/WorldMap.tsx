@@ -28,7 +28,7 @@ export const WorldMap: React.FC<WorldMapProps> = ({ isOpen, onClose, chunks, age
     const lastMouse = useRef({ x: 0, y: 0 });
 
     // Calculate Exploration Percentage
-    const allTiles = Object.values(chunks).flatMap(c => c.tiles);
+    const allTiles = Object.values(chunks).flatMap((c: Chunk) => c.tiles);
     const exploredCount = allTiles.filter(t => t.explored).length;
     const totalCount = allTiles.length || 1;
     const exploredPercent = Math.floor((exploredCount / totalCount) * 100);
@@ -68,7 +68,7 @@ export const WorldMap: React.FC<WorldMapProps> = ({ isOpen, onClose, chunks, age
         ctx.strokeRect(0, 0, MAP_SIZE, MAP_SIZE);
 
         // Draw Tiles from chunks
-        Object.values(chunks).forEach(chunk => {
+        Object.values(chunks).forEach((chunk: Chunk) => {
             chunk.tiles.forEach(tile => {
                 const x = tile.x * TILE_SIZE;
                 const y = tile.z * TILE_SIZE;

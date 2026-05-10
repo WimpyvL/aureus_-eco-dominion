@@ -52,7 +52,7 @@ export const Minimap: React.FC<MinimapProps> = React.memo(({ chunks, agents, onO
             const halfSize = Math.floor(MAP_DISPLAY_SIZE / 2);
 
             // Draw Grid from chunks
-            Object.values(chunks).forEach(chunk => {
+            Object.values(chunks).forEach((chunk: Chunk) => {
                 chunk.tiles.forEach(tile => {
                     // Only draw if within minimap bounds relative to origin
                     if (Math.abs(tile.x) > halfSize || Math.abs(tile.z) > halfSize) return;

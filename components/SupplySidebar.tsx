@@ -10,7 +10,7 @@ import {
     HeartPulse, Dumbbell, Gem, TrainFront, Truck,
     Trash2, TreeDeciduous, Salad, Thermometer, Trophy, Rocket, Package
 } from 'lucide-react';
-import { GameState, BuildingType, Action } from '../types';
+import { GameState, BuildingType, Action, Chunk } from '../types';
 import { BUILDINGS } from '../engine/data/VoxelConstants';
 import { calculateBuildingCost } from '../engine/utils/GameUtils';
 
@@ -409,7 +409,7 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, wor
                                         const isEcoLocked = (b as any).ecoReq ? state.resources.eco < (b as any).ecoReq : false;
                                         let dependencyMet = true;
                                         if ((b as any).dependency) {
-                                            dependencyMet = Object.values(state.chunks).flatMap(c => c.tiles).some(t => t.buildingType === (b as any).dependency && !t.isUnderConstruction);
+                                            dependencyMet = Object.values(state.chunks).flatMap((c: Chunk) => c.tiles).some(t => t.buildingType === (b as any).dependency && !t.isUnderConstruction);
                                         }
                                         const isEraLocked = b.era && b.era !== 'UNDERGROUND' && !state.unlockedEras.includes(b.era);
                                         const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet || isEraLocked);
@@ -518,7 +518,7 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, wor
                                 const isEcoLocked = (b as any).ecoReq ? state.resources.eco < (b as any).ecoReq : false;
                                 let dependencyMet = true;
                                 if ((b as any).dependency) {
-                                    dependencyMet = Object.values(state.chunks).flatMap(c => c.tiles).some(t => t.buildingType === (b as any).dependency && !t.isUnderConstruction);
+                                    dependencyMet = Object.values(state.chunks).flatMap((c: Chunk) => c.tiles).some(t => t.buildingType === (b as any).dependency && !t.isUnderConstruction);
                                 }
                                 const isEraLocked = b.era && b.era !== 'UNDERGROUND' && !state.unlockedEras.includes(b.era);
                                 const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet || isEraLocked);

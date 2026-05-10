@@ -2,7 +2,7 @@
 import React from 'react';
 import { FileText, CheckCircle2, XCircle, Clock, Send, User } from 'lucide-react';
 import { GameState, Action } from '../types';
-import { PermitStatus } from '../engine/types/bureaucracy';
+import { NPC, Permit, PermitStatus } from '../engine/types/bureaucracy';
 
 interface BureaucracyOfficeProps {
     state: GameState;
@@ -45,7 +45,7 @@ export const BureaucracyOffice: React.FC<BureaucracyOfficeProps> = ({ state, dis
                     </h3>
                 </div>
                 <div className="p-3 grid grid-cols-1 gap-2">
-                    {Object.values(bureaucracy.npcs).map(npc => (
+                    {Object.values(bureaucracy.npcs).map((npc: NPC) => (
                         <div key={npc.id} className="flex items-center justify-between bg-slate-950 border border-slate-800 p-2 rounded-[2px]">
                             <div className="flex items-center gap-2">
                                 <div className="w-8 h-8 bg-blue-900/30 border border-blue-500/50 rounded-[2px] flex items-center justify-center text-blue-400 font-bold">
@@ -75,7 +75,7 @@ export const BureaucracyOffice: React.FC<BureaucracyOfficeProps> = ({ state, dis
                     </h3>
                 </div>
                 <div className="p-3 space-y-3">
-                    {Object.values(bureaucracy.permits).map(permit => (
+                    {Object.values(bureaucracy.permits).map((permit: Permit) => (
                         <div key={permit.id} className="bg-slate-950 border border-slate-800 p-3 rounded-[2px] space-y-2">
                             <div className="flex justify-between items-start">
                                 <div className="flex flex-col">
