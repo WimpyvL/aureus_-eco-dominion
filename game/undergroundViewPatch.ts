@@ -13,7 +13,7 @@ const proto = AureusWorld.prototype as any;
 if (!proto.__undergroundTogglePatched) {
     const originalDispatch = proto.dispatch;
 
-    proto.dispatch = function patchedDispatch(action: any): void {
+    proto.dispatch = function patchedDispatch(this: any, action: any): void {
         if (action?.type === 'TOGGLE_VIEW') {
             const stateManager = this.stateManager;
             const state = stateManager.getState();
