@@ -6,7 +6,7 @@
 
 import React, { useState } from 'react';
 import { Menu, ArrowLeft, TrendingUp, FlaskConical, BarChart3, Users, Zap, Utensils, Smile, Briefcase, Shield, Leaf, Wrench, Pickaxe } from 'lucide-react';
-import { GameState, Action, Agent, AgentRole } from '../types';
+import { GameState, Action, Agent, AgentRole, Chunk } from '../types';
 import { ResearchTree } from './ResearchTree';
 import { BureaucracyOffice } from './BureaucracyOffice';
 import { MAX_AGENTS, CAPACITY_PER_QUARTERS } from '../engine/sim/logic/SimulationLogic';
@@ -114,7 +114,7 @@ export const OpsDrawer: React.FC<OpsDrawerProps> = ({ isOpen, onClose, state, di
         if (isOpen) setActiveTab('OVERVIEW');
     }, [isOpen]);
 
-    const quartersCount = Object.values(state.chunks).flatMap(c => c.tiles).filter(t => t.buildingType === BuildingType.STAFF_QUARTERS && !t.isUnderConstruction).length;
+    const quartersCount = Object.values(state.chunks).flatMap((c: Chunk) => c.tiles).filter(t => t.buildingType === BuildingType.STAFF_QUARTERS && !t.isUnderConstruction).length;
     const currentCapacity = (quartersCount * CAPACITY_PER_QUARTERS) + 4;
     const colonistCount = state.agents.filter(a => a.type !== 'ILLEGAL_MINER').length;
 
