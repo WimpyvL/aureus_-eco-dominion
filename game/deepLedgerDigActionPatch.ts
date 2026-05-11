@@ -11,8 +11,11 @@ import { SfxType, UndergroundTile } from '../types';
 const proto = AureusWorld.prototype as any;
 const PANEL_ID = 'deep-ledger-dig-action-panel';
 const COST_AGT = 75;
+const REINFORCE_COST_AGT = 100;
 const TILE_STABILITY_COST = 8;
+const TILE_REINFORCE_GAIN = 25;
 const GLOBAL_STABILITY_COST = 1;
+const GLOBAL_REINFORCE_GAIN = 1;
 
 let selectedIndex = 0;
 let collapsed = false;
@@ -39,6 +42,7 @@ function getPanel(): HTMLDivElement | null {
 function scoreTile(tile: UndergroundTile): number {
     let score = 0;
     if (tile.status === 'DUG' || tile.hasTunnel) score -= 500;
+    if (tile.status === 'DUG' && !tile.hasSupport) score += 750;
     if (tile.hazard !== 'NONE') score += 1000;
     if (tile.resourceType !== 'NONE') score += 500;
     score += tile.oreRichness;
@@ -111,6 +115,50 @@ function digSelectedTile(world: any, tile: UndergroundTile): void {
     stateManager.markDirty?.('resources' as any, 'underground' as any, 'newsFeed' as any, 'pendingEffects' as any);
 }
 
+function reinforceSelectedTile(world: any, tile: UndergroundTile): void {
+    const stateManager = world.stateManager;
+    const state = stateManager?.getState?.();
+    if (!state) return;
+
+    const underground = ensureUndergroundState(state);
+    const liveTile = underground.tiles[tile.id];
+    if (!liveTile) return;
+
+    if (!liveTile.hasTunnel && liveTile.status !== 'DUG' && liveTile.status !== 'REINFORCED') {
+        addNews(state, 'Only open tunnel tiles can be reinforced.', 'NEGATIVE');
+        stateManager.pushEffect?.({ type: 'AUDIO', sfx: SfxType.ERROR });
+        stateManager.markDirty?.('newsFeed' as any, 'pendingEffects' as any);
+        return;
+    }
+
+    if (liveTile.hasSupport || liveTile.status === 'REINFORCED') {
+        addNews(state, 'That Sector B1 tunnel is already reinforced.', 'NEUTRAL');
+        stateManager.markDirty?.('newsFeed' as any);
+        return;
+    }
+
+    if (!state.cheatsEnabled && state.resources.agt < REINFORCE_COST_AGT) {
+        addNews(state, `Reinforcement requires ${REINFORCE_COST_AGT} AGT.`, 'NEGATIVE');
+        stateManager.pushEffect?.({ type: 'AUDIO', sfx: SfxType.ERROR });
+        stateManager.markDirty?.('newsFeed' as any, 'pendingEffects' as any);
+        return;
+    }
+
+    if (!state.cheatsEnabled) {
+        state.resources.agt -= REINFORCE_COST_AGT;
+    }
+
+    liveTile.hasSupport = true;
+    liveTile.hasTunnel = true;
+    liveTile.status = 'REINFORCED';
+    liveTile.stability = Math.min(100, liveTile.stability + TILE_REINFORCE_GAIN);
+    underground.globalStability = Math.min(100, underground.globalStability + GLOBAL_REINFORCE_GAIN);
+
+    addNews(state, `Support beams installed at Sector B${liveTile.depth} (${liveTile.x}, ${liveTile.z}).`, 'POSITIVE');
+    stateManager.pushEffect?.({ type: 'AUDIO', sfx: SfxType.BUILD });
+    stateManager.markDirty?.('resources' as any, 'underground' as any, 'newsFeed' as any, 'pendingEffects' as any);
+}
+
 function renderPanel(world: any, state: any): void {
     const panel = getPanel();
     if (!panel) return;
@@ -126,9 +174,11 @@ function renderPanel(world: any, state: any): void {
 
     const tile = tiles[selectedIndex];
     const canOpen = Boolean(tile && (tile.status === 'SURVEYED' || tile.status === 'REINFORCED'));
+    const canReinforce = Boolean(tile && (tile.status === 'DUG' || tile.hasTunnel) && !tile.hasSupport && tile.status !== 'REINFORCED');
     const title = tile ? `B${tile.depth} // ${tile.x}, ${tile.z}` : 'No surveyed tiles';
+    const supportState = tile?.hasSupport || tile?.status === 'REINFORCED' ? 'SUPPORTED' : 'UNSUPPORTED';
     const detail = tile
-        ? `${tile.status} | ${tile.resourceType} | ${tile.oreRichness}% ore | ${tile.stability}% stability | ${tile.hazard}`
+        ? `${tile.status} | ${supportState} | ${tile.resourceType} | ${tile.oreRichness}% ore | ${tile.stability}% stability | ${tile.hazard}`
         : 'Scan Sector B1 with a Survey Drill first.';
 
     panel.style.display = 'block';
@@ -146,7 +196,8 @@ function renderPanel(world: any, state: any): void {
                 <div style="display:flex;border-top:1px solid rgba(51,65,85,.8);">
                     <button id="deep-ledger-dig-prev" style="flex:1;padding:9px;background:rgba(15,23,42,.95);color:#cbd5e1;border:0;border-right:1px solid rgba(51,65,85,.8);cursor:pointer;font-weight:800;text-transform:uppercase;font-size:10px;">Prev</button>
                     <button id="deep-ledger-dig-next" style="flex:1;padding:9px;background:rgba(15,23,42,.95);color:#cbd5e1;border:0;border-right:1px solid rgba(51,65,85,.8);cursor:pointer;font-weight:800;text-transform:uppercase;font-size:10px;">Next</button>
-                    <button id="deep-ledger-open-tunnel" ${canOpen ? '' : 'disabled'} style="flex:1.3;padding:9px;background:${canOpen ? 'linear-gradient(135deg,rgba(245,158,11,.95),rgba(180,83,9,.95))' : 'rgba(30,41,59,.75)'};color:${canOpen ? '#1c1917' : '#64748b'};border:0;cursor:${canOpen ? 'pointer' : 'not-allowed'};font-weight:900;text-transform:uppercase;font-size:10px;">Open</button>
+                    <button id="deep-ledger-open-tunnel" ${canOpen ? '' : 'disabled'} style="flex:1.15;padding:9px;background:${canOpen ? 'linear-gradient(135deg,rgba(245,158,11,.95),rgba(180,83,9,.95))' : 'rgba(30,41,59,.75)'};color:${canOpen ? '#1c1917' : '#64748b'};border:0;border-right:1px solid rgba(51,65,85,.8);cursor:${canOpen ? 'pointer' : 'not-allowed'};font-weight:900;text-transform:uppercase;font-size:10px;">Open</button>
+                    <button id="deep-ledger-reinforce-tunnel" ${canReinforce ? '' : 'disabled'} style="flex:1.45;padding:9px;background:${canReinforce ? 'linear-gradient(135deg,rgba(52,211,153,.95),rgba(5,150,105,.95))' : 'rgba(30,41,59,.75)'};color:${canReinforce ? '#022c22' : '#64748b'};border:0;cursor:${canReinforce ? 'pointer' : 'not-allowed'};font-weight:900;text-transform:uppercase;font-size:10px;">Support</button>
                 </div>
             `}
         </div>
@@ -166,6 +217,10 @@ function renderPanel(world: any, state: any): void {
     });
     panel.querySelector('#deep-ledger-open-tunnel')?.addEventListener('click', () => {
         if (tile) digSelectedTile(world, tile);
+        renderPanel(world, state);
+    });
+    panel.querySelector('#deep-ledger-reinforce-tunnel')?.addEventListener('click', () => {
+        if (tile) reinforceSelectedTile(world, tile);
         renderPanel(world, state);
     });
 }
