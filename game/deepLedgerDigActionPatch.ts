@@ -1,0 +1,191 @@
+import { AureusWorld } from './AureusWorld';
+import { ensureUndergroundState } from '../engine/underground/UndergroundGenerator';
+import { SfxType, UndergroundTile } from '../types';
+
+/**
+ * Adds a compact Deep Ledger tunnel action panel.
+ *
+ * This is intentionally separate from the inspector UI so the first tunnel action
+ * can ship without replacing the entire inspector overlay.
+ */
+const proto = AureusWorld.prototype as any;
+const PANEL_ID = 'deep-ledger-dig-action-panel';
+const COST_AGT = 75;
+const TILE_STABILITY_COST = 8;
+const GLOBAL_STABILITY_COST = 1;
+
+let selectedIndex = 0;
+let collapsed = false;
+
+function getPanel(): HTMLDivElement | null {
+    if (typeof document === 'undefined') return null;
+
+    let panel = document.getElementById(PANEL_ID) as HTMLDivElement | null;
+    if (!panel) {
+        panel = document.createElement('div');
+        panel.id = PANEL_ID;
+        panel.style.position = 'fixed';
+        panel.style.left = '16px';
+        panel.style.bottom = '24px';
+        panel.style.zIndex = '73';
+        panel.style.pointerEvents = 'auto';
+        panel.style.minWidth = '260px';
+        document.body.appendChild(panel);
+    }
+
+    return panel;
+}
+
+function scoreTile(tile: UndergroundTile): number {
+    let score = 0;
+    if (tile.status === 'DUG' || tile.hasTunnel) score -= 500;
+    if (tile.hazard !== 'NONE') score += 1000;
+    if (tile.resourceType !== 'NONE') score += 500;
+    score += tile.oreRichness;
+    score += Math.max(0, 100 - tile.stability);
+    return score;
+}
+
+function getTiles(state: any): UndergroundTile[] {
+    const underground = ensureUndergroundState(state);
+    return (Object.values(underground.tiles) as UndergroundTile[])
+        .filter(tile => tile.status !== 'HIDDEN')
+        .sort((a, b) => scoreTile(b) - scoreTile(a));
+}
+
+function addNews(state: any, headline: string, type: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'CRITICAL'): void {
+    state.newsFeed.unshift({
+        id: `deep_ledger_action_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        headline,
+        type,
+        timestamp: Date.now()
+    });
+    state.newsFeed = state.newsFeed.slice(0, 12);
+}
+
+function digSelectedTile(world: any, tile: UndergroundTile): void {
+    const stateManager = world.stateManager;
+    const state = stateManager?.getState?.();
+    if (!state) return;
+
+    const underground = ensureUndergroundState(state);
+    const liveTile = underground.tiles[tile.id];
+    if (!liveTile) return;
+
+    if (liveTile.status === 'DUG' || liveTile.hasTunnel) {
+        addNews(state, 'That Sector B1 tile already has an open tunnel.', 'NEUTRAL');
+        stateManager.markDirty?.('newsFeed' as any);
+        return;
+    }
+
+    if (liveTile.status !== 'SURVEYED' && liveTile.status !== 'REINFORCED') {
+        addNews(state, 'Only surveyed Sector B1 tiles can be opened.', 'NEGATIVE');
+        stateManager.pushEffect?.({ type: 'AUDIO', sfx: SfxType.ERROR });
+        stateManager.markDirty?.('newsFeed' as any, 'pendingEffects' as any);
+        return;
+    }
+
+    if (!state.cheatsEnabled && state.resources.agt < COST_AGT) {
+        addNews(state, `Tunnel operation requires ${COST_AGT} AGT.`, 'NEGATIVE');
+        stateManager.pushEffect?.({ type: 'AUDIO', sfx: SfxType.ERROR });
+        stateManager.markDirty?.('newsFeed' as any, 'pendingEffects' as any);
+        return;
+    }
+
+    if (!state.cheatsEnabled) {
+        state.resources.agt -= COST_AGT;
+    }
+
+    liveTile.status = 'DUG';
+    liveTile.hasTunnel = true;
+    liveTile.connectedToSurface = true;
+    liveTile.stability = Math.max(5, liveTile.stability - TILE_STABILITY_COST);
+    underground.globalStability = Math.max(0, underground.globalStability - GLOBAL_STABILITY_COST);
+
+    if (liveTile.hazard !== 'NONE') {
+        underground.exposureRisk = Math.min(100, underground.exposureRisk + 1);
+    }
+
+    addNews(state, `Tunnel opened at Sector B${liveTile.depth} (${liveTile.x}, ${liveTile.z}).`, 'POSITIVE');
+    stateManager.pushEffect?.({ type: 'AUDIO', sfx: SfxType.BUILD });
+    stateManager.markDirty?.('resources' as any, 'underground' as any, 'newsFeed' as any, 'pendingEffects' as any);
+}
+
+function renderPanel(world: any, state: any): void {
+    const panel = getPanel();
+    if (!panel) return;
+
+    if (state.activeView !== 'DUNGEON') {
+        panel.style.display = 'none';
+        return;
+    }
+
+    const tiles = getTiles(state);
+    if (selectedIndex >= tiles.length) selectedIndex = Math.max(0, tiles.length - 1);
+    if (selectedIndex < 0) selectedIndex = 0;
+
+    const tile = tiles[selectedIndex];
+    const canOpen = Boolean(tile && (tile.status === 'SURVEYED' || tile.status === 'REINFORCED'));
+    const title = tile ? `B${tile.depth} // ${tile.x}, ${tile.z}` : 'No surveyed tiles';
+    const detail = tile
+        ? `${tile.status} | ${tile.resourceType} | ${tile.oreRichness}% ore | ${tile.stability}% stability | ${tile.hazard}`
+        : 'Scan Sector B1 with a Survey Drill first.';
+
+    panel.style.display = 'block';
+    panel.innerHTML = `
+        <div style="background:rgba(2,6,23,.94);border:1px solid rgba(245,158,11,.4);border-radius:10px;color:#e2e8f0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;box-shadow:0 20px 40px rgba(0,0,0,.45);overflow:hidden;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;background:rgba(15,23,42,.92);">
+                <div>
+                    <div style="color:#f59e0b;font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;">Tunnel Action</div>
+                    <div style="color:#94a3b8;font-size:10px;margin-top:2px;">${title}</div>
+                </div>
+                <button id="deep-ledger-dig-collapse" style="background:rgba(30,41,59,.9);color:#f59e0b;border:1px solid rgba(245,158,11,.35);border-radius:6px;cursor:pointer;font-size:10px;font-weight:900;padding:4px 8px;text-transform:uppercase;">${collapsed ? 'Open' : 'Min'}</button>
+            </div>
+            ${collapsed ? '' : `
+                <div style="padding:12px;font-size:11px;color:#94a3b8;line-height:1.45;">${detail}</div>
+                <div style="display:flex;border-top:1px solid rgba(51,65,85,.8);">
+                    <button id="deep-ledger-dig-prev" style="flex:1;padding:9px;background:rgba(15,23,42,.95);color:#cbd5e1;border:0;border-right:1px solid rgba(51,65,85,.8);cursor:pointer;font-weight:800;text-transform:uppercase;font-size:10px;">Prev</button>
+                    <button id="deep-ledger-dig-next" style="flex:1;padding:9px;background:rgba(15,23,42,.95);color:#cbd5e1;border:0;border-right:1px solid rgba(51,65,85,.8);cursor:pointer;font-weight:800;text-transform:uppercase;font-size:10px;">Next</button>
+                    <button id="deep-ledger-open-tunnel" ${canOpen ? '' : 'disabled'} style="flex:1.3;padding:9px;background:${canOpen ? 'linear-gradient(135deg,rgba(245,158,11,.95),rgba(180,83,9,.95))' : 'rgba(30,41,59,.75)'};color:${canOpen ? '#1c1917' : '#64748b'};border:0;cursor:${canOpen ? 'pointer' : 'not-allowed'};font-weight:900;text-transform:uppercase;font-size:10px;">Open</button>
+                </div>
+            `}
+        </div>
+    `;
+
+    panel.querySelector('#deep-ledger-dig-collapse')?.addEventListener('click', () => {
+        collapsed = !collapsed;
+        renderPanel(world, state);
+    });
+    panel.querySelector('#deep-ledger-dig-prev')?.addEventListener('click', () => {
+        selectedIndex = tiles.length ? (selectedIndex - 1 + tiles.length) % tiles.length : 0;
+        renderPanel(world, state);
+    });
+    panel.querySelector('#deep-ledger-dig-next')?.addEventListener('click', () => {
+        selectedIndex = tiles.length ? (selectedIndex + 1) % tiles.length : 0;
+        renderPanel(world, state);
+    });
+    panel.querySelector('#deep-ledger-open-tunnel')?.addEventListener('click', () => {
+        if (tile) digSelectedTile(world, tile);
+        renderPanel(world, state);
+    });
+}
+
+if (!proto.__deepLedgerDigActionPatched) {
+    const originalDraw = proto.draw;
+    const originalTeardown = proto.onTeardown;
+
+    proto.draw = function patchedDeepLedgerDigActionDraw(this: any, ctx: any): void {
+        const result = originalDraw.call(this, ctx);
+        const state = this.stateManager?.getState?.();
+        if (state) renderPanel(this, state);
+        return result;
+    };
+
+    proto.onTeardown = async function patchedDeepLedgerDigActionTeardown(this: any): Promise<void> {
+        const panel = typeof document !== 'undefined' ? document.getElementById(PANEL_ID) : null;
+        panel?.remove();
+        return originalTeardown.call(this);
+    };
+
+    proto.__deepLedgerDigActionPatched = true;
+}
