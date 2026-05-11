@@ -10,6 +10,7 @@ import './game/undergroundViewPatch';
 import './game/deepLedgerFoundationPatch';
 import './game/deepLedgerStatusOverlayPatch';
 import './game/surveyDrillAccessPatch';
+import './game/deepLedgerTileInspectorPatch';
 import ReactDOM from 'react-dom/client';
 import { Analytics } from "@vercel/analytics/react";
 import { BrowserRouter } from 'react-router-dom';
