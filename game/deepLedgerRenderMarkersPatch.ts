@@ -1,6 +1,7 @@
 import { AureusWorld } from './AureusWorld';
 import { ensureUndergroundState } from '../engine/underground/UndergroundGenerator';
 import { UndergroundTile } from '../types';
+import { isSelectedDeepLedgerTile, setSelectedDeepLedgerTileId } from './deepLedgerSelection';
 
 /**
  * Deep Ledger render markers v0.
@@ -127,18 +128,21 @@ function renderMarkers(state: any): void {
     const centerY = typeof window !== 'undefined' ? window.innerHeight / 2 : 360;
 
     const markerHtml = tiles.map(tile => {
+        const selected = isSelectedDeepLedgerTile(tile.id);
         const color = markerColor(tile);
         const label = markerLabel(tile);
         const left = centerX + (tile.x - avgX) * GRID_SCALE;
         const top = centerY + (tile.z - avgZ) * GRID_SCALE;
-        const opacity = tile.status === 'SURVEYED' && tile.resourceType === 'NONE' && tile.hazard === 'NONE' ? 0.42 : 0.9;
-        const size = tile.status === 'COLLAPSED' || tile.status === 'REINFORCED' || tile.hasTunnel || tile.resourceType !== 'NONE' || tile.hazard !== 'NONE' ? 20 : 12;
-        const border = tile.hazard !== 'NONE' ? '#fb7185' : color;
+        const opacity = selected ? 1 : tile.status === 'SURVEYED' && tile.resourceType === 'NONE' && tile.hazard === 'NONE' ? 0.42 : 0.9;
+        const baseSize = tile.status === 'COLLAPSED' || tile.status === 'REINFORCED' || tile.hasTunnel || tile.resourceType !== 'NONE' || tile.hazard !== 'NONE' ? 20 : 12;
+        const size = selected ? baseSize + 10 : baseSize;
+        const border = selected ? '#ffffff' : tile.hazard !== 'NONE' ? '#fb7185' : color;
+        const shadow = selected ? `0 0 0 3px rgba(255,255,255,.55), 0 0 22px ${color}` : `0 0 12px ${color}66`;
 
         return `
-            <div title="B${tile.depth} // ${tile.x}, ${tile.z} | ${tile.status} | ${tile.resourceType} | ${tile.hazard} | ${tile.stability}% stability" style="position:absolute;left:${left}px;top:${top}px;width:${size}px;height:${size}px;transform:translate(-50%,-50%);border:1px solid ${border};border-radius:${tile.status === 'COLLAPSED' ? '2px' : '999px'};background:${color}22;color:${color};opacity:${opacity};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;text-shadow:0 1px 2px #000;box-shadow:0 0 12px ${color}66;">
+            <button data-deep-ledger-tile-id="${tile.id}" title="B${tile.depth} // ${tile.x}, ${tile.z} | ${tile.status} | ${tile.resourceType} | ${tile.hazard} | ${tile.stability}% stability" style="position:absolute;left:${left}px;top:${top}px;width:${size}px;height:${size}px;transform:translate(-50%,-50%);border:2px solid ${border};border-radius:${tile.status === 'COLLAPSED' ? '4px' : '999px'};background:${color}33;color:${color};opacity:${opacity};display:flex;align-items:center;justify-content:center;font-size:${selected ? 12 : 10}px;font-weight:900;text-shadow:0 1px 2px #000;box-shadow:${shadow};pointer-events:auto;cursor:pointer;padding:0;">
                 ${label}
-            </div>
+            </button>
         `;
     }).join('');
 
@@ -151,6 +155,16 @@ function renderMarkers(state: any): void {
     layer.querySelector('#deep-ledger-marker-legend-toggle')?.addEventListener('click', () => {
         collapsedLegend = !collapsedLegend;
         renderMarkers(state);
+    });
+
+    layer.querySelectorAll('[data-deep-ledger-tile-id]').forEach(marker => {
+        marker.addEventListener('click', event => {
+            const target = event.currentTarget as HTMLElement;
+            const tileId = target.dataset.deepLedgerTileId;
+            if (!tileId) return;
+            setSelectedDeepLedgerTileId(tileId);
+            renderMarkers(state);
+        });
     });
 }
 
