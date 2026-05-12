@@ -1,6 +1,7 @@
 import { AureusWorld } from './AureusWorld';
 import { ensureUndergroundState } from '../engine/underground/UndergroundGenerator';
 import { SfxType, UndergroundTile } from '../types';
+import { getSelectedDeepLedgerTileId, setSelectedDeepLedgerTileId } from './deepLedgerSelection';
 
 /**
  * Adds a compact Deep Ledger tunnel action panel.
@@ -56,9 +57,17 @@ function scoreTile(tile: UndergroundTile): number {
 
 function getTiles(state: any): UndergroundTile[] {
     const underground = ensureUndergroundState(state);
-    return (Object.values(underground.tiles) as UndergroundTile[])
+    const selectedId = getSelectedDeepLedgerTileId();
+    const tiles = (Object.values(underground.tiles) as UndergroundTile[])
         .filter(tile => tile.status !== 'HIDDEN')
         .sort((a, b) => scoreTile(b) - scoreTile(a));
+
+    if (!selectedId) return tiles;
+
+    const selectedTile = tiles.find(tile => tile.id === selectedId);
+    if (!selectedTile) return tiles;
+
+    return [selectedTile, ...tiles.filter(tile => tile.id !== selectedId)];
 }
 
 function addNews(state: any, headline: string, type: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'CRITICAL'): void {
@@ -243,10 +252,16 @@ function renderPanel(world: any, state: any): void {
     }
 
     const tiles = getTiles(state);
+    const selectedId = getSelectedDeepLedgerTileId();
+    if (selectedId) {
+        const selectedPosition = tiles.findIndex(tile => tile.id === selectedId);
+        if (selectedPosition >= 0) selectedIndex = selectedPosition;
+    }
     if (selectedIndex >= tiles.length) selectedIndex = Math.max(0, tiles.length - 1);
     if (selectedIndex < 0) selectedIndex = 0;
 
     const tile = tiles[selectedIndex];
+    const isMarkerSelected = Boolean(tile && getSelectedDeepLedgerTileId() === tile.id);
     const isOpen = Boolean(tile && (tile.status === 'DUG' || tile.status === 'REINFORCED' || tile.hasTunnel));
     const canOpen = Boolean(tile && (tile.status === 'SURVEYED' || tile.status === 'REINFORCED'));
     const canReinforce = Boolean(tile && (tile.status === 'DUG' || tile.hasTunnel) && !tile.hasSupport && tile.status !== 'REINFORCED');
@@ -259,10 +274,10 @@ function renderPanel(world: any, state: any): void {
 
     panel.style.display = 'block';
     panel.innerHTML = `
-        <div style="background:rgba(2,6,23,.94);border:1px solid rgba(245,158,11,.4);border-radius:10px;color:#e2e8f0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;box-shadow:0 20px 40px rgba(0,0,0,.45);overflow:hidden;">
+        <div style="background:rgba(2,6,23,.94);border:1px solid ${isMarkerSelected ? 'rgba(255,255,255,.78)' : 'rgba(245,158,11,.4)'};border-radius:10px;color:#e2e8f0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;box-shadow:0 20px 40px rgba(0,0,0,.45);overflow:hidden;">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;background:rgba(15,23,42,.92);">
                 <div>
-                    <div style="color:#f59e0b;font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;">Tunnel Action</div>
+                    <div style="color:#f59e0b;font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;">Tunnel Action${isMarkerSelected ? ' // Selected' : ''}</div>
                     <div style="color:#94a3b8;font-size:10px;margin-top:2px;">${title}</div>
                 </div>
                 <button id="deep-ledger-dig-collapse" style="background:rgba(30,41,59,.9);color:#f59e0b;border:1px solid rgba(245,158,11,.35);border-radius:6px;cursor:pointer;font-size:10px;font-weight:900;padding:4px 8px;text-transform:uppercase;">${collapsed ? 'Open' : 'Min'}</button>
@@ -286,22 +301,33 @@ function renderPanel(world: any, state: any): void {
     });
     panel.querySelector('#deep-ledger-dig-prev')?.addEventListener('click', () => {
         selectedIndex = tiles.length ? (selectedIndex - 1 + tiles.length) % tiles.length : 0;
+        if (tiles[selectedIndex]) setSelectedDeepLedgerTileId(tiles[selectedIndex].id);
         renderPanel(world, state);
     });
     panel.querySelector('#deep-ledger-dig-next')?.addEventListener('click', () => {
         selectedIndex = tiles.length ? (selectedIndex + 1) % tiles.length : 0;
+        if (tiles[selectedIndex]) setSelectedDeepLedgerTileId(tiles[selectedIndex].id);
         renderPanel(world, state);
     });
     panel.querySelector('#deep-ledger-open-tunnel')?.addEventListener('click', () => {
-        if (tile) digSelectedTile(world, tile);
+        if (tile) {
+            setSelectedDeepLedgerTileId(tile.id);
+            digSelectedTile(world, tile);
+        }
         renderPanel(world, state);
     });
     panel.querySelector('#deep-ledger-reinforce-tunnel')?.addEventListener('click', () => {
-        if (tile) reinforceSelectedTile(world, tile);
+        if (tile) {
+            setSelectedDeepLedgerTileId(tile.id);
+            reinforceSelectedTile(world, tile);
+        }
         renderPanel(world, state);
     });
     panel.querySelector('#deep-ledger-extract-tile')?.addEventListener('click', () => {
-        if (tile) extractSelectedTile(world, tile);
+        if (tile) {
+            setSelectedDeepLedgerTileId(tile.id);
+            extractSelectedTile(world, tile);
+        }
         renderPanel(world, state);
     });
 }
