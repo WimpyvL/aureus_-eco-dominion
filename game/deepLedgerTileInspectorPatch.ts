@@ -1,6 +1,7 @@
 import { AureusWorld } from './AureusWorld';
 import { ensureUndergroundState } from '../engine/underground/UndergroundGenerator';
 import { UndergroundTile } from '../types';
+import { getSelectedDeepLedgerTileId, setSelectedDeepLedgerTileId } from './deepLedgerSelection';
 
 /**
  * Deep Ledger tile inspector v0.
@@ -46,12 +47,23 @@ function priority(tile: UndergroundTile): number {
 
 function getInspectableTiles(state: any): UndergroundTile[] {
     const underground = ensureUndergroundState(state);
-    return (Object.values(underground.tiles) as UndergroundTile[])
+    const selectedId = getSelectedDeepLedgerTileId();
+    const tiles = (Object.values(underground.tiles) as UndergroundTile[])
         .filter(tile => tile.status !== 'HIDDEN')
         .sort((a, b) => priority(b) - priority(a));
+
+    if (!selectedId) return tiles;
+
+    const selectedTile = tiles.find(tile => tile.id === selectedId);
+    if (!selectedTile) return tiles;
+
+    return [selectedTile, ...tiles.filter(tile => tile.id !== selectedId)];
 }
 
 function recommendation(tile: UndergroundTile): string {
+    if (tile.status === 'COLLAPSED') return 'Collapsed. Re-open or route around this tile in a later connectivity pass.';
+    if (tile.status === 'REINFORCED' || tile.hasSupport) return 'Supported tunnel. Safer candidate for extraction.';
+    if (tile.status === 'DUG' || tile.hasTunnel) return 'Open tunnel. Consider support before repeated extraction.';
     if (tile.hazard === 'GAS') return 'Ventilation recommended before extraction.';
     if (tile.hazard === 'WATER') return 'Pump support recommended before tunneling.';
     if (tile.hazard === 'INSTABILITY') return 'Reinforcement recommended before drilling.';
@@ -86,10 +98,17 @@ function renderInspector(state: any): void {
         return;
     }
 
+    const selectedId = getSelectedDeepLedgerTileId();
+    if (selectedId) {
+        const selectedPosition = tiles.findIndex(tile => tile.id === selectedId);
+        if (selectedPosition >= 0) selectedIndex = selectedPosition;
+    }
+
     if (selectedIndex >= tiles.length) selectedIndex = tiles.length - 1;
     if (selectedIndex < 0) selectedIndex = 0;
 
     const tile = tiles[selectedIndex];
+    const isMarkerSelected = getSelectedDeepLedgerTileId() === tile.id;
     const resourceColor = tile.resourceType === 'AUREUS_VEIN'
         ? '#f59e0b'
         : tile.resourceType === 'GEMS'
@@ -105,11 +124,11 @@ function renderInspector(state: any): void {
 
     inspector.style.display = 'block';
     inspector.innerHTML = `
-        <div style="background: rgba(2, 6, 23, 0.94); border: 1px solid rgba(245, 158, 11, 0.36); border-radius: 10px; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; box-shadow: 0 20px 40px rgba(0,0,0,0.45); overflow: hidden; backdrop-filter: blur(10px);">
+        <div style="background: rgba(2, 6, 23, 0.94); border: 1px solid ${isMarkerSelected ? 'rgba(255,255,255,.78)' : 'rgba(245, 158, 11, 0.36)'}; border-radius: 10px; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; box-shadow: 0 20px 40px rgba(0,0,0,0.45); overflow: hidden; backdrop-filter: blur(10px);">
             <div style="padding: 12px 14px; background: rgba(15, 23, 42, 0.92); border-bottom: 1px solid rgba(51, 65, 85, 0.8);">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
                     <div>
-                        <div style="color: #f59e0b; font-size: 11px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase;">Tile Inspector</div>
+                        <div style="color: #f59e0b; font-size: 11px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase;">Tile Inspector${isMarkerSelected ? ' // Selected' : ''}</div>
                         <div style="color: #94a3b8; font-size: 10px; margin-top: 2px;">B${tile.depth} // ${tile.x}, ${tile.z}</div>
                     </div>
                     <div style="font-size: 10px; color: #64748b;">${selectedIndex + 1}/${tiles.length}</div>
@@ -135,11 +154,13 @@ function renderInspector(state: any): void {
 
     inspector.querySelector('#deep-ledger-prev-tile')?.addEventListener('click', () => {
         selectedIndex = (selectedIndex - 1 + tiles.length) % tiles.length;
+        setSelectedDeepLedgerTileId(tiles[selectedIndex].id);
         renderInspector(state);
     });
 
     inspector.querySelector('#deep-ledger-next-tile')?.addEventListener('click', () => {
         selectedIndex = (selectedIndex + 1) % tiles.length;
+        setSelectedDeepLedgerTileId(tiles[selectedIndex].id);
         renderInspector(state);
     });
 }
