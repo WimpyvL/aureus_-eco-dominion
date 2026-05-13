@@ -1,6 +1,7 @@
 import { AureusWorld } from './AureusWorld';
 import { ensureUndergroundState } from '../engine/underground/UndergroundGenerator';
 import { isUndergroundTileConnected, recalculateUndergroundConnectivity } from '../engine/underground/UndergroundConnectivity';
+import { DEEP_LEDGER_TUNING } from '../engine/underground/DeepLedgerTuning';
 import { SfxType, UndergroundTile } from '../types';
 import { getSelectedDeepLedgerTileId, setSelectedDeepLedgerTileId } from './deepLedgerSelection';
 
@@ -12,21 +13,22 @@ import { getSelectedDeepLedgerTileId, setSelectedDeepLedgerTileId } from './deep
  */
 const proto = AureusWorld.prototype as any;
 const PANEL_ID = 'deep-ledger-dig-action-panel';
-const COST_AGT = 75;
-const REINFORCE_COST_AGT = 100;
-const CLEAR_COLLAPSE_COST_AGT = 125;
-const MITIGATE_HAZARD_COST_AGT = 90;
-const TILE_STABILITY_COST = 8;
-const TILE_REINFORCE_GAIN = 25;
-const TILE_CLEAR_STABILITY = 22;
-const TILE_EXTRACT_STABILITY_COST = 5;
-const TILE_MITIGATION_STABILITY_GAIN = 10;
-const ORE_DEPLETION_PER_EXTRACT = 25;
-const GLOBAL_STABILITY_COST = 1;
-const GLOBAL_REINFORCE_GAIN = 1;
-const GLOBAL_CLEAR_STABILITY_COST = 1;
-const GLOBAL_MITIGATION_STABILITY_GAIN = 1;
-const GLOBAL_EXTRACT_STABILITY_COST = 1;
+const TUNING = DEEP_LEDGER_TUNING;
+const COST_AGT = TUNING.actionCosts.openTunnelAGT;
+const REINFORCE_COST_AGT = TUNING.actionCosts.reinforceTunnelAGT;
+const CLEAR_COLLAPSE_COST_AGT = TUNING.actionCosts.clearCollapseAGT;
+const MITIGATE_HAZARD_COST_AGT = TUNING.actionCosts.mitigateHazardAGT;
+const TILE_STABILITY_COST = TUNING.tileStability.openTunnelCost;
+const TILE_REINFORCE_GAIN = TUNING.tileStability.reinforceGain;
+const TILE_CLEAR_STABILITY = TUNING.tileStability.clearCollapseMinimum;
+const TILE_EXTRACT_STABILITY_COST = TUNING.tileStability.extractionCost;
+const TILE_MITIGATION_STABILITY_GAIN = TUNING.tileStability.mitigationGain;
+const ORE_DEPLETION_PER_EXTRACT = TUNING.extraction.oreDepletionPerExtract;
+const GLOBAL_STABILITY_COST = TUNING.globalStability.openTunnelCost;
+const GLOBAL_REINFORCE_GAIN = TUNING.globalStability.reinforceGain;
+const GLOBAL_CLEAR_STABILITY_COST = TUNING.globalStability.clearCollapseCost;
+const GLOBAL_MITIGATION_STABILITY_GAIN = TUNING.globalStability.mitigationGain;
+const GLOBAL_EXTRACT_STABILITY_COST = TUNING.globalStability.extractionCost;
 
 let selectedIndex = 0;
 let collapsed = false;
@@ -130,7 +132,7 @@ function digSelectedTile(world: any, tile: UndergroundTile): void {
     recalculateUndergroundConnectivity(underground);
 
     if (liveTile.hazard !== 'NONE') {
-        underground.exposureRisk = Math.min(100, underground.exposureRisk + 1);
+        underground.exposureRisk = Math.min(100, underground.exposureRisk + TUNING.exposure.openHazardTunnel);
     }
 
     addNews(state, `Tunnel opened at Sector B${liveTile.depth} (${liveTile.x}, ${liveTile.z}).`, 'POSITIVE');
@@ -215,7 +217,7 @@ function clearCollapsedTile(world: any, tile: UndergroundTile): void {
     liveTile.hasSupport = false;
     liveTile.stability = Math.max(TILE_CLEAR_STABILITY, liveTile.stability);
     underground.globalStability = Math.max(0, underground.globalStability - GLOBAL_CLEAR_STABILITY_COST);
-    underground.exposureRisk = Math.min(100, underground.exposureRisk + 1);
+    underground.exposureRisk = Math.min(100, underground.exposureRisk + TUNING.exposure.clearCollapse);
     recalculateUndergroundConnectivity(underground);
 
     addNews(state, `Rubble cleared at Sector B${liveTile.depth} (${liveTile.x}, ${liveTile.z}). Tunnel reopened but remains unstable.`, 'POSITIVE');
@@ -262,15 +264,15 @@ function mitigateHazard(world: any, tile: UndergroundTile): void {
     underground.globalStability = Math.min(100, underground.globalStability + GLOBAL_MITIGATION_STABILITY_GAIN);
 
     if (oldHazard === 'GAS') {
-        underground.oxygen = Math.min(100, underground.oxygen + 8);
+        underground.oxygen = Math.min(100, underground.oxygen + TUNING.oxygen.gasMitigationGain);
         addNews(state, `Vent crews cleared gas from Sector B${liveTile.depth} (${liveTile.x}, ${liveTile.z}).`, 'POSITIVE');
     } else if (oldHazard === 'WATER') {
         addNews(state, `Pumps cleared water from Sector B${liveTile.depth} (${liveTile.x}, ${liveTile.z}).`, 'POSITIVE');
     } else if (oldHazard === 'INSTABILITY') {
-        liveTile.stability = Math.min(100, liveTile.stability + 10);
+        liveTile.stability = Math.min(100, liveTile.stability + TILE_MITIGATION_STABILITY_GAIN);
         addNews(state, `Instability stabilized at Sector B${liveTile.depth} (${liveTile.x}, ${liveTile.z}).`, 'POSITIVE');
     } else if (oldHazard === 'ILLEGAL_TUNNEL') {
-        underground.exposureRisk = Math.max(0, underground.exposureRisk - 2);
+        underground.exposureRisk = Math.max(0, underground.exposureRisk - TUNING.exposure.illegalTunnelMitigationReduction);
         addNews(state, `Illegal tunnel secured at Sector B${liveTile.depth} (${liveTile.x}, ${liveTile.z}). Exposure reduced.`, 'POSITIVE');
     } else if (oldHazard === 'HEAT') {
         addNews(state, `Heat pocket cooled at Sector B${liveTile.depth} (${liveTile.x}, ${liveTile.z}).`, 'POSITIVE');
@@ -319,13 +321,13 @@ function extractSelectedTile(world: any, tile: UndergroundTile): void {
         state.resources.minerals = (state.resources.minerals ?? 0) + yieldAmount;
         headline = `Extracted ${yieldAmount} minerals from Sector B${liveTile.depth}.`;
     } else if (liveTile.resourceType === 'GEMS') {
-        const agt = yieldAmount * 20;
+        const agt = yieldAmount * TUNING.extraction.gemAGTPerYield;
         state.resources.agt += agt;
         headline = `Sold gem yield from Sector B${liveTile.depth} for ${agt} AGT.`;
     } else if (liveTile.resourceType === 'AUREUS_VEIN') {
-        const agt = yieldAmount * 50;
+        const agt = yieldAmount * TUNING.extraction.aureusAGTPerYield;
         state.resources.agt += agt;
-        underground.exposureRisk = Math.min(100, underground.exposureRisk + 2);
+        underground.exposureRisk = Math.min(100, underground.exposureRisk + TUNING.exposure.aureusExtraction);
         headline = `Aureus vein extraction yielded ${agt} AGT. Exposure risk increased.`;
     } else if (liveTile.resourceType === 'RELIC_FRAGMENT') {
         const research = yieldAmount;
@@ -333,11 +335,11 @@ function extractSelectedTile(world: any, tile: UndergroundTile): void {
             state.resources.research = (state.resources.research ?? 0) + research;
             headline = `Recovered ${research} relic research from Sector B${liveTile.depth}.`;
         } else {
-            const agt = yieldAmount * 35;
+            const agt = yieldAmount * TUNING.extraction.relicFallbackAGTPerYield;
             state.resources.agt += agt;
             headline = `Recovered relic fragments from Sector B${liveTile.depth} and liquidated them for ${agt} AGT.`;
         }
-        underground.exposureRisk = Math.min(100, underground.exposureRisk + 1);
+        underground.exposureRisk = Math.min(100, underground.exposureRisk + TUNING.exposure.relicExtraction);
     }
 
     liveTile.oreRichness = Math.max(0, liveTile.oreRichness - ORE_DEPLETION_PER_EXTRACT);
@@ -346,7 +348,7 @@ function extractSelectedTile(world: any, tile: UndergroundTile): void {
     recalculateUndergroundConnectivity(underground);
 
     if (liveTile.hazard !== 'NONE') {
-        underground.exposureRisk = Math.min(100, underground.exposureRisk + 1);
+        underground.exposureRisk = Math.min(100, underground.exposureRisk + TUNING.exposure.hazardousExtraction);
     }
 
     if (liveTile.oreRichness <= 0) {
