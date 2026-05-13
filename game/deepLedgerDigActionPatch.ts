@@ -15,14 +15,17 @@ const PANEL_ID = 'deep-ledger-dig-action-panel';
 const COST_AGT = 75;
 const REINFORCE_COST_AGT = 100;
 const CLEAR_COLLAPSE_COST_AGT = 125;
+const MITIGATE_HAZARD_COST_AGT = 90;
 const TILE_STABILITY_COST = 8;
 const TILE_REINFORCE_GAIN = 25;
 const TILE_CLEAR_STABILITY = 22;
 const TILE_EXTRACT_STABILITY_COST = 5;
+const TILE_MITIGATION_STABILITY_GAIN = 10;
 const ORE_DEPLETION_PER_EXTRACT = 25;
 const GLOBAL_STABILITY_COST = 1;
 const GLOBAL_REINFORCE_GAIN = 1;
 const GLOBAL_CLEAR_STABILITY_COST = 1;
+const GLOBAL_MITIGATION_STABILITY_GAIN = 1;
 const GLOBAL_EXTRACT_STABILITY_COST = 1;
 
 let selectedIndex = 0;
@@ -54,7 +57,7 @@ function scoreTile(tile: UndergroundTile): number {
     if ((tile.status === 'DUG' || tile.status === 'REINFORCED') && tile.resourceType !== 'NONE') score += 900;
     if (tile.status === 'DUG' && !tile.hasSupport) score += 750;
     if (!tile.connectedToSurface && (tile.status === 'DUG' || tile.status === 'REINFORCED' || tile.hasTunnel)) score += 650;
-    if (tile.hazard !== 'NONE') score += 1000;
+    if (tile.hazard !== 'NONE') score += 1600;
     if (tile.resourceType !== 'NONE') score += 500;
     score += tile.oreRichness;
     score += Math.max(0, 100 - tile.stability);
@@ -220,6 +223,64 @@ function clearCollapsedTile(world: any, tile: UndergroundTile): void {
     stateManager.markDirty?.('resources' as any, 'underground' as any, 'newsFeed' as any, 'pendingEffects' as any);
 }
 
+function mitigateHazard(world: any, tile: UndergroundTile): void {
+    const stateManager = world.stateManager;
+    const state = stateManager?.getState?.();
+    if (!state) return;
+
+    const underground = ensureUndergroundState(state);
+    const liveTile = underground.tiles[tile.id];
+    if (!liveTile) return;
+
+    if (liveTile.status === 'COLLAPSED') {
+        addNews(state, 'Clear collapsed rubble before mitigating hazards.', 'NEGATIVE');
+        stateManager.pushEffect?.({ type: 'AUDIO', sfx: SfxType.ERROR });
+        stateManager.markDirty?.('newsFeed' as any, 'pendingEffects' as any);
+        return;
+    }
+
+    if (liveTile.hazard === 'NONE') {
+        addNews(state, 'No active hazard remains on that Sector B1 tile.', 'NEUTRAL');
+        stateManager.markDirty?.('newsFeed' as any);
+        return;
+    }
+
+    if (!state.cheatsEnabled && state.resources.agt < MITIGATE_HAZARD_COST_AGT) {
+        addNews(state, `Hazard mitigation requires ${MITIGATE_HAZARD_COST_AGT} AGT.`, 'NEGATIVE');
+        stateManager.pushEffect?.({ type: 'AUDIO', sfx: SfxType.ERROR });
+        stateManager.markDirty?.('newsFeed' as any, 'pendingEffects' as any);
+        return;
+    }
+
+    if (!state.cheatsEnabled) {
+        state.resources.agt -= MITIGATE_HAZARD_COST_AGT;
+    }
+
+    const oldHazard = liveTile.hazard;
+    liveTile.hazard = 'NONE';
+    liveTile.stability = Math.min(100, liveTile.stability + TILE_MITIGATION_STABILITY_GAIN);
+    underground.globalStability = Math.min(100, underground.globalStability + GLOBAL_MITIGATION_STABILITY_GAIN);
+
+    if (oldHazard === 'GAS') {
+        underground.oxygen = Math.min(100, underground.oxygen + 8);
+        addNews(state, `Vent crews cleared gas from Sector B${liveTile.depth} (${liveTile.x}, ${liveTile.z}).`, 'POSITIVE');
+    } else if (oldHazard === 'WATER') {
+        addNews(state, `Pumps cleared water from Sector B${liveTile.depth} (${liveTile.x}, ${liveTile.z}).`, 'POSITIVE');
+    } else if (oldHazard === 'INSTABILITY') {
+        liveTile.stability = Math.min(100, liveTile.stability + 10);
+        addNews(state, `Instability stabilized at Sector B${liveTile.depth} (${liveTile.x}, ${liveTile.z}).`, 'POSITIVE');
+    } else if (oldHazard === 'ILLEGAL_TUNNEL') {
+        underground.exposureRisk = Math.max(0, underground.exposureRisk - 2);
+        addNews(state, `Illegal tunnel secured at Sector B${liveTile.depth} (${liveTile.x}, ${liveTile.z}). Exposure reduced.`, 'POSITIVE');
+    } else if (oldHazard === 'HEAT') {
+        addNews(state, `Heat pocket cooled at Sector B${liveTile.depth} (${liveTile.x}, ${liveTile.z}).`, 'POSITIVE');
+    }
+
+    recalculateUndergroundConnectivity(underground);
+    stateManager.pushEffect?.({ type: 'AUDIO', sfx: SfxType.BUILD });
+    stateManager.markDirty?.('resources' as any, 'underground' as any, 'newsFeed' as any, 'pendingEffects' as any);
+}
+
 function extractSelectedTile(world: any, tile: UndergroundTile): void {
     const stateManager = world.stateManager;
     const state = stateManager?.getState?.();
@@ -326,6 +387,7 @@ function renderPanel(world: any, state: any): void {
     const isConnected = isUndergroundTileConnected(tile);
     const canOpen = Boolean(tile && !isCollapsed && (tile.status === 'SURVEYED' || tile.status === 'REINFORCED'));
     const canClear = Boolean(tile && isCollapsed);
+    const canMitigate = Boolean(tile && !isCollapsed && tile.hazard !== 'NONE');
     const canReinforce = Boolean(tile && !isCollapsed && (tile.status === 'DUG' || tile.hasTunnel) && !tile.hasSupport && tile.status !== 'REINFORCED');
     const canExtract = Boolean(tile && !isCollapsed && isOpen && isConnected && tile.resourceType !== 'NONE' && tile.oreRichness > 0);
     const title = tile ? `B${tile.depth} // ${tile.x}, ${tile.z}` : 'No surveyed tiles';
@@ -352,6 +414,7 @@ function renderPanel(world: any, state: any): void {
                     <button id="deep-ledger-dig-next" style="flex:1;padding:9px;background:rgba(15,23,42,.95);color:#cbd5e1;border:0;border-right:1px solid rgba(51,65,85,.8);cursor:pointer;font-weight:800;text-transform:uppercase;font-size:10px;">Next</button>
                     <button id="deep-ledger-open-tunnel" ${canOpen ? '' : 'disabled'} style="flex:1.05;padding:9px;background:${canOpen ? 'linear-gradient(135deg,rgba(245,158,11,.95),rgba(180,83,9,.95))' : 'rgba(30,41,59,.75)'};color:${canOpen ? '#1c1917' : '#64748b'};border:0;border-right:1px solid rgba(51,65,85,.8);cursor:${canOpen ? 'pointer' : 'not-allowed'};font-weight:900;text-transform:uppercase;font-size:10px;">Open</button>
                     <button id="deep-ledger-clear-collapse" ${canClear ? '' : 'disabled'} style="flex:1.15;padding:9px;background:${canClear ? 'linear-gradient(135deg,rgba(251,113,133,.95),rgba(190,18,60,.95))' : 'rgba(30,41,59,.75)'};color:${canClear ? '#fff1f2' : '#64748b'};border:0;border-right:1px solid rgba(51,65,85,.8);cursor:${canClear ? 'pointer' : 'not-allowed'};font-weight:900;text-transform:uppercase;font-size:10px;">Clear</button>
+                    <button id="deep-ledger-mitigate-hazard" ${canMitigate ? '' : 'disabled'} style="flex:1.2;padding:9px;background:${canMitigate ? 'linear-gradient(135deg,rgba(56,189,248,.95),rgba(14,116,144,.95))' : 'rgba(30,41,59,.75)'};color:${canMitigate ? '#ecfeff' : '#64748b'};border:0;border-right:1px solid rgba(51,65,85,.8);cursor:${canMitigate ? 'pointer' : 'not-allowed'};font-weight:900;text-transform:uppercase;font-size:10px;">Mitigate</button>
                     <button id="deep-ledger-reinforce-tunnel" ${canReinforce ? '' : 'disabled'} style="flex:1.25;padding:9px;background:${canReinforce ? 'linear-gradient(135deg,rgba(52,211,153,.95),rgba(5,150,105,.95))' : 'rgba(30,41,59,.75)'};color:${canReinforce ? '#022c22' : '#64748b'};border:0;border-right:1px solid rgba(51,65,85,.8);cursor:${canReinforce ? 'pointer' : 'not-allowed'};font-weight:900;text-transform:uppercase;font-size:10px;">Support</button>
                     <button id="deep-ledger-extract-tile" ${canExtract ? '' : 'disabled'} style="flex:1.25;padding:9px;background:${canExtract ? 'linear-gradient(135deg,rgba(168,85,247,.95),rgba(126,34,206,.95))' : 'rgba(30,41,59,.75)'};color:${canExtract ? '#faf5ff' : '#64748b'};border:0;cursor:${canExtract ? 'pointer' : 'not-allowed'};font-weight:900;text-transform:uppercase;font-size:10px;">Extract</button>
                 </div>
@@ -384,6 +447,13 @@ function renderPanel(world: any, state: any): void {
         if (tile) {
             setSelectedDeepLedgerTileId(tile.id);
             clearCollapsedTile(world, tile);
+        }
+        renderPanel(world, state);
+    });
+    panel.querySelector('#deep-ledger-mitigate-hazard')?.addEventListener('click', () => {
+        if (tile) {
+            setSelectedDeepLedgerTileId(tile.id);
+            mitigateHazard(world, tile);
         }
         renderPanel(world, state);
     });
