@@ -1,4 +1,5 @@
 import { AureusWorld } from './AureusWorld';
+import { recalculateUndergroundConnectivity } from '../engine/underground/UndergroundConnectivity';
 import { ensureUndergroundState } from '../engine/underground/UndergroundGenerator';
 import { SfxType, UndergroundTile } from '../types';
 
@@ -52,6 +53,7 @@ function runCollapseCheck(world: any): void {
     if (!state || state.activeView !== 'DUNGEON') return;
 
     const underground = ensureUndergroundState(state);
+    recalculateUndergroundConnectivity(underground);
     const tiles = Object.values(underground.tiles) as UndergroundTile[];
     let changed = false;
     let warnings = 0;
@@ -80,8 +82,9 @@ function runCollapseCheck(world: any): void {
 
             underground.globalStability = Math.max(0, underground.globalStability - GLOBAL_STABILITY_LOSS);
             underground.exposureRisk = Math.min(100, underground.exposureRisk + EXPOSURE_ON_COLLAPSE);
+            recalculateUndergroundConnectivity(underground);
 
-            addNews(state, `Cave-in reported at Sector B${tile.depth} (${tile.x}, ${tile.z}).`, 'CRITICAL');
+            addNews(state, `Cave-in reported at Sector B${tile.depth} (${tile.x}, ${tile.z}). Route connectivity recalculated.`, 'CRITICAL');
             collapses += 1;
             changed = true;
 

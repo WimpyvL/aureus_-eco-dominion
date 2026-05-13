@@ -1,5 +1,6 @@
 import { AureusWorld } from './AureusWorld';
 import { ensureUndergroundState } from '../engine/underground/UndergroundGenerator';
+import { isUndergroundTileConnected, recalculateUndergroundConnectivity } from '../engine/underground/UndergroundConnectivity';
 import { SfxType, UndergroundTile } from '../types';
 import { getSelectedDeepLedgerTileId, setSelectedDeepLedgerTileId } from './deepLedgerSelection';
 
@@ -48,6 +49,7 @@ function scoreTile(tile: UndergroundTile): number {
     if (tile.status === 'DUG' || tile.hasTunnel) score -= 500;
     if ((tile.status === 'DUG' || tile.status === 'REINFORCED') && tile.resourceType !== 'NONE') score += 900;
     if (tile.status === 'DUG' && !tile.hasSupport) score += 750;
+    if (!tile.connectedToSurface && (tile.status === 'DUG' || tile.status === 'REINFORCED' || tile.hasTunnel)) score += 650;
     if (tile.hazard !== 'NONE') score += 1000;
     if (tile.resourceType !== 'NONE') score += 500;
     score += tile.oreRichness;
@@ -57,6 +59,7 @@ function scoreTile(tile: UndergroundTile): number {
 
 function getTiles(state: any): UndergroundTile[] {
     const underground = ensureUndergroundState(state);
+    recalculateUndergroundConnectivity(underground);
     const selectedId = getSelectedDeepLedgerTileId();
     const tiles = (Object.values(underground.tiles) as UndergroundTile[])
         .filter(tile => tile.status !== 'HIDDEN')
@@ -115,9 +118,9 @@ function digSelectedTile(world: any, tile: UndergroundTile): void {
 
     liveTile.status = 'DUG';
     liveTile.hasTunnel = true;
-    liveTile.connectedToSurface = true;
     liveTile.stability = Math.max(5, liveTile.stability - TILE_STABILITY_COST);
     underground.globalStability = Math.max(0, underground.globalStability - GLOBAL_STABILITY_COST);
+    recalculateUndergroundConnectivity(underground);
 
     if (liveTile.hazard !== 'NONE') {
         underground.exposureRisk = Math.min(100, underground.exposureRisk + 1);
@@ -166,6 +169,7 @@ function reinforceSelectedTile(world: any, tile: UndergroundTile): void {
     liveTile.status = 'REINFORCED';
     liveTile.stability = Math.min(100, liveTile.stability + TILE_REINFORCE_GAIN);
     underground.globalStability = Math.min(100, underground.globalStability + GLOBAL_REINFORCE_GAIN);
+    recalculateUndergroundConnectivity(underground);
 
     addNews(state, `Support beams installed at Sector B${liveTile.depth} (${liveTile.x}, ${liveTile.z}).`, 'POSITIVE');
     stateManager.pushEffect?.({ type: 'AUDIO', sfx: SfxType.BUILD });
@@ -178,6 +182,7 @@ function extractSelectedTile(world: any, tile: UndergroundTile): void {
     if (!state) return;
 
     const underground = ensureUndergroundState(state);
+    recalculateUndergroundConnectivity(underground);
     const liveTile = underground.tiles[tile.id];
     if (!liveTile) return;
 
@@ -186,6 +191,13 @@ function extractSelectedTile(world: any, tile: UndergroundTile): void {
         addNews(state, 'Only open Sector B1 tunnels can be extracted.', 'NEGATIVE');
         stateManager.pushEffect?.({ type: 'AUDIO', sfx: SfxType.ERROR });
         stateManager.markDirty?.('newsFeed' as any, 'pendingEffects' as any);
+        return;
+    }
+
+    if (!isUndergroundTileConnected(liveTile)) {
+        addNews(state, 'That tunnel is disconnected from surface access. Reconnect the route before extraction.', 'NEGATIVE');
+        stateManager.pushEffect?.({ type: 'AUDIO', sfx: SfxType.ERROR });
+        stateManager.markDirty?.('underground' as any, 'newsFeed' as any, 'pendingEffects' as any);
         return;
     }
 
@@ -226,6 +238,7 @@ function extractSelectedTile(world: any, tile: UndergroundTile): void {
     liveTile.oreRichness = Math.max(0, liveTile.oreRichness - ORE_DEPLETION_PER_EXTRACT);
     liveTile.stability = Math.max(0, liveTile.stability - TILE_EXTRACT_STABILITY_COST);
     underground.globalStability = Math.max(0, underground.globalStability - GLOBAL_EXTRACT_STABILITY_COST);
+    recalculateUndergroundConnectivity(underground);
 
     if (liveTile.hazard !== 'NONE') {
         underground.exposureRisk = Math.min(100, underground.exposureRisk + 1);
@@ -251,6 +264,8 @@ function renderPanel(world: any, state: any): void {
         return;
     }
 
+    const underground = ensureUndergroundState(state);
+    recalculateUndergroundConnectivity(underground);
     const tiles = getTiles(state);
     const selectedId = getSelectedDeepLedgerTileId();
     if (selectedId) {
@@ -263,13 +278,15 @@ function renderPanel(world: any, state: any): void {
     const tile = tiles[selectedIndex];
     const isMarkerSelected = Boolean(tile && getSelectedDeepLedgerTileId() === tile.id);
     const isOpen = Boolean(tile && (tile.status === 'DUG' || tile.status === 'REINFORCED' || tile.hasTunnel));
+    const isConnected = isUndergroundTileConnected(tile);
     const canOpen = Boolean(tile && (tile.status === 'SURVEYED' || tile.status === 'REINFORCED'));
     const canReinforce = Boolean(tile && (tile.status === 'DUG' || tile.hasTunnel) && !tile.hasSupport && tile.status !== 'REINFORCED');
-    const canExtract = Boolean(tile && isOpen && tile.resourceType !== 'NONE' && tile.oreRichness > 0);
+    const canExtract = Boolean(tile && isOpen && isConnected && tile.resourceType !== 'NONE' && tile.oreRichness > 0);
     const title = tile ? `B${tile.depth} // ${tile.x}, ${tile.z}` : 'No surveyed tiles';
     const supportState = tile?.hasSupport || tile?.status === 'REINFORCED' ? 'SUPPORTED' : 'UNSUPPORTED';
+    const connectionState = isConnected ? 'CONNECTED' : 'DISCONNECTED';
     const detail = tile
-        ? `${tile.status} | ${supportState} | ${tile.resourceType} | ${tile.oreRichness}% ore | ${tile.stability}% stability | ${tile.hazard}`
+        ? `${tile.status} | ${connectionState} | ${supportState} | ${tile.resourceType} | ${tile.oreRichness}% ore | ${tile.stability}% stability | ${tile.hazard}`
         : 'Scan Sector B1 with a Survey Drill first.';
 
     panel.style.display = 'block';
