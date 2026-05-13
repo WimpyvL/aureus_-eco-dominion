@@ -14,12 +14,15 @@ const proto = AureusWorld.prototype as any;
 const PANEL_ID = 'deep-ledger-dig-action-panel';
 const COST_AGT = 75;
 const REINFORCE_COST_AGT = 100;
+const CLEAR_COLLAPSE_COST_AGT = 125;
 const TILE_STABILITY_COST = 8;
 const TILE_REINFORCE_GAIN = 25;
+const TILE_CLEAR_STABILITY = 22;
 const TILE_EXTRACT_STABILITY_COST = 5;
 const ORE_DEPLETION_PER_EXTRACT = 25;
 const GLOBAL_STABILITY_COST = 1;
 const GLOBAL_REINFORCE_GAIN = 1;
+const GLOBAL_CLEAR_STABILITY_COST = 1;
 const GLOBAL_EXTRACT_STABILITY_COST = 1;
 
 let selectedIndex = 0;
@@ -46,6 +49,7 @@ function getPanel(): HTMLDivElement | null {
 
 function scoreTile(tile: UndergroundTile): number {
     let score = 0;
+    if (tile.status === 'COLLAPSED') score += 1400;
     if (tile.status === 'DUG' || tile.hasTunnel) score -= 500;
     if ((tile.status === 'DUG' || tile.status === 'REINFORCED') && tile.resourceType !== 'NONE') score += 900;
     if (tile.status === 'DUG' && !tile.hasSupport) score += 750;
@@ -176,6 +180,46 @@ function reinforceSelectedTile(world: any, tile: UndergroundTile): void {
     stateManager.markDirty?.('resources' as any, 'underground' as any, 'newsFeed' as any, 'pendingEffects' as any);
 }
 
+function clearCollapsedTile(world: any, tile: UndergroundTile): void {
+    const stateManager = world.stateManager;
+    const state = stateManager?.getState?.();
+    if (!state) return;
+
+    const underground = ensureUndergroundState(state);
+    const liveTile = underground.tiles[tile.id];
+    if (!liveTile) return;
+
+    if (liveTile.status !== 'COLLAPSED') {
+        addNews(state, 'Only collapsed Sector B1 tiles can be cleared.', 'NEGATIVE');
+        stateManager.pushEffect?.({ type: 'AUDIO', sfx: SfxType.ERROR });
+        stateManager.markDirty?.('newsFeed' as any, 'pendingEffects' as any);
+        return;
+    }
+
+    if (!state.cheatsEnabled && state.resources.agt < CLEAR_COLLAPSE_COST_AGT) {
+        addNews(state, `Clearing collapsed rubble requires ${CLEAR_COLLAPSE_COST_AGT} AGT.`, 'NEGATIVE');
+        stateManager.pushEffect?.({ type: 'AUDIO', sfx: SfxType.ERROR });
+        stateManager.markDirty?.('newsFeed' as any, 'pendingEffects' as any);
+        return;
+    }
+
+    if (!state.cheatsEnabled) {
+        state.resources.agt -= CLEAR_COLLAPSE_COST_AGT;
+    }
+
+    liveTile.status = 'DUG';
+    liveTile.hasTunnel = true;
+    liveTile.hasSupport = false;
+    liveTile.stability = Math.max(TILE_CLEAR_STABILITY, liveTile.stability);
+    underground.globalStability = Math.max(0, underground.globalStability - GLOBAL_CLEAR_STABILITY_COST);
+    underground.exposureRisk = Math.min(100, underground.exposureRisk + 1);
+    recalculateUndergroundConnectivity(underground);
+
+    addNews(state, `Rubble cleared at Sector B${liveTile.depth} (${liveTile.x}, ${liveTile.z}). Tunnel reopened but remains unstable.`, 'POSITIVE');
+    stateManager.pushEffect?.({ type: 'AUDIO', sfx: SfxType.BUILD });
+    stateManager.markDirty?.('resources' as any, 'underground' as any, 'newsFeed' as any, 'pendingEffects' as any);
+}
+
 function extractSelectedTile(world: any, tile: UndergroundTile): void {
     const stateManager = world.stateManager;
     const state = stateManager?.getState?.();
@@ -277,11 +321,13 @@ function renderPanel(world: any, state: any): void {
 
     const tile = tiles[selectedIndex];
     const isMarkerSelected = Boolean(tile && getSelectedDeepLedgerTileId() === tile.id);
+    const isCollapsed = tile?.status === 'COLLAPSED';
     const isOpen = Boolean(tile && (tile.status === 'DUG' || tile.status === 'REINFORCED' || tile.hasTunnel));
     const isConnected = isUndergroundTileConnected(tile);
-    const canOpen = Boolean(tile && (tile.status === 'SURVEYED' || tile.status === 'REINFORCED'));
-    const canReinforce = Boolean(tile && (tile.status === 'DUG' || tile.hasTunnel) && !tile.hasSupport && tile.status !== 'REINFORCED');
-    const canExtract = Boolean(tile && isOpen && isConnected && tile.resourceType !== 'NONE' && tile.oreRichness > 0);
+    const canOpen = Boolean(tile && !isCollapsed && (tile.status === 'SURVEYED' || tile.status === 'REINFORCED'));
+    const canClear = Boolean(tile && isCollapsed);
+    const canReinforce = Boolean(tile && !isCollapsed && (tile.status === 'DUG' || tile.hasTunnel) && !tile.hasSupport && tile.status !== 'REINFORCED');
+    const canExtract = Boolean(tile && !isCollapsed && isOpen && isConnected && tile.resourceType !== 'NONE' && tile.oreRichness > 0);
     const title = tile ? `B${tile.depth} // ${tile.x}, ${tile.z}` : 'No surveyed tiles';
     const supportState = tile?.hasSupport || tile?.status === 'REINFORCED' ? 'SUPPORTED' : 'UNSUPPORTED';
     const connectionState = isConnected ? 'CONNECTED' : 'DISCONNECTED';
@@ -305,6 +351,7 @@ function renderPanel(world: any, state: any): void {
                     <button id="deep-ledger-dig-prev" style="flex:1;padding:9px;background:rgba(15,23,42,.95);color:#cbd5e1;border:0;border-right:1px solid rgba(51,65,85,.8);cursor:pointer;font-weight:800;text-transform:uppercase;font-size:10px;">Prev</button>
                     <button id="deep-ledger-dig-next" style="flex:1;padding:9px;background:rgba(15,23,42,.95);color:#cbd5e1;border:0;border-right:1px solid rgba(51,65,85,.8);cursor:pointer;font-weight:800;text-transform:uppercase;font-size:10px;">Next</button>
                     <button id="deep-ledger-open-tunnel" ${canOpen ? '' : 'disabled'} style="flex:1.05;padding:9px;background:${canOpen ? 'linear-gradient(135deg,rgba(245,158,11,.95),rgba(180,83,9,.95))' : 'rgba(30,41,59,.75)'};color:${canOpen ? '#1c1917' : '#64748b'};border:0;border-right:1px solid rgba(51,65,85,.8);cursor:${canOpen ? 'pointer' : 'not-allowed'};font-weight:900;text-transform:uppercase;font-size:10px;">Open</button>
+                    <button id="deep-ledger-clear-collapse" ${canClear ? '' : 'disabled'} style="flex:1.15;padding:9px;background:${canClear ? 'linear-gradient(135deg,rgba(251,113,133,.95),rgba(190,18,60,.95))' : 'rgba(30,41,59,.75)'};color:${canClear ? '#fff1f2' : '#64748b'};border:0;border-right:1px solid rgba(51,65,85,.8);cursor:${canClear ? 'pointer' : 'not-allowed'};font-weight:900;text-transform:uppercase;font-size:10px;">Clear</button>
                     <button id="deep-ledger-reinforce-tunnel" ${canReinforce ? '' : 'disabled'} style="flex:1.25;padding:9px;background:${canReinforce ? 'linear-gradient(135deg,rgba(52,211,153,.95),rgba(5,150,105,.95))' : 'rgba(30,41,59,.75)'};color:${canReinforce ? '#022c22' : '#64748b'};border:0;border-right:1px solid rgba(51,65,85,.8);cursor:${canReinforce ? 'pointer' : 'not-allowed'};font-weight:900;text-transform:uppercase;font-size:10px;">Support</button>
                     <button id="deep-ledger-extract-tile" ${canExtract ? '' : 'disabled'} style="flex:1.25;padding:9px;background:${canExtract ? 'linear-gradient(135deg,rgba(168,85,247,.95),rgba(126,34,206,.95))' : 'rgba(30,41,59,.75)'};color:${canExtract ? '#faf5ff' : '#64748b'};border:0;cursor:${canExtract ? 'pointer' : 'not-allowed'};font-weight:900;text-transform:uppercase;font-size:10px;">Extract</button>
                 </div>
@@ -330,6 +377,13 @@ function renderPanel(world: any, state: any): void {
         if (tile) {
             setSelectedDeepLedgerTileId(tile.id);
             digSelectedTile(world, tile);
+        }
+        renderPanel(world, state);
+    });
+    panel.querySelector('#deep-ledger-clear-collapse')?.addEventListener('click', () => {
+        if (tile) {
+            setSelectedDeepLedgerTileId(tile.id);
+            clearCollapsedTile(world, tile);
         }
         renderPanel(world, state);
     });
