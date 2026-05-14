@@ -29,6 +29,7 @@ const GLOBAL_REINFORCE_GAIN = TUNING.globalStability.reinforceGain;
 const GLOBAL_CLEAR_STABILITY_COST = TUNING.globalStability.clearCollapseCost;
 const GLOBAL_MITIGATION_STABILITY_GAIN = TUNING.globalStability.mitigationGain;
 const GLOBAL_EXTRACT_STABILITY_COST = TUNING.globalStability.extractionCost;
+const TILE_PRIORITY = TUNING.tilePriority;
 
 let selectedIndex = 0;
 let collapsed = false;
@@ -54,13 +55,13 @@ function getPanel(): HTMLDivElement | null {
 
 function scoreTile(tile: UndergroundTile): number {
     let score = 0;
-    if (tile.status === 'COLLAPSED') score += 1400;
-    if (tile.status === 'DUG' || tile.hasTunnel) score -= 500;
-    if ((tile.status === 'DUG' || tile.status === 'REINFORCED') && tile.resourceType !== 'NONE') score += 900;
-    if (tile.status === 'DUG' && !tile.hasSupport) score += 750;
-    if (!tile.connectedToSurface && (tile.status === 'DUG' || tile.status === 'REINFORCED' || tile.hasTunnel)) score += 650;
-    if (tile.hazard !== 'NONE') score += 1600;
-    if (tile.resourceType !== 'NONE') score += 500;
+    if (tile.status === 'COLLAPSED') score += TILE_PRIORITY.collapsed;
+    if (tile.status === 'DUG' || tile.hasTunnel) score += TILE_PRIORITY.existingTunnelPenalty;
+    if ((tile.status === 'DUG' || tile.status === 'REINFORCED') && tile.resourceType !== 'NONE') score += TILE_PRIORITY.extractableOpenDeposit;
+    if (tile.status === 'DUG' && !tile.hasSupport) score += TILE_PRIORITY.unsupportedDugTunnel;
+    if (!tile.connectedToSurface && (tile.status === 'DUG' || tile.status === 'REINFORCED' || tile.hasTunnel)) score += TILE_PRIORITY.disconnectedTunnel;
+    if (tile.hazard !== 'NONE') score += TILE_PRIORITY.activeHazard;
+    if (tile.resourceType !== 'NONE') score += TILE_PRIORITY.resourceDeposit;
     score += tile.oreRichness;
     score += Math.max(0, 100 - tile.stability);
     return score;

@@ -35,5 +35,14 @@ export const DEEP_LEDGER_TUNING = {
     },
     oxygen: {
         gasMitigationGain: 8
+    },
+    tilePriority: {
+        collapsed: 1400,
+        existingTunnelPenalty: -500,
+        extractableOpenDeposit: 900,
+        unsupportedDugTunnel: 750,
+        disconnectedTunnel: 650,
+        activeHazard: 1600,
+        resourceDeposit: 500
     }
 } as const;
