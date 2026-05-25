@@ -14,6 +14,7 @@ import { PathPool } from '../../utils/PathPool';
 import { ChunkStore } from '../../space/ChunkStore';
 import { HARVESTABLE_ROCKS, HARVESTABLE_TREES } from '../../utils/GameUtils';
 import { worldToChunk, CHUNK_SIZE } from '../../utils/coords';
+import { getEventEnvironmentModifiers, getWeatherGameplayEffects } from '../../weather/weatherModel';
 
 // Configuration
 const CONFIG = {
@@ -95,7 +96,7 @@ export class AgentSystem extends BaseSimSystem {
             }
 
             // 1. Update Needs (Decay)
-            this.updateNeeds(agent, ctx.fixedDt);
+            this.updateNeeds(agent, ctx.fixedDt, state);
 
             // 1b. Clear pathfinding cooldowns
             if (!agent.unreachableCooldowns) agent.unreachableCooldowns = {};
@@ -120,9 +121,13 @@ export class AgentSystem extends BaseSimSystem {
         }
     }
 
-    private updateNeeds(agent: Agent, dt: number): void {
+    private updateNeeds(agent: Agent, dt: number, state: GameState): void {
+        const weatherEffects = getWeatherGameplayEffects(state.weather);
+        const eventEffects = getEventEnvironmentModifiers(state.activeEvents);
+        const energyDecayMult = weatherEffects.energyDecayMult * eventEffects.energyDecayMult;
+
         // Slow decay unless sleeping/eating
-        if (agent.state !== 'SLEEPING') agent.energy = Math.max(0, agent.energy - 0.2 * dt);
+        if (agent.state !== 'SLEEPING') agent.energy = Math.max(0, agent.energy - 0.2 * dt * energyDecayMult);
         if (agent.state !== 'EATING') agent.hunger = Math.max(0, agent.hunger - 0.15 * dt);
         agent.mood = Math.max(0, agent.mood - 0.1 * dt);
     }

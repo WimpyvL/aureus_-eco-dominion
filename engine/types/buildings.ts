@@ -33,6 +33,7 @@ export enum BuildingType {
     WORKSHOP = 'WORKSHOP',
     GENERATOR = 'GENERATOR',
     MINE_SHAFT = 'MINE_SHAFT',
+    SURVEY_DRILL = 'SURVEY_DRILL',
     // Era 2: Growth
     MEDICAL_BAY = 'MEDICAL_BAY',
     TRAINING_CENTER = 'TRAINING_CENTER',
@@ -101,6 +102,7 @@ export interface BuildingDef {
     era: Era;
     power?: PowerConfig;
     water?: WaterConfig;
+    trustReq?: number;
     upgrades?: BuildingUpgrade[];
     waterPlaceable?: boolean; // If true, this building can be placed on water tiles (POND)
 }

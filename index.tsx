@@ -5,15 +5,6 @@
 
 import React from 'react';
 import './index.css';
-import './game/surveyDrillBuildingPatch';
-import './game/undergroundViewPatch';
-import './game/deepLedgerFoundationPatch';
-import './game/deepLedgerStatusOverlayPatch';
-import './game/surveyDrillAccessPatch';
-import './game/deepLedgerTileInspectorPatch';
-import './game/deepLedgerDigActionPatch';
-import './game/deepLedgerCollapseRiskPatch';
-import './game/deepLedgerRenderMarkersPatch';
 import ReactDOM from 'react-dom/client';
 import { Analytics } from "@vercel/analytics/react";
 import { BrowserRouter } from 'react-router-dom';

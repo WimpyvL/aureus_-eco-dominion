@@ -1,6 +1,7 @@
 export * from './AgentSystem';
 export * from './JobGenerationSystem';
 export * from './EnvironmentSystem';
+export * from './UndergroundSurveySystem';
 export * from './EconomySystem';
 export * from './ColonySystem';
 export * from './LogisticsSystem';

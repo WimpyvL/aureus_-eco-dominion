@@ -90,22 +90,20 @@ export function checkAndGenerateEvent(ctx: FixedContext, state: GameState): { ev
     const r = ctx.random?.next() || Math.random();
     const eco = state.resources.eco;
 
-    // 1. TOXIC ACID RAIN (High chance if Eco is low)
-    // Threshold: Eco < 50. Chance increases as Eco drops.
-    const acidRainChance = eco < 50 ? 0.3 + ((50 - eco) / 100) : 0;
+    // 1. DUST STORM FRONT (More likely after ecological abuse)
+    const dustStormChance = eco < 50 ? 0.22 + ((50 - eco) / 120) : 0;
 
-    if (r < acidRainChance) {
+    if (r < dustStormChance) {
         newChunks = { ...state.chunks };
         let affected = 0;
         Object.keys(newChunks).forEach(chunkKey => {
             const chunk = { ...newChunks![chunkKey], tiles: [...newChunks![chunkKey].tiles] };
             chunk.tiles.forEach((t, i) => {
-                // Damage foliage
+                // Strip vegetation and topsoil under prolonged dust exposure.
                 if (t.foliage && t.foliage.startsWith('TREE_') && (ctx.random?.next() || Math.random()) > 0.8) {
                     chunk.tiles[i] = { ...t, foliage: 'TREE_DEAD', biome: 'DIRT' };
                     affected++;
                 }
-                // Grass dies
                 else if (t.biome === 'GRASS' && t.buildingType === BuildingType.EMPTY && (ctx.random?.next() || Math.random()) > 0.9) {
                     chunk.tiles[i] = { ...t, biome: 'DIRT', foliage: 'NONE' };
                     affected++;
@@ -115,31 +113,38 @@ export function checkAndGenerateEvent(ctx: FixedContext, state: GameState): { ev
         });
 
         event = {
-            id: ctx.getNextId?.('evt_acid') || `evt_acid_${Date.now()}`,
-            name: "Toxic Acid Rain",
+            id: ctx.getNextId?.('evt_dust') || `evt_dust_${Date.now()}`,
+            name: "Dust Storm Front",
             type: 'WEATHER',
-            description: "High pollution levels have triggered acidic precipitation. Flora is decaying.",
-            duration: 600, // 60 seconds
-            visualTheme: 'TOXIC',
-            modifiers: { ecoRegenMult: 0.1, productionMult: 0.8 }
+            description: "Dry, degraded ground has kicked a dust front across the concession. Visibility and field efficiency are down.",
+            duration: 480,
+            weatherOverride: 'DUST_STORM',
+            visualTheme: 'NORMAL',
+            modifiers: { ecoRegenMult: 0.4, productionMult: 0.78, trustGainMult: 0.85 }
         };
-        news = { id: ctx.getNextId?.('news_acid') || `news_acid_${Date.now()}`, headline: "WARNING: Toxic Rain detected. Shelter advised.", type: 'NEGATIVE', timestamp: state.tickCount };
+        news = {
+            id: ctx.getNextId?.('news_dust') || `news_dust_${Date.now()}`,
+            headline: `WEATHER: Dust storm front rolling over the mine. ${affected > 0 ? `${affected} terrain patches were scoured.` : 'Visibility is collapsing.'}`,
+            type: 'NEGATIVE',
+            timestamp: state.tickCount
+        };
         return { event, news, newChunks, newAgents };
     }
 
 
-    // 2. HEATWAVE (Random, mostly in summer/hot biomes conceptually, but here just random)
+    // 2. HEATWAVE
     if (r < 0.45) {
         event = {
             id: ctx.getNextId?.('evt_heat') || `evt_heat_${Date.now()}`,
-            name: "Solar Flare / Heatwave",
+            name: "Heatwave",
             type: 'WEATHER',
-            description: "Intense solar activity. Energy consumption increased. Solar output maxed.",
+            description: "Dry-season heat is pushing crews, pumps, and surface equipment hard.",
             duration: 450,
-            visualTheme: 'HEAT',
-            modifiers: { energyDecayMult: 2.0, productionMult: 1.2 } // Solar panels work better, bots drain faster
+            weatherOverride: 'HEATWAVE',
+            visualTheme: 'NORMAL',
+            modifiers: { energyDecayMult: 1.6, productionMult: 0.92 }
         };
-        news = { id: ctx.getNextId?.('news_heat') || `news_heat_${Date.now()}`, headline: "WEATHER: Severe Heatwave. Cooling systems critical.", type: 'NEUTRAL', timestamp: state.tickCount };
+        news = { id: ctx.getNextId?.('news_heat') || `news_heat_${Date.now()}`, headline: "WEATHER: Heatwave warning. Water demand and crew fatigue are spiking.", type: 'NEGATIVE', timestamp: state.tickCount };
         return { event, news, newChunks: null, newAgents: null };
     }
 

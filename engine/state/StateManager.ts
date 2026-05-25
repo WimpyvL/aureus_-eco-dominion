@@ -16,6 +16,8 @@ import { worldToChunk } from '../utils/coords';
 import { Random } from '../kernel/Random';
 import { INITIAL_NPCS, INITIAL_PERMITS } from '../data/bureaucracy';
 import { DAY_NIGHT } from '../sim/dayNightCycle';
+import { createWeatherState } from '../weather/weatherModel';
+import { normalizeUndergroundState } from '../underground/UndergroundGenerator';
 
 export type StateListener = (state: GameState) => void;
 
@@ -138,11 +140,7 @@ export class StateManager {
                 sellThreshold: 100,
             },
 
-            weather: {
-                current: 'CLEAR',
-                timeLeft: 300,
-                intensity: 0,
-            },
+            weather: createWeatherState('CLEAR', 0.2, 180),
 
             activeEvents: [],
 
@@ -217,6 +215,7 @@ export class StateManager {
             },
 
             ...overrides,
+            underground: normalizeUndergroundState(overrides?.underground),
         } as GameState;
     }
 
@@ -363,7 +362,7 @@ export class StateManager {
     // --- Save/Load ---
 
     loadState(saved: Partial<GameState>): void {
-        this.state = { ...this.createInitialState(), ...saved };
+        this.state = this.createInitialState(saved);
         this.forceNotify();
     }
 

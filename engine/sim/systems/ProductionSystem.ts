@@ -11,6 +11,7 @@ import { getEcoMultiplier, HARVESTABLE_TREES, HARVESTABLE_ROCKS } from '../../ut
 import { BASE_STORAGE_CAPACITY, DEPOT_CAPACITY_BONUS, STOCKPILE_CAPACITY_BONUS } from '../logic/SimulationLogic';
 import { ChunkStore } from '../../space/ChunkStore';
 import { worldToChunk, CHUNK_SIZE } from '../../utils/coords';
+import { getEventEnvironmentModifiers, getWeatherGameplayEffects } from '../../weather/weatherModel';
 
 export class ProductionSystem extends BaseSimSystem {
     readonly id = 'production';
@@ -165,8 +166,13 @@ export class ProductionSystem extends BaseSimSystem {
 
         // Apply Results
         state.resources.agt += (totalIncome - totalMaintenance) * dt;
-        state.resources.eco = Math.max(0, Math.min(100, state.resources.eco - (ecoChange / 8) * dt));
-        state.resources.trust = Math.min(100, state.resources.trust + (trustProd * dt));
+
+        let ecoDelta = -(ecoChange / 8) * dt;
+        if (ecoDelta > 0) {
+            ecoDelta *= modifiers.ecoRegen;
+        }
+        state.resources.eco = Math.max(0, Math.min(100, state.resources.eco + ecoDelta));
+        state.resources.trust = Math.min(100, state.resources.trust + (trustProd * dt * modifiers.trustGain));
 
         // Resource Clamping
         state.resources.minerals = Math.min(totalCapacity, state.resources.minerals + (mineralProd * dt));
@@ -186,23 +192,15 @@ export class ProductionSystem extends BaseSimSystem {
     }
 
     private getModifiers(state: GameState) {
-        const mods = { production: 1, sellPrice: 1, upkeep: 1 };
-
-        // Weather
-        if (state.weather.current === 'DUST_STORM') {
-            mods.upkeep *= 1.5;
-            mods.production *= 0.7;
-        } else if (state.weather.current === 'STORM' || state.weather.current === 'RAINY') {
-            mods.production *= 0.5; // Solar panels etc
-        }
-
-        // Events
-        state.activeEvents.forEach(e => {
-            if (e.modifiers) {
-                if (e.modifiers.productionMult) mods.production *= e.modifiers.productionMult;
-                if (e.modifiers.sellPriceMult) mods.sellPrice *= e.modifiers.sellPriceMult;
-            }
-        });
+        const weatherEffects = getWeatherGameplayEffects(state.weather);
+        const eventEffects = getEventEnvironmentModifiers(state.activeEvents);
+        const mods = {
+            production: weatherEffects.productionMult * eventEffects.productionMult,
+            sellPrice: eventEffects.sellPriceMult,
+            upkeep: weatherEffects.upkeepMult * eventEffects.upkeepMult,
+            ecoRegen: weatherEffects.ecoRegenMult * eventEffects.ecoRegenMult,
+            trustGain: weatherEffects.trustGainMult * eventEffects.trustGainMult,
+        };
 
         // Research / Technology
         const unlocked = state.research.unlocked;

@@ -6,6 +6,7 @@
 
 import { GameState, Agent, GridTile, BuildingType } from '../../types';
 import { DEFAULT_VIEW_RADIUS } from '../utils/GameUtils';
+import { applyDeepLedgerSurvey } from '../underground/UndergroundGenerator';
 
 export class PersistenceManager {
     private readonly STORAGE_KEY = 'aureus_save_v2';
@@ -113,6 +114,8 @@ export class PersistenceManager {
             // Revive Grid: JSON.parse makes generic objects, but GridTile is an interface so it's fine.
             // If we had class instances, we'd need to re-instantiate them.
 
+            applyDeepLedgerSurvey(state as any);
+
             console.log('[PersistenceManager] Game loaded successfully.');
             return state;
         } catch (e) {
@@ -157,6 +160,8 @@ export class PersistenceManager {
                     }
                 }
             }
+
+            applyDeepLedgerSurvey(state as any);
 
             return state;
         } catch (e) {

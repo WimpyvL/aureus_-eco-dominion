@@ -1,4 +1,5 @@
 
+// (|/) Klaasvaakie
 import * as THREE from 'three';
 import { Agent, AgentRole } from '../../../types';
 import { createAgentGroup } from '../../../engine/data/voxels/Agent';
@@ -170,6 +171,8 @@ export class AgentRenderSystem {
             // Calculate Position
             const worldX = agent.visualX ?? agent.x;
             const worldZ = agent.visualZ ?? agent.z;
+            const targetPos = (meshGroup.userData.targetPos as THREE.Vector3 | undefined) ?? new THREE.Vector3();
+            targetPos.set(worldX, 0, worldZ);
 
             // Target Rotation Logic
             let targetRot = meshGroup.userData.targetRot ?? meshGroup.rotation.y;
@@ -197,7 +200,7 @@ export class AgentRenderSystem {
 
             meshGroup.userData = {
                 ...meshGroup.userData,
-                targetPos: new THREE.Vector3(worldX, 0, worldZ),
+                targetPos,
                 agentState: agent.state,
                 targetRot: targetRot,
                 prevX: worldX,
@@ -398,14 +401,20 @@ export class AgentRenderSystem {
         stateSprite.position.set(0.05, 0, 0);
         group.add(stateSprite);
 
+        group.userData.stateSprite = stateSprite;
+        group.userData.stateIcon = 'IDLE';
+
         return group;
     }
 
     private updateStatusIndicators(agent: Agent, group: THREE.Group, time: number) {
-        const stateSprite = group.getObjectByName('stateSprite') as THREE.Sprite;
+        const stateSprite = group.userData.stateSprite as THREE.Sprite | undefined;
         if (stateSprite) {
             const icon = STATE_ICONS[agent.state] || STATE_ICONS.IDLE;
-            (stateSprite.material as THREE.SpriteMaterial).map = this.createIconTexture(icon);
+            if (group.userData.stateIcon !== icon) {
+                (stateSprite.material as THREE.SpriteMaterial).map = this.createIconTexture(icon);
+                group.userData.stateIcon = icon;
+            }
         }
     }
 }

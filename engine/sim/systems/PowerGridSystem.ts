@@ -10,6 +10,7 @@ import { GameState, BuildingType } from '../../../types';
 import { BUILDINGS } from '../../data/VoxelConstants';
 import { ChunkStore } from '../../space/ChunkStore';
 import { getSolarEfficiency } from '../dayNightCycle';
+import { getWeatherGameplayEffects } from '../../weather/weatherModel';
 
 
 export class PowerGridSystem extends BaseSimSystem {
@@ -34,6 +35,7 @@ export class PowerGridSystem extends BaseSimSystem {
 
         const isDaytime = state.dayNightCycle?.isDaytime ?? true;
         const timeOfDay = state.dayNightCycle?.timeOfDay ?? 12000;
+        const weatherEffects = getWeatherGameplayEffects(state.weather);
 
         for (const chunk of Object.values(state.chunks)) {
             for (const tile of chunk.tiles) {
@@ -52,17 +54,13 @@ export class PowerGridSystem extends BaseSimSystem {
                             production = 0;
                         } else {
                             const solarEfficiency = getSolarEfficiency(timeOfDay);
-                            production = Math.floor(def.power.produces * solarEfficiency);
+                            production = Math.floor(def.power.produces * solarEfficiency * weatherEffects.solarMult);
                         }
                     }
 
-                    // Wind Logic
+                    // Wind turbines should meaningfully respond to gust fronts and storms.
                     if (tile.buildingType === BuildingType.WIND_TURBINE) {
-                        if (state.weather?.current === 'STORM' || state.weather?.current === 'DUST_STORM') {
-                            production = Math.floor(def.power.produces * 1.5);
-                        } else if (state.weather?.current === 'CLEAR') {
-                            production = Math.floor(def.power.produces * 0.7);
-                        }
+                        production = Math.floor(def.power.produces * weatherEffects.windMult);
                     }
 
                     totalProduced += production;

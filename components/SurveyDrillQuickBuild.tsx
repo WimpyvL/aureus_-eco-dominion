@@ -2,7 +2,6 @@ import React from 'react';
 import { Pickaxe } from 'lucide-react';
 import { BuildingType, GameState } from '../types';
 import { BUILDINGS } from '../engine/data/VoxelConstants';
-import { SURVEY_DRILL } from '../game/surveyDrillBuildingPatch';
 
 interface SurveyDrillQuickBuildProps {
     state: GameState;
@@ -11,12 +10,13 @@ interface SurveyDrillQuickBuildProps {
 }
 
 export const SurveyDrillQuickBuild: React.FC<SurveyDrillQuickBuildProps> = ({ state, dispatch, playSfx }) => {
-    const drill = (BUILDINGS as any)[SURVEY_DRILL];
+    const drill = BUILDINGS[BuildingType.SURVEY_DRILL];
     if (!drill) return null;
 
-    const hasTrust = state.resources.trust >= 50 || state.dungeon.unlocked;
+    const trustReq = drill.trustReq ?? 50;
+    const hasTrust = state.resources.trust >= trustReq || state.underground.unlocked || state.dungeon.unlocked;
     const canAfford = state.cheatsEnabled || state.resources.agt >= drill.cost;
-    const isSelected = state.selectedBuilding === SURVEY_DRILL;
+    const isSelected = state.selectedBuilding === BuildingType.SURVEY_DRILL;
 
     const handleClick = () => {
         if (!hasTrust || !canAfford) {
@@ -27,7 +27,7 @@ export const SurveyDrillQuickBuild: React.FC<SurveyDrillQuickBuildProps> = ({ st
         dispatch({
             type: 'BUY_BUILDING',
             payload: {
-                type: SURVEY_DRILL as BuildingType,
+                type: BuildingType.SURVEY_DRILL,
                 cost: state.cheatsEnabled ? 0 : drill.cost
             }
         });
@@ -38,7 +38,7 @@ export const SurveyDrillQuickBuild: React.FC<SurveyDrillQuickBuildProps> = ({ st
         <div className="absolute bottom-32 sm:bottom-24 right-3 sm:right-6 z-30 pointer-events-auto">
             <button
                 onClick={handleClick}
-                title={hasTrust ? 'Build Survey Drill' : 'Reach Trust 50 to authorize subsurface survey operations'}
+                title={hasTrust ? 'Build Survey Drill' : `Reach Trust ${trustReq} to authorize subsurface survey operations`}
                 className={`
                     flex items-center gap-2 px-4 py-3 rounded-[6px]
                     border-2 border-b-[5px] shadow-[4px_4px_0px_0px_rgba(0,0,0,0.35)]
