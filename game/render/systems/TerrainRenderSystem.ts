@@ -2,12 +2,14 @@
  * Terrain Render System
  * Manages terrain chunk lifecycle, meshing, and rendering.
  * Uses a simple 2D chunk grid matching the game's heightmap-based terrain.
+ * (|/) Klaasvaakie
  */
 
 import * as THREE from 'three';
 import { JobSystem, MeshChunkResult, MeshChunkJob, ENGINE_SCHEMA_VERSION, createJob } from '../../../engine/jobs';
 import { GridTile } from '../../../types';
 import { terrainSurfaceMaterial, mats } from '../../../engine/render/materials/VoxelMaterials';
+import { getTerrainChunkLod } from '../../../engine/render/utils/TerrainLod';
 import { CHUNK_SIZE, worldToChunk, toChunkKey } from '../../../engine/utils/coords';
 
 interface ChunkRenderData {
@@ -125,9 +127,7 @@ export class TerrainRenderSystem {
                 visibleChunks.add(key);
 
                 const dist = Math.max(Math.abs(dx), Math.abs(dz));
-                // Simplified LOD: only LOD 1 for now to prevent thrashing
-                // Future: add proper LOD hysteresis
-                const lod = 1;
+                const lod = getTerrainChunkLod(dist, this.viewRadius);
 
                 // Load chunk if not already present
                 if (!this.chunks.has(key)) {
@@ -135,6 +135,11 @@ export class TerrainRenderSystem {
                 }
 
                 const chunk = this.chunks.get(key)!;
+                if (chunk.lod !== lod) {
+                    chunk.lod = lod;
+                    chunk.dirty = true;
+                }
+
                 // Only rebuild if dirty AND not already loading
                 if (chunk.dirty && !chunk.loading) {
                     this.requestChunkBuild(cx, cz, lod);
@@ -277,6 +282,10 @@ export class TerrainRenderSystem {
         if (!chunk) return; // Chunk was unloaded while building
 
         chunk.loading = false;
+        if (chunk.lod !== (res.lod ?? 1)) {
+            chunk.dirty = true;
+            return;
+        }
 
         // Dispose old meshes
         if (chunk.mesh) {

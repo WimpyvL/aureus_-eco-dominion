@@ -2,6 +2,7 @@
  * Foliage Render System
  * Renders trees, rocks, and resources using InstancedMesh.
  * Receives data from TerrainRenderSystem.
+ * (|/) Klaasvaakie
  */
 
 import * as THREE from 'three';
@@ -19,13 +20,11 @@ export interface FoliageItem {
 
 export class FoliageRenderSystem {
     private scene: THREE.Scene;
-    private instancedMeshes: Map<string, THREE.InstancedMesh> = new Map();
-
-    // Data Source: Chunk ID -> List of Items
-    private chunkFoliage: Map<string, FoliageItem[]> = new Map();
-
-    private isDirty = false;
-    private rafId = 0;
+    private chunkMeshes: Map<string, Map<string, THREE.InstancedMesh>> = new Map();
+    private geometryCache: Map<string, THREE.BufferGeometry> = new Map();
+    private readonly dummy = new THREE.Object3D();
+    private readonly markedColor = new THREE.Color(1, 0.3, 0.3);
+    private readonly defaultColor = new THREE.Color(1, 1, 1);
 
     constructor(scene: THREE.Scene) {
         this.scene = scene;
@@ -35,139 +34,129 @@ export class FoliageRenderSystem {
      * Update foliage for a specific chunk
      */
     public updateChunk(key: string, items: FoliageItem[]) {
-        this.chunkFoliage.set(key, items);
-        this.requestRebuild();
-    }
+        this.disposeChunkMeshes(key);
 
-    /**
-     * Remove foliage for a chunk (unloaded)
-     */
-    public removeChunk(key: string) {
-        if (this.chunkFoliage.delete(key)) {
-            this.requestRebuild();
+        if (items.length === 0) {
+            return;
         }
-    }
 
-    public dispose() {
-        cancelAnimationFrame(this.rafId);
-        this.instancedMeshes.forEach(mesh => {
-            this.scene.remove(mesh);
-            mesh.dispose();
-        });
-        this.instancedMeshes.clear();
-        this.chunkFoliage.clear();
-    }
-
-    private requestRebuild() {
-        if (!this.isDirty) {
-            this.isDirty = true;
-            // Debounce to avoid rebuilding multiple times per frame if multiple chunks load
-            this.rafId = requestAnimationFrame(this.rebuild.bind(this));
-        }
-    }
-
-    private rebuild() {
-        this.isDirty = false;
-
-        // 1. Bucket by Type
-        const buckets: Record<string, FoliageItem[]> = {};
-        let totalItems = 0;
-
-        for (const items of this.chunkFoliage.values()) {
-            for (const item of items) {
-                if (!buckets[item.type]) buckets[item.type] = [];
-                buckets[item.type].push(item);
-                totalItems++;
+        const buckets = new Map<string, FoliageItem[]>();
+        for (const item of items) {
+            const bucket = buckets.get(item.type);
+            if (bucket) {
+                bucket.push(item);
+            } else {
+                buckets.set(item.type, [item]);
             }
         }
 
-        // 2. Sync Meshes
-        const activeKeys = new Set<string>();
-        const dummy = new THREE.Object3D();
+        const chunkTypeMeshes = new Map<string, THREE.InstancedMesh>();
 
-        Object.entries(buckets).forEach(([type, items]) => {
-            activeKeys.add(type);
-
-            let mesh = this.instancedMeshes.get(type);
-            const count = items.length;
-
-            // Create or Resize Mesh
-            if (!mesh || mesh.count < count) {
-                if (mesh) {
-                    this.scene.remove(mesh);
-                    mesh.dispose();
-                }
-
-                if (!BuildingFactory[type]) {
-                    console.warn(`[FoliageSystem] Unknown foliage type: ${type}`);
-                    return;
-                }
-
-                const group = BuildingFactory[type]({ seed: 42 });
-                const geometry = mergeGroupGeometry(group);
-
-                // Allocate with some buffer to avoid frequent re-alloc
-                const capacity = Math.ceil(count * 1.5);
-                mesh = new THREE.InstancedMesh(geometry, foliageInstancedMaterial, capacity);
-
-                mesh.castShadow = true;
-                mesh.receiveShadow = true;
-                mesh.frustumCulled = false; // CRITICAL: This is a global pool across all chunks
-                // Allow updates
-                mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-                this.scene.add(mesh);
-                this.instancedMeshes.set(type, mesh);
+        for (const [type, bucket] of buckets) {
+            const geometry = this.getGeometry(type);
+            if (!geometry) {
+                continue;
             }
 
-            // Update Instances
-            let idx = 0;
-            items.forEach((item) => {
-                // Deterministic rotation and scale based on position
+            const mesh = new THREE.InstancedMesh(geometry, foliageInstancedMaterial, bucket.length);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.frustumCulled = true;
+            mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+            mesh.userData.chunkKey = key;
+            mesh.userData.foliageType = type;
+
+            for (let idx = 0; idx < bucket.length; idx++) {
+                const item = bucket[idx];
+
+                // Deterministic rotation and scale based on position.
                 const rotSeed = Math.abs(item.x * 31 + item.z * 17);
                 const rotY = (rotSeed % 4) * (Math.PI / 2);
 
                 const scaleSeed = Math.abs(item.x * 7.11 + item.z * 3.45);
                 const scale = 0.85 + (scaleSeed % 10) * 0.03;
 
-                // Position is absolute world coordinate from worker
-                dummy.position.set(item.x, item.y, item.z);
-                dummy.rotation.set(0, rotY, 0);
-                dummy.scale.setScalar(scale);
-                dummy.updateMatrix();
-                dummy.updateMatrixWorld(true);
+                this.dummy.position.set(item.x, item.y, item.z);
+                this.dummy.rotation.set(0, rotY, 0);
+                this.dummy.scale.setScalar(scale);
+                this.dummy.updateMatrix();
 
-                mesh!.setMatrixAt(idx, dummy.matrix);
-
-                // Tint if marked for harvest
-                if (item.marked) {
-                    mesh!.setColorAt(idx, new THREE.Color(1, 0.3, 0.3)); // Red tint
-                } else {
-                    mesh!.setColorAt(idx, new THREE.Color(1, 1, 1)); // White (Normal)
-                }
-
-                idx++;
-            });
-
-            mesh.count = count;
-            mesh.instanceMatrix.needsUpdate = true;
-            if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-        });
-
-        // 3. Cleanup Unused
-        for (const [type, mesh] of this.instancedMeshes) {
-            if (!activeKeys.has(type)) {
-                this.scene.remove(mesh);
-                mesh.dispose();
-                this.instancedMeshes.delete(type);
+                mesh.setMatrixAt(idx, this.dummy.matrix);
+                mesh.setColorAt(idx, item.marked ? this.markedColor : this.defaultColor);
             }
+
+            mesh.instanceMatrix.needsUpdate = true;
+            if (mesh.instanceColor) {
+                mesh.instanceColor.needsUpdate = true;
+            }
+            mesh.computeBoundingBox();
+            mesh.computeBoundingSphere();
+
+            this.scene.add(mesh);
+            chunkTypeMeshes.set(type, mesh);
         }
+
+        if (chunkTypeMeshes.size > 0) {
+            this.chunkMeshes.set(key, chunkTypeMeshes);
+        }
+    }
+
+    /**
+     * Remove foliage for a chunk (unloaded)
+     */
+    public removeChunk(key: string) {
+        this.disposeChunkMeshes(key);
+    }
+
+    public dispose() {
+        for (const key of this.chunkMeshes.keys()) {
+            this.disposeChunkMeshes(key);
+        }
+        for (const geometry of this.geometryCache.values()) {
+            geometry.dispose();
+        }
+        this.geometryCache.clear();
+    }
+
+    private getGeometry(type: string): THREE.BufferGeometry | null {
+        const cached = this.geometryCache.get(type);
+        if (cached) {
+            return cached;
+        }
+
+        if (!BuildingFactory[type]) {
+            console.warn(`[FoliageSystem] Unknown foliage type: ${type}`);
+            return null;
+        }
+
+        const group = BuildingFactory[type]({ seed: 42 });
+        const geometry = mergeGroupGeometry(group);
+        this.geometryCache.set(type, geometry);
+        return geometry;
+    }
+
+    private disposeChunkMeshes(key: string) {
+        const meshes = this.chunkMeshes.get(key);
+        if (!meshes) {
+            return;
+        }
+
+        for (const mesh of meshes.values()) {
+            this.scene.remove(mesh);
+            mesh.dispose();
+        }
+
+        this.chunkMeshes.delete(key);
     }
 
     /**
      * Get meshes for raycasting/interaction
      */
     public getInteractables(): THREE.Object3D[] {
-        return Array.from(this.instancedMeshes.values());
+        const meshes: THREE.Object3D[] = [];
+        for (const chunkMeshes of this.chunkMeshes.values()) {
+            meshes.push(...chunkMeshes.values());
+        }
+        return meshes;
     }
 }

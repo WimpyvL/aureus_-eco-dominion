@@ -3,9 +3,11 @@
  * Handles heavy computations in a background thread:
  * - Pathfinding
  * - Terrain Meshing (Surface Shell Optimized)
+ * (|/) Klaasvaakie
  */
 
 import { GridTile, Chunk } from '../../types';
+import { getTerrainMacroStep } from '../render/utils/TerrainLod';
 import { getBiomeAt as getBiomeAtImpl, getFoliageAt as getFoliageAtImpl } from '../worldgen/Core';
 import { Job, PathfindJob, PathfindResult, MeshChunkJob, MeshChunkResult, ENGINE_SCHEMA_VERSION } from './jobs.types';
 import { findPath } from '../sim/algorithms/Pathfinding';
@@ -97,6 +99,7 @@ self.onmessage = (e: MessageEvent) => {
 function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
     const { cx, cz, tiles, lod = 1 } = job.payload;
     const CHUNK_SIZE = 16;
+    const macroStep = getTerrainMacroStep(lod);
 
     const startX = cx * CHUNK_SIZE;
     const startZ = cz * CHUNK_SIZE;
@@ -127,18 +130,25 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
         return Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
     }
 
-    // Default half-height for standard blocks (1 unit tall)
-    const stdH = 0.5;
-
-    const addFace = (dest: any, sx: number, sy: number, sz: number, type: number, color: number[], h: number = 0.5) => {
+    const addFace = (
+        dest: any,
+        sx: number,
+        sy: number,
+        sz: number,
+        type: number,
+        color: number[],
+        hx: number = 0.5,
+        hy: number = 0.5,
+        hz: number = 0.5
+    ) => {
         let v1, v2, v3, v4, nx, ny, nz;
         // 0: +X, 1: -X, 2: +Y (Top), 3: -Y (Bottom), 4: +Z, 5: -Z
-        if (type === 0) { v1 = [h, -h, h]; v2 = [h, -h, -h]; v3 = [h, h, -h]; v4 = [h, h, h]; nx = 1; ny = 0; nz = 0; }
-        else if (type === 1) { v1 = [-h, -h, -h]; v2 = [-h, -h, h]; v3 = [-h, h, h]; v4 = [-h, h, -h]; nx = -1; ny = 0; nz = 0; }
-        else if (type === 2) { v1 = [-h, h, h]; v2 = [h, h, h]; v3 = [h, h, -h]; v4 = [-h, h, -h]; nx = 0; ny = 1; nz = 0; }
-        else if (type === 3) { v1 = [-h, -h, -h]; v2 = [h, -h, -h]; v3 = [h, -h, h]; v4 = [-h, -h, h]; nx = 0; ny = -1; nz = 0; }
-        else if (type === 4) { v1 = [-h, -h, h]; v2 = [h, -h, h]; v3 = [h, h, h]; v4 = [-h, h, h]; nx = 0; ny = 0; nz = 1; }
-        else { v1 = [h, -h, -h]; v2 = [-h, -h, -h]; v3 = [-h, h, -h]; v4 = [h, h, -h]; nx = 0; ny = 0; nz = -1; }
+        if (type === 0) { v1 = [hx, -hy, hz]; v2 = [hx, -hy, -hz]; v3 = [hx, hy, -hz]; v4 = [hx, hy, hz]; nx = 1; ny = 0; nz = 0; }
+        else if (type === 1) { v1 = [-hx, -hy, -hz]; v2 = [-hx, -hy, hz]; v3 = [-hx, hy, hz]; v4 = [-hx, hy, -hz]; nx = -1; ny = 0; nz = 0; }
+        else if (type === 2) { v1 = [-hx, hy, hz]; v2 = [hx, hy, hz]; v3 = [hx, hy, -hz]; v4 = [-hx, hy, -hz]; nx = 0; ny = 1; nz = 0; }
+        else if (type === 3) { v1 = [-hx, -hy, -hz]; v2 = [hx, -hy, -hz]; v3 = [hx, -hy, hz]; v4 = [-hx, -hy, hz]; nx = 0; ny = -1; nz = 0; }
+        else if (type === 4) { v1 = [-hx, -hy, hz]; v2 = [hx, -hy, hz]; v3 = [hx, hy, hz]; v4 = [-hx, hy, hz]; nx = 0; ny = 0; nz = 1; }
+        else { v1 = [hx, -hy, -hz]; v2 = [-hx, -hy, -hz]; v3 = [-hx, hy, -hz]; v4 = [hx, hy, -hz]; nx = 0; ny = 0; nz = -1; }
 
         dest.p.push(sx + v1[0], sy + v1[1], sz + v1[2]);
         dest.p.push(sx + v2[0], sy + v2[1], sz + v2[2]);
@@ -179,29 +189,52 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
         return { h: data.height, b: data.biome, bt: 'EMPTY', f: 'NONE', in: false, marked: false };
     };
 
-    for (let z = 0; z < CHUNK_SIZE; z++) {
-        for (let x = 0; x < CHUNK_SIZE; x++) {
+    const getMacroData = (worldX: number, worldZ: number, cellWidth: number, cellDepth: number) => {
+        const sampleX = Math.min(worldX + Math.floor((cellWidth - 1) * 0.5), startX + CHUNK_SIZE - 1);
+        const sampleZ = Math.min(worldZ + Math.floor((cellDepth - 1) * 0.5), startZ + CHUNK_SIZE - 1);
+        const data = getData(sampleX, sampleZ);
+
+        let fType = data.f;
+        if ((!fType || fType === 'NONE') && data.bt === 'EMPTY' && data.h > 0) {
+            const bd = getBiomeAtImpl(sampleX, sampleZ);
+            fType = getFoliageAtImpl(sampleX, sampleZ, data.b, data.h, bd.detail);
+            if (fType === 'GOLD_VEIN') {
+                fType = 'NONE';
+            }
+        }
+
+        return {
+            worldX,
+            worldZ,
+            sampleX,
+            sampleZ,
+            cellWidth,
+            cellDepth,
+            localCenterX: (worldX - startX) + (cellWidth - 1) * 0.5,
+            localCenterZ: (worldZ - startZ) + (cellDepth - 1) * 0.5,
+            data,
+            foliageType: fType,
+        };
+    };
+
+    for (let z = 0; z < CHUNK_SIZE; z += macroStep) {
+        for (let x = 0; x < CHUNK_SIZE; x += macroStep) {
             const worldX = startX + x;
             const worldZ = startZ + z;
-            const data = getData(worldX, worldZ);
-            const tile = getTile(worldX, worldZ);
+            const cellWidth = Math.min(macroStep, CHUNK_SIZE - x);
+            const cellDepth = Math.min(macroStep, CHUNK_SIZE - z);
+            const macro = getMacroData(worldX, worldZ, cellWidth, cellDepth);
+            const data = macro.data;
 
             // Foliage Logic (Infinite)
-            let fType = data.f;
-
-            // Try procedural generation if no explicit foliage
-            if ((!fType || fType === 'NONE') && data.bt === 'EMPTY' && data.h > 0) {
-                const bd = getBiomeAtImpl(worldX, worldZ);
-                fType = getFoliageAtImpl(worldX, worldZ, data.b, data.h, bd.detail);
-
-                // Do not spawn gold outside playable area
-                if (fType === 'GOLD_VEIN') {
-                    fType = 'NONE';
-                }
-            }
-
-            if (fType && fType !== 'NONE' && fType !== 'GOLD_VEIN') {
-                foliageItems.push({ x: worldX, y: data.h * 0.5, z: worldZ, type: fType, marked: data.marked });
+            if (macro.foliageType && macro.foliageType !== 'NONE' && macro.foliageType !== 'GOLD_VEIN') {
+                foliageItems.push({
+                    x: macro.sampleX,
+                    y: data.h * 0.5,
+                    z: macro.sampleZ,
+                    type: macro.foliageType,
+                    marked: data.marked
+                });
             }
 
             let matKey = data.b.toLowerCase();
@@ -217,24 +250,64 @@ function processMeshChunk(job: MeshChunkJob): MeshChunkResult {
             else if (!data.in && data.h === 0) topY = -2;
 
             // Surface
-            addFace(solid, x, topY, z, 2, color);
+            addFace(
+                solid,
+                macro.localCenterX,
+                topY,
+                macro.localCenterZ,
+                2,
+                color,
+                cellWidth * 0.5,
+                0.5,
+                cellDepth * 0.5
+            );
 
             // Sides (cliff edges)
-            [[1, 0, 0], [-1, 0, 1], [0, 1, 4], [0, -1, 5]].forEach(([dx, dz, type]) => {
-                const neighbor = getData(worldX + dx, worldZ + dz);
+            [
+                [cellWidth, 0, 0],
+                [-macroStep, 0, 1],
+                [0, cellDepth, 4],
+                [0, -macroStep, 5]
+            ].forEach(([dx, dz, type]) => {
+                const neighbor = getMacroData(
+                    worldX + dx,
+                    worldZ + dz,
+                    cellWidth,
+                    cellDepth
+                ).data;
                 let nTop = (neighbor.h * 0.5) - 0.5;
                 if (neighbor.bt === 'POND' || neighbor.bt === 'RESERVOIR') nTop -= 1;
                 else if (!neighbor.in && neighbor.h === 0) nTop = -2;
 
                 for (let y = topY; y > nTop; y--) {
-                    addFace(solid, x, y, z, type, color);
+                    addFace(
+                        solid,
+                        macro.localCenterX,
+                        y,
+                        macro.localCenterZ,
+                        type,
+                        color,
+                        cellWidth * 0.5,
+                        0.5,
+                        cellDepth * 0.5
+                    );
                 }
             });
 
             // Water
             if (isWater) {
                 const waterY = data.h === 0 ? 0 : surfaceY;
-                addFace(water, x, waterY, z, 2, PALETTE['water']);
+                addFace(
+                    water,
+                    macro.localCenterX,
+                    waterY,
+                    macro.localCenterZ,
+                    2,
+                    PALETTE['water'],
+                    cellWidth * 0.5,
+                    0.5,
+                    cellDepth * 0.5
+                );
             }
         }
     }

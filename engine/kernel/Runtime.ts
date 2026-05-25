@@ -1,6 +1,7 @@
 /**
  * Engine Kernel - Runtime
  * The main loop controller - orchestrates the entire frame sequence
+ * (|/) Klaasvaakie
  */
 
 import { Clock } from './Clock';
@@ -21,6 +22,9 @@ export class Runtime {
     private paused = false;
     private rafId: number | null = null;
     private config: EngineConfig;
+    private readonly telemetryLoggingEnabled =
+        typeof window !== 'undefined'
+        && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
     constructor(
         private worldHost: WorldHost,
@@ -179,7 +183,7 @@ export class Runtime {
         telemetry.record('frame', frameCtx.dt * 1000);
 
         // Log telemetry every 5 seconds (debug mode)
-        if (Math.floor(frameCtx.time) % 5 === 0 && Math.abs(frameCtx.time % 1) < frameCtx.dt * 2) {
+        if (this.telemetryLoggingEnabled && Math.floor(frameCtx.time) % 5 === 0 && Math.abs(frameCtx.time % 1) < frameCtx.dt * 2) {
             console.log(telemetry.getSummary());
         }
 
