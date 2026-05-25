@@ -16,6 +16,7 @@ import { worldToChunk } from '../utils/coords';
 import { Random } from '../kernel/Random';
 import { INITIAL_NPCS, INITIAL_PERMITS } from '../data/bureaucracy';
 import { DAY_NIGHT } from '../sim/dayNightCycle';
+import { createWeatherState } from '../weather/weatherModel';
 
 export type StateListener = (state: GameState) => void;
 
@@ -138,11 +139,7 @@ export class StateManager {
                 sellThreshold: 100,
             },
 
-            weather: {
-                current: 'CLEAR',
-                timeLeft: 300,
-                intensity: 0,
-            },
+            weather: createWeatherState('CLEAR', 0.2, 180),
 
             activeEvents: [],
 

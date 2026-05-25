@@ -1,4 +1,6 @@
 
+export type { WeatherSource, WeatherState, WeatherType } from '../weather/weatherModel';
+
 export type BiomeType = 'GRASS' | 'DIRT' | 'SAND' | 'STONE' | 'SNOW';
 
 export type FoliageType =
@@ -42,14 +44,6 @@ export type FoliageType =
     | 'ROCK_MOSSY'
     | 'FLOWER_ALPINE'
     | 'CRYSTAL_SPIKE';
-
-export type WeatherType = 'CLEAR' | 'CLOUDY' | 'RAINY' | 'STORM' | 'DUST_STORM' | 'ACID_RAIN';
-
-export interface WeatherState {
-    current: WeatherType;
-    timeLeft: number; // Ticks remaining
-    intensity: number; // 0-1
-}
 
 import { BuildingType } from './buildings';
 

@@ -9,6 +9,7 @@ import { FixedContext } from '../../kernel';
 import { GameState, BuildingType } from '../../../types';
 import { BUILDINGS } from '../../data/VoxelConstants';
 import { ChunkStore } from '../../space/ChunkStore';
+import { getWeatherGameplayEffects } from '../../weather/weatherModel';
 
 
 export class WaterNetworkSystem extends BaseSimSystem {
@@ -30,6 +31,7 @@ export class WaterNetworkSystem extends BaseSimSystem {
 
         let totalProduced = 0;
         let totalConsumed = 0;
+        const weatherEffects = getWeatherGameplayEffects(state.weather);
 
         // 1. Identify Sources and reset network state
         const openSet: { x: number, z: number }[] = []; // Tiles with water
@@ -49,13 +51,8 @@ export class WaterNetworkSystem extends BaseSimSystem {
                     // Determine actual production
                     let production = def.water.produces;
 
-                    // Weather effects
                     if (tile.buildingType === BuildingType.POND) {
-                        if (state.weather?.current === 'RAINY' || state.weather?.current === 'STORM') {
-                            production = Math.floor(def.water.produces * 1.5);
-                        } else if (state.weather?.current === 'DUST_STORM') {
-                            production = Math.floor(def.water.produces * 0.5);
-                        }
+                        production = Math.floor(def.water.produces * weatherEffects.waterCollectionMult);
                     }
 
                     // Power dependency for Reservoirs

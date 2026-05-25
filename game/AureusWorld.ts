@@ -865,7 +865,7 @@ export class AureusWorld extends BaseWorld {
         this.environmentRenderSystem.update(
             ctx.dt,
             state.dayNightCycle?.timeOfDay || 12000,
-            state.weather?.current || 'CLEAR',
+            state.weather,
             this.cameraSystem.cameraFocus
         );
 

@@ -1,7 +1,7 @@
 
 import { BuildingType } from './buildings';
 import { Agent, AgentRequest, Job } from './agents';
-import { GridTile, WeatherState, Chunk } from './world';
+import { GridTile, WeatherState, WeatherType, Chunk } from './world';
 import { GameResources, MarketState, Contract } from './economy';
 import { DungeonState } from '../dungeon/DungeonTypes';
 import { BureaucracyState } from './bureaucracy';
@@ -56,10 +56,12 @@ export interface GlobalEvent {
     type: 'WEATHER' | 'ECONOMIC' | 'GEOLOGICAL' | 'SOCIAL' | 'INCURSION';
     duration: number; // in ticks
     description: string;
-    visualTheme?: 'NORMAL' | 'TOXIC' | 'HEAT' | 'GOLDEN';
+    visualTheme?: 'NORMAL' | 'GOLDEN';
+    weatherOverride?: WeatherType;
     modifiers?: {
         productionMult?: number;
         sellPriceMult?: number;
+        upkeepMult?: number;
         ecoRegenMult?: number;
         trustGainMult?: number;
         energyDecayMult?: number;
