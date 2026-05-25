@@ -17,7 +17,7 @@ interface ControlsProps {
     step: GameStep;
     debugMode: boolean;
     interactionMode: 'BUILD' | 'BULLDOZE' | 'INSPECT' | 'TEST_DESTRUCT';
-    dungeonUnlocked: boolean;
+    undergroundUnlocked: boolean;
     activeView: 'SURFACE' | 'DUNGEON';
     onToggleView: () => void;
     selectedAgentId: string | null;
@@ -25,7 +25,7 @@ interface ControlsProps {
 
 export const Controls: React.FC<ControlsProps> = React.memo(({
     selectedBuilding, dispatch, setSidebarOpen, playSfx, step,
-    debugMode, interactionMode, dungeonUnlocked, activeView, onToggleView,
+    debugMode, interactionMode, undergroundUnlocked, activeView, onToggleView,
     selectedAgentId
 }) => {
     // ... (keep existing render logic for selectedBuilding)
@@ -123,11 +123,11 @@ export const Controls: React.FC<ControlsProps> = React.memo(({
                     </button>
                 )}
 
-                {dungeonUnlocked && (
+                {undergroundUnlocked && (
                     <button
                         onClick={onToggleView}
                         className={`view-switch-button ${activeView === 'DUNGEON' ? 'is-dungeon' : 'is-surface'} w-12 h-12 !p-0`}
-                        title={activeView === 'DUNGEON' ? 'Return to Surface (U)' : 'Enter Dungeon (U)'}
+                        title={activeView === 'DUNGEON' ? 'Return to Surface (U)' : 'Enter Below Sector (U)'}
                     >
                         {activeView === 'DUNGEON' ? <ArrowUp size={20} /> : <ArrowDown size={20} />}
                     </button>

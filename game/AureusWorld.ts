@@ -21,7 +21,7 @@ import {
     ColonySystem, LogisticsSystem, EventSystem, MissionSystem,
     ProductionSystem, ConstructionSystem, EraSystem,
     PowerGridSystem, WaterNetworkSystem,
-    TutorialDemoSystem, CommandDispatcher,
+    TutorialDemoSystem, CommandDispatcher, UndergroundSurveySystem,
     ResearchSystem, EmploymentSystem, BureaucracySystem, AmbientNPCSystem
 } from '../engine/sim/systems';
 import { DungeonMinerSystem } from '../engine/sim/systems/DungeonMinerSystem';
@@ -53,6 +53,7 @@ import {
 import { ChunkStore } from '../engine/space/ChunkStore';
 import { worldToChunk, worldToLocal, CHUNK_SIZE } from '../engine/utils/coords';
 import { confirmMobilePlacement } from './mobilePlacement';
+import { applyDeepLedgerSurvey } from '../engine/underground/UndergroundGenerator';
 
 
 export interface AureusWorldConfig {
@@ -141,6 +142,7 @@ export class AureusWorld extends BaseWorld {
         this.sim.addSystem(this.constructionSystem);
         this.sim.addSystem(new JobGenerationSystem());
         this.sim.addSystem(new EnvironmentSystem());
+        this.sim.addSystem(new UndergroundSurveySystem());
 
         const econ = new EconomySystem();
         this.sim.addSystem(econ);
@@ -498,6 +500,7 @@ export class AureusWorld extends BaseWorld {
     loadGame(data?: string): void {
         const loadedState = data ? this.persistenceManager.reviveState(data) : this.persistenceManager.loadGame();
         if (loadedState) {
+            applyDeepLedgerSurvey(loadedState as any);
             this.stateManager.loadState(loadedState);
             this.workerPool.broadcast({ type: 'SYNC_CHUNKS', payload: loadedState.chunks });
 
@@ -982,22 +985,27 @@ export class AureusWorld extends BaseWorld {
      */
     toggleViewMode(): void {
         const state = this.stateManager.getState();
-
-        if (!state.dungeon.unlocked && !state.cheatsEnabled) {
-            return;
-        }
+        const accessUnlocked = state.cheatsEnabled || state.underground.unlocked || state.dungeon.unlocked;
 
         if (state.activeView === 'SURFACE') {
-            if (!state.cheatsEnabled && state.resources.trust < 50) {
+            if (!accessUnlocked) {
                 state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
                 state.newsFeed.push({
                     id: `dungeon_locked_${Date.now()}`,
-                    headline: 'Underground access requires Trust level 50.',
+                    headline: state.resources.trust < 50
+                        ? 'Below Sector locked. Reach Trust 50 to authorize subsurface operations.'
+                        : 'Below Sector locked. Build a Survey Drill to authorize subsurface operations.',
                     type: 'NEGATIVE',
                     timestamp: Date.now(),
                 });
                 this.stateManager.markDirty('pendingEffects', 'newsFeed');
                 return;
+            }
+
+            if (state.cheatsEnabled && !state.underground.unlocked) {
+                state.underground.unlocked = true;
+                state.dungeon.unlocked = true;
+                this.stateManager.markDirty('underground', 'dungeon');
             }
 
             this.stateManager.mutate('activeView', 'DUNGEON');
@@ -1123,6 +1131,7 @@ export class AureusWorld extends BaseWorld {
     }
 
     private loadState(saved: any) {
+        applyDeepLedgerSurvey(saved);
         this.stateManager.loadState(saved);
     }
 

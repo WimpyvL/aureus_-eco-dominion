@@ -99,6 +99,15 @@ export class EconomySystem extends BaseSimSystem {
         const def = BUILDINGS[buildingType];
         if (!def) return { ok: false, code: CommandErrorCode.INVALID_TARGET, reason: `Unknown building type: ${buildingTypeInput}` };
 
+        if (!state.cheatsEnabled && def.trustReq !== undefined && state.resources.trust < def.trustReq) {
+            state.pendingEffects.push({ type: 'AUDIO', sfx: SfxType.ERROR });
+            return {
+                ok: false,
+                code: CommandErrorCode.FORBIDDEN,
+                reason: `Requires Trust ${def.trustReq}`
+            };
+        }
+
         if (def.costs) {
             // Check resources first
             for (const [res, amt] of Object.entries(def.costs)) {

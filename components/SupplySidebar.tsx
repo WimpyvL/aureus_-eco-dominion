@@ -67,6 +67,7 @@ export const getBuildingIcon = (type: BuildingType) => {
         case BuildingType.MONUMENT: return <Trophy size={18} />;
         case BuildingType.SPACEPORT: return <Rocket size={18} />;
         case BuildingType.MINE_SHAFT: return <Pickaxe size={18} />;
+        case BuildingType.SURVEY_DRILL: return <Pickaxe size={18} />;
         case BuildingType.SAWMILL: return <TreeDeciduous size={18} />;
         case BuildingType.STONE_QUARRY: return <Pickaxe size={18} />;
         case BuildingType.POWER_LINE: return <Zap size={18} />;
@@ -142,6 +143,7 @@ const ITEM_CATEGORIES: Record<BuildingType, CategoryType> = {
     [BuildingType.SAWMILL]: 'PRODUCTION',
     [BuildingType.STONE_QUARRY]: 'PRODUCTION',
     [BuildingType.MINE_SHAFT]: 'PRODUCTION',
+    [BuildingType.SURVEY_DRILL]: 'UNDERGROUND',
     [BuildingType.STOCKPILE]: 'UTILITIES',
     [BuildingType.D_MINE]: 'UNDERGROUND',
     [BuildingType.D_SUPPORT]: 'UNDERGROUND',
@@ -173,7 +175,7 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, wor
             BuildingType.STAFF_QUARTERS, BuildingType.CANTEEN, BuildingType.WORKSHOP,
             BuildingType.SAWMILL, BuildingType.STONE_QUARRY,
             BuildingType.WASH_PLANT, BuildingType.SOLAR_ARRAY, BuildingType.WATER_WELL, BuildingType.STORAGE_DEPOT,
-            BuildingType.MINING_HEADFRAME, BuildingType.MINE_SHAFT,
+            BuildingType.MINING_HEADFRAME, BuildingType.SURVEY_DRILL, BuildingType.MINE_SHAFT,
             // Era 2: Growth
             BuildingType.MEDICAL_BAY, BuildingType.TRAINING_CENTER, BuildingType.GENERATOR,
             BuildingType.SOCIAL_HUB, BuildingType.SECURITY_POST, BuildingType.COMMUNITY_GARDEN, BuildingType.WIND_TURBINE,
@@ -299,10 +301,10 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, wor
                         <div className="flex justify-between items-end mb-4">
                             <div>
                                 <h2 className="text-white font-black uppercase tracking-widest text-xl font-['Rajdhani'] leading-none">
-                                    {state.activeView === 'DUNGEON' ? 'Dungeon Ops' : 'Supply Command'}
+                                    {state.activeView === 'DUNGEON' ? 'Deep Ledger' : 'Supply Command'}
                                 </h2>
                                 <p className="text-slate-500 text-[10px] uppercase font-mono mt-1 tracking-tighter">
-                                    {state.activeView === 'DUNGEON' ? 'Subterranean Logistics & Mining' : 'Authorized Assets & Infrastructure'}
+                                    {state.activeView === 'DUNGEON' ? 'Survey Intel & Subsurface Operations' : 'Authorized Assets & Infrastructure'}
                                 </p>
                             </div>
                             <div className="flex flex-col items-end">
@@ -407,12 +409,13 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, wor
                                         };
                                         const cost = b.cost || (BUILDINGS[type] ? calculateBuildingCost(type, state.chunks) : 0);
                                         const isEcoLocked = (b as any).ecoReq ? state.resources.eco < (b as any).ecoReq : false;
+                                        const isTrustLocked = (b as any).trustReq ? state.resources.trust < (b as any).trustReq : false;
                                         let dependencyMet = true;
                                         if ((b as any).dependency) {
                                             dependencyMet = Object.values(state.chunks).flatMap((c: Chunk) => c.tiles).some(t => t.buildingType === (b as any).dependency && !t.isUnderConstruction);
                                         }
                                         const isEraLocked = b.era && b.era !== 'UNDERGROUND' && !state.unlockedEras.includes(b.era);
-                                        const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet || isEraLocked);
+                                        const isLocked = !state.cheatsEnabled && (isEcoLocked || isTrustLocked || !dependencyMet || isEraLocked);
                                         const canAfford = state.cheatsEnabled || state.resources.agt >= cost;
                                         const isSelected = selectedItem === type;
 
@@ -455,7 +458,7 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, wor
                                                         </span>
                                                         <div className="w-1 h-1 rounded-full bg-slate-700" />
                                                         <span className="text-slate-500 text-[8px] uppercase font-mono tracking-tighter truncate">
-                                                            {b.era}
+                                                            {isTrustLocked ? `TRUST ${String((b as any).trustReq)}` : b.era}
                                                         </span>
                                                     </div>
 
@@ -516,12 +519,13 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, wor
                                 }
 
                                 const isEcoLocked = (b as any).ecoReq ? state.resources.eco < (b as any).ecoReq : false;
+                                const isTrustLocked = (b as any).trustReq ? state.resources.trust < (b as any).trustReq : false;
                                 let dependencyMet = true;
                                 if ((b as any).dependency) {
                                     dependencyMet = Object.values(state.chunks).flatMap((c: Chunk) => c.tiles).some(t => t.buildingType === (b as any).dependency && !t.isUnderConstruction);
                                 }
                                 const isEraLocked = b.era && b.era !== 'UNDERGROUND' && !state.unlockedEras.includes(b.era);
-                                const isLocked = !state.cheatsEnabled && (isEcoLocked || !dependencyMet || isEraLocked);
+                                const isLocked = !state.cheatsEnabled && (isEcoLocked || isTrustLocked || !dependencyMet || isEraLocked);
 
                                 return (
                                     <div className="flex flex-col">
@@ -577,7 +581,13 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, wor
                                                     <div className="flex-1">
                                                         <p className="text-[10px] font-black text-rose-500 uppercase">Requirement Failed</p>
                                                         <p className="text-xs text-rose-200">
-                                                            {isEraLocked ? `Unavailable in Era: ${b.era}` : isEcoLocked ? `Requires Ecological Index ${(b as any).ecoReq}` : `Requires Active ${BUILDINGS[(b as any).dependency!]?.name || 'Prerequisite'}`}
+                                                            {isEraLocked
+                                                                ? `Unavailable in Era: ${b.era}`
+                                                                : isTrustLocked
+                                                                    ? `Requires Trust ${(b as any).trustReq}`
+                                                                    : isEcoLocked
+                                                                        ? `Requires Ecological Index ${(b as any).ecoReq}`
+                                                                        : `Requires Active ${BUILDINGS[(b as any).dependency!]?.name || 'Prerequisite'}`}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -620,7 +630,7 @@ export const SupplySidebar: React.FC<SupplySidebarProps> = ({ isOpen, state, wor
                                         {/* Footer / Meta */}
                                         <div className="px-6 py-3 bg-slate-950 border-t border-white/5 flex justify-between items-center text-[9px] font-mono text-slate-600 uppercase">
                                             <span>Build Window: {(b as any).buildTime || 0}s</span>
-                                            <span>Eco Req: {(b as any).ecoReq || 0}</span>
+                                            <span>{(b as any).trustReq ? `Trust Req: ${(b as any).trustReq}` : `Eco Req: ${(b as any).ecoReq || 0}`}</span>
                                         </div>
                                     </div>
                                 );

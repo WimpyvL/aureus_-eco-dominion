@@ -14,6 +14,7 @@ import { StoneQuarryFactory } from './StoneQuarry';
 import { StorageDepotFactory } from './StorageDepot';
 import { WorkshopFactory } from './Workshop';
 import { MineShaftFactory } from './MineShaft';
+import { SurveyDrillFactory } from './SurveyDrill';
 
 export const Era1Buildings = {
     [BuildingType.ROAD]: RoadFactory,
@@ -29,5 +30,6 @@ export const Era1Buildings = {
     [BuildingType.STONE_QUARRY]: StoneQuarryFactory,
     [BuildingType.STORAGE_DEPOT]: StorageDepotFactory,
     [BuildingType.WORKSHOP]: WorkshopFactory,
-    [BuildingType.MINE_SHAFT]: MineShaftFactory
+    [BuildingType.MINE_SHAFT]: MineShaftFactory,
+    [BuildingType.SURVEY_DRILL]: SurveyDrillFactory
 };

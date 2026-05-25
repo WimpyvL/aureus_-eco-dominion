@@ -213,7 +213,7 @@ const App: React.FC = () => {
                                 <div className="absolute inset-0">
                                     <WeatherOverlay weather={state.weather} />
                                     {state.activeView === 'DUNGEON' && (
-                                        <UndergroundHUD underground={(state as any).underground} />
+                                        <UndergroundHUD underground={state.underground} />
                                     )}
                                     {/* Main Game Interface Overlay */}
                                     {!state.isFPS ? (
@@ -279,7 +279,7 @@ const App: React.FC = () => {
                                                 step={state.step}
                                                 debugMode={state.debugMode}
                                                 interactionMode={state.interactionMode}
-                                                dungeonUnlocked={state.dungeon.unlocked}
+                                                undergroundUnlocked={state.underground.unlocked || state.dungeon.unlocked}
                                                 activeView={state.activeView}
                                                 selectedAgentId={state.selectedAgentId}
                                                 onToggleView={handleToggleView}

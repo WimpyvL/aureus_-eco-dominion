@@ -12,6 +12,7 @@ import { updateWaterConnectivity } from '../../utils/GameUtils';
 import { ChunkStore } from '../../space/ChunkStore';
 import { worldToChunk, worldToLocal, CHUNK_SIZE } from '../../utils/coords';
 import { DungeonEngine } from '../../dungeon/DungeonEngine';
+import { applyDeepLedgerSurvey } from '../../underground/UndergroundGenerator';
 
 export class ConstructionSystem extends BaseSimSystem {
     readonly id = 'construction';
@@ -155,17 +156,29 @@ export class ConstructionSystem extends BaseSimSystem {
         }
         updateWaterConnectivity(state.chunks);
 
-        // UNLOCK DUNGEON: If this is a MINE_SHAFT, initialize the dungeon
-        if (headTile.buildingType === BuildingType.MINE_SHAFT && !state.dungeon.unlocked) {
-            state.dungeon.unlocked = true;
-
-            // Initialize dungeon voxel data if not already done
-            if (!state.dungeon.voxelData) {
-                // DungeonEngine constructor automatically initializes voxel data
+        if (headTile.buildingType === BuildingType.SURVEY_DRILL) {
+            const survey = applyDeepLedgerSurvey(state);
+            if (!state.dungeon.voxelData && survey.unlocked) {
                 new DungeonEngine(state.dungeon);
             }
 
-            state.dungeon.logs.push('Mine Shaft complete! The underground is now accessible.');
+            state.newsFeed.unshift({
+                id: `survey_drill_${Date.now()}`,
+                headline: 'Survey Drill complete! Below Sector authorization is now active.',
+                type: 'POSITIVE',
+                timestamp: state.tickCount
+            });
+            state.dungeon.logs.push(`Survey Drill online. ${survey.surveyedTileCount} tiles surveyed in Sector B${state.underground.depthLevel}.`);
+        } else if (headTile.buildingType === BuildingType.MINE_SHAFT) {
+            if (!state.dungeon.voxelData && (state.underground.unlocked || state.dungeon.unlocked)) {
+                new DungeonEngine(state.dungeon);
+            }
+
+            state.dungeon.logs.push(
+                state.underground.unlocked || state.dungeon.unlocked
+                    ? 'Mine Shaft complete! Surface access secured for Below Sector crews.'
+                    : 'Mine Shaft complete. Build a Survey Drill to authorize Below Sector operations.'
+            );
         }
     }
 

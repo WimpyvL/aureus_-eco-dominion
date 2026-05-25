@@ -6,6 +6,7 @@ import { GameResources, MarketState, Contract } from './economy';
 import { DungeonState } from '../dungeon/DungeonTypes';
 import { BureaucracyState } from './bureaucracy';
 import { DayNightCycleState } from '../sim/dayNightCycle';
+import { UndergroundState } from './underground';
 
 export enum Era {
     SETTLEMENT = 'SETTLEMENT',
@@ -174,6 +175,7 @@ export interface GameState {
     activeView: 'SURFACE' | 'DUNGEON';
     isFPS: boolean;
     dungeon: DungeonState;
+    underground: UndergroundState;
 
     // Day/Night Cycle (1 game day = 24000 ticks = ~80 real minutes at 200ms/tick)
     dayNightCycle: DayNightCycleState;
