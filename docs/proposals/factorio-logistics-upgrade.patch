@@ -1,0 +1,729 @@
+diff --git a/engine/types/game.ts b/engine/types/game.ts
+--- a/engine/types/game.ts
++++ b/engine/types/game.ts
+@@
+ export interface GameCommand {
+     id: string; // Unique ID to prevent double execution
+@@
+     issuedAtTick?: number;
+ }
++
++export type FactoryResourceType = 'ORE' | 'CONCENTRATE' | 'MINERALS' | 'WOOD' | 'STONE' | 'GEMS';
++
++export interface FactoryNodeState {
++    key: string;
++    x: number;
++    z: number;
++    buildingType: BuildingType;
++    mode: 'SOURCE' | 'PROCESSOR' | 'TRANSPORT' | 'SINK';
++    buffer: Partial<Record<FactoryResourceType, number>>;
++    inputBuffer: Partial<Record<FactoryResourceType, number>>;
++    stalledTicks: number;
++    lastActiveTick: number;
++}
++
++export interface FactoryState {
++    nodes: Record<string, FactoryNodeState>;
++    throughput: number;
++    backlog: number;
++    stalledNodes: number;
++    lastNetworkTick: number;
++}
+@@
+     spawnX: number;  // World X offset for this game's starting point
+     spawnZ: number;  // World Z offset for this game's starting point
+     logistics: LogisticsState;
++    factory?: FactoryState;
+     activeGoal: Goal | null;
+
+diff --git a/engine/data/buildings.ts b/engine/data/buildings.ts
+--- a/engine/data/buildings.ts
++++ b/engine/data/buildings.ts
+@@
+     [BuildingType.MINING_HEADFRAME]: {
+         type: BuildingType.MINING_HEADFRAME,
+         name: 'Mining Headframe',
+         cost: 2500,
+-        desc: 'Massive industrial mining tower with ore extraction wheel. High throughput.',
++        desc: 'Primary raw ore source. Feed its output into conveyors and processors.',
+         ecoReq: 0,
+-        stats: '+60 Minerals/s',
++        stats: '+Raw Ore Output',
+@@
+     [BuildingType.WASH_PLANT]: {
+         type: BuildingType.WASH_PLANT,
+         name: 'Industrial Wash Plant',
+         cost: 1200,
+-        desc: 'Massive throughput for ore cleaning. Highly polluting.',
++        desc: 'Refines raw ore into concentrate. Needs conveyor-fed input.',
+         ecoReq: 0,
+-        stats: '+25 Minerals/s',
++        stats: 'Ore -> Concentrate',
+@@
+     [BuildingType.RECYCLING_PLANT]: {
+         type: BuildingType.RECYCLING_PLANT,
+         name: 'Recycling Complex',
+         cost: 3000,
+-        desc: 'Clean industrial processing with high efficiency.',
++        desc: 'Cleaner concentrate processor for ore-fed production chains.',
+         ecoReq: 30,
+-        stats: '+20 Min/s, Low Pol',
++        stats: 'Ore -> Concentrate',
+@@
+     [BuildingType.ORE_FOUNDRY]: {
+         type: BuildingType.ORE_FOUNDRY,
+         name: 'Ore Foundry',
+         cost: 25000,
+-        desc: 'High-temperature smelting facility. Converts raw ore to refined materials.',
++        desc: 'Consumes concentrate and stone to mint usable mineral stock.',
+         ecoReq: 10,
+-        stats: '+40 Min/s, +Gems',
++        stats: 'Concentrate + Stone -> Minerals',
+@@
+     [BuildingType.GEM_REFINERY]: {
+         type: BuildingType.GEM_REFINERY,
+         name: 'Gem Refinery',
+         cost: 15000,
+-        desc: 'Precision facility that extracts gems from raw ore.',
++        desc: 'Consumes concentrate to produce high-value gems.',
+         ecoReq: 20,
+-        stats: '+5 Gems/min',
++        stats: 'Concentrate -> Gems',
+@@
+     [BuildingType.SAWMILL]: {
+         type: BuildingType.SAWMILL,
+         name: 'Industrial Sawmill',
+         cost: 1500,
+-        desc: 'Efficiently processes timber from the surrounding area.',
++        desc: 'Cuts nearby timber into output that can be conveyor-routed to storage.',
+         ecoReq: 0,
+-        stats: '+25 Wood/s',
++        stats: 'Wood Output',
+@@
+     [BuildingType.STONE_QUARRY]: {
+         type: BuildingType.STONE_QUARRY,
+         name: 'Stone Quarry',
+         cost: 1200,
+-        desc: 'Excavates stone and processes rock into usable materials.',
++        desc: 'Excavates stone and outputs it into your logistics network.',
+         ecoReq: 0,
+-        stats: '+25 Stone/s',
++        stats: 'Stone Output',
+@@
+     [BuildingType.STORAGE_DEPOT]: {
+         type: BuildingType.STORAGE_DEPOT,
+         name: 'Storage Depot',
+         cost: 600,
+-        desc: 'Expands mineral storage capacity by 500 units.',
++        desc: 'Network sink that unloads conveyors into your global stockpile.',
+         ecoReq: 0,
+-        stats: '+500 Storage',
++        stats: 'Unload +500 Storage',
+@@
+     [BuildingType.STOCKPILE]: {
+         type: BuildingType.STOCKPILE,
+         name: 'Resource Stockpile',
+         cost: 2000,
+-        desc: 'Massive open-air storage. Increases capacity significantly.',
++        desc: 'Large network sink for bulk logistics throughput.',
+         ecoReq: 0,
+-        stats: '+2000 Storage',
++        stats: 'Bulk Unload +2000 Storage',
+@@
+     [BuildingType.RAIL_LINE]: {
+         type: BuildingType.RAIL_LINE,
+-        name: 'Rail Line',
+-        cost: 50,
+-        desc: 'Industrial track for fast resource transport.',
++        name: 'Freight Conveyor',
++        cost: 40,
++        desc: 'Ground belt for moving ore, concentrate, wood, stone, minerals, and gems between buildings.',
+         ecoReq: 0,
+-        stats: '3x Transport Speed',
+-        buildTime: 5,
+-        maintenance: 0.2,
++        stats: 'Moves factory cargo tile-to-tile',
++        buildTime: 2,
++        maintenance: 0.1,
+         pollution: 0.1,
+         era: Era.INDUSTRY,
++        costs: { agt: 40, stone: 2, minerals: 1 }
+     },
+@@
+     [BuildingType.DISTRIBUTION_HUB]: {
+         type: BuildingType.DISTRIBUTION_HUB,
+         name: 'Distribution Hub',
+         cost: 8000,
+-        desc: 'Logistics center that auto-delivers resources to nearby buildings.',
++        desc: 'High-capacity belt junction that keeps complex factory lines flowing.',
+         ecoReq: 10,
+-        stats: 'Auto-Distribute',
++        stats: 'Smart Routing Junction',
+         width: 2,
+         depth: 2,
+
+diff --git a/engine/sim/systems/LogisticsSystem.ts b/engine/sim/systems/LogisticsSystem.ts
+--- a/engine/sim/systems/LogisticsSystem.ts
++++ b/engine/sim/systems/LogisticsSystem.ts
+@@
+-import { GameState, Chunk } from '../../../types';
++import { BuildingType, FactoryNodeState, FactoryResourceType, FactoryState, GameState } from '../../../types';
+ import { updateWaterConnectivity } from '../../utils/GameUtils';
+ import { ChunkStore } from '../../space/ChunkStore';
+ 
+ export class LogisticsSystem extends BaseSimSystem {
+     readonly id = 'logistics';
+     readonly priority = 20;
+ 
+     private lastExplorationUpdate = 0;
+     private lastWaterUpdate = 0;
++    private lastFactoryUpdate = 0;
++    private readonly FACTORY_INTERVAL = 0.25;
++    private readonly MAX_ROUTE_DEPTH = 14;
+ 
+     tick(ctx: FixedContext, state: GameState): void {
+         const chunks = state.chunks;
+         if (!chunks) return;
+@@
+         if (ctx.time - this.lastWaterUpdate > 1.0) {
+             this.lastWaterUpdate = ctx.time;
+             updateWaterConnectivity(state.chunks);
+         }
++
++        if (ctx.time - this.lastFactoryUpdate > this.FACTORY_INTERVAL) {
++            this.lastFactoryUpdate = ctx.time;
++            const factory = this.getFactoryState(state);
++            this.syncFactoryNodes(state, factory);
++            this.routeFactoryResources(state, factory);
++        }
+     }
++
++    private getFactoryState(state: GameState): FactoryState {
++        if (!state.factory) {
++            state.factory = {
++                nodes: {},
++                throughput: 0,
++                backlog: 0,
++                stalledNodes: 0,
++                lastNetworkTick: 0
++            };
++        }
++
++        return state.factory;
++    }
++
++    private isFactoryBuilding(type: BuildingType): boolean {
++        return [
++            BuildingType.MINING_HEADFRAME,
++            BuildingType.WASH_PLANT,
++            BuildingType.RECYCLING_PLANT,
++            BuildingType.ORE_FOUNDRY,
++            BuildingType.GEM_REFINERY,
++            BuildingType.SAWMILL,
++            BuildingType.STONE_QUARRY,
++            BuildingType.RAIL_LINE,
++            BuildingType.STORAGE_DEPOT,
++            BuildingType.STOCKPILE,
++            BuildingType.TRAIN_STATION,
++            BuildingType.DISTRIBUTION_HUB
++        ].includes(type);
++    }
++
++    private getNodeMode(type: BuildingType): FactoryNodeState['mode'] | null {
++        if (type === BuildingType.RAIL_LINE || type === BuildingType.DISTRIBUTION_HUB) return 'TRANSPORT';
++        if ([BuildingType.STORAGE_DEPOT, BuildingType.STOCKPILE, BuildingType.TRAIN_STATION].includes(type)) return 'SINK';
++        if ([BuildingType.WASH_PLANT, BuildingType.RECYCLING_PLANT, BuildingType.ORE_FOUNDRY, BuildingType.GEM_REFINERY].includes(type)) return 'PROCESSOR';
++        if ([BuildingType.MINING_HEADFRAME, BuildingType.SAWMILL, BuildingType.STONE_QUARRY].includes(type)) return 'SOURCE';
++        return null;
++    }
++
++    private syncFactoryNodes(state: GameState, factory: FactoryState): void {
++        const seen = new Set<string>();
++
++        for (const chunk of Object.values(state.chunks)) {
++            for (const tile of chunk.tiles) {
++                if (tile.isUnderConstruction) continue;
++                if (tile.structureHeadX !== undefined && (tile.x !== tile.structureHeadX || tile.z !== tile.structureHeadZ)) continue;
++                if (!this.isFactoryBuilding(tile.buildingType)) continue;
++
++                const mode = this.getNodeMode(tile.buildingType);
++                if (!mode) continue;
++
++                const key = `${tile.x},${tile.z}`;
++                seen.add(key);
++
++                const existing = factory.nodes[key];
++                if (!existing || existing.buildingType !== tile.buildingType || existing.mode !== mode) {
++                    factory.nodes[key] = {
++                        key,
++                        x: tile.x,
++                        z: tile.z,
++                        buildingType: tile.buildingType,
++                        mode,
++                        buffer: existing?.buffer || {},
++                        inputBuffer: existing?.inputBuffer || {},
++                        stalledTicks: existing?.stalledTicks || 0,
++                        lastActiveTick: existing?.lastActiveTick || state.tickCount
++                    };
++                }
++            }
++        }
++
++        Object.keys(factory.nodes).forEach((key) => {
++            if (!seen.has(key)) {
++                delete factory.nodes[key];
++            }
++        });
++    }
++
++    private routeFactoryResources(state: GameState, factory: FactoryState): void {
++        const pendingInbound: Array<{ to: FactoryNodeState; resource: FactoryResourceType; amount: number; target: 'buffer' | 'input' }> = [];
++        let throughput = 0;
++        let stalledNodes = 0;
++
++        for (const node of Object.values(factory.nodes)) {
++            for (const [resource, rawAmount] of Object.entries(node.buffer) as Array<[FactoryResourceType, number]>) {
++                if (!rawAmount || rawAmount < 0.25) continue;
++
++                const route = this.findRoute(factory, node, resource);
++                if (!route) {
++                    stalledNodes++;
++                    node.stalledTicks += 1;
++                    continue;
++                }
++
++                const amount = Math.min(rawAmount, this.getTransferBudget(node), this.getCapacityLeft(route.node, route.target));
++                if (amount <= 0) continue;
++
++                node.buffer[resource] = rawAmount - amount;
++                if (node.buffer[resource]! <= 0.001) {
++                    delete node.buffer[resource];
++                }
++
++                if (route.node.mode === 'SINK') {
++                    this.depositResource(state, resource, amount);
++                } else {
++                    pendingInbound.push({ to: route.node, resource, amount, target: route.target });
++                }
++
++                node.lastActiveTick = state.tickCount;
++                route.node.lastActiveTick = state.tickCount;
++                throughput += amount;
++            }
++        }
++
++        for (const inbound of pendingInbound) {
++            const bucket = inbound.target === 'input' ? inbound.to.inputBuffer : inbound.to.buffer;
++            bucket[inbound.resource] = (bucket[inbound.resource] || 0) + inbound.amount;
++        }
++
++        factory.throughput = throughput / this.FACTORY_INTERVAL;
++        factory.stalledNodes = stalledNodes;
++        factory.backlog = Object.values(factory.nodes).reduce((sum, node) => {
++            const out = Object.values(node.buffer).reduce((acc, value) => acc + (value || 0), 0);
++            const input = Object.values(node.inputBuffer).reduce((acc, value) => acc + (value || 0), 0);
++            return sum + out + input;
++        }, 0);
++        factory.lastNetworkTick = state.tickCount;
++    }
++
++    private findRoute(factory: FactoryState, origin: FactoryNodeState, resource: FactoryResourceType): { node: FactoryNodeState; target: 'buffer' | 'input' } | null {
++        const visited = new Set<string>([origin.key]);
++        const queue: Array<{ key: string; depth: number }> = [{ key: origin.key, depth: 0 }];
++
++        while (queue.length > 0) {
++            const current = queue.shift()!;
++            const node = factory.nodes[current.key];
++            if (!node) continue;
++
++            for (const neighbor of this.getNeighbors(factory, node)) {
++                if (visited.has(neighbor.key)) continue;
++                visited.add(neighbor.key);
++
++                const acceptTarget = this.getAcceptTarget(neighbor, resource);
++                if (acceptTarget) {
++                    return { node: neighbor, target: acceptTarget };
++                }
++
++                if (neighbor.mode === 'TRANSPORT' && current.depth < this.MAX_ROUTE_DEPTH) {
++                    queue.push({ key: neighbor.key, depth: current.depth + 1 });
++                }
++            }
++        }
++
++        return null;
++    }
++
++    private getNeighbors(factory: FactoryState, node: FactoryNodeState): FactoryNodeState[] {
++        const keys = [
++            `${node.x + 1},${node.z}`,
++            `${node.x - 1},${node.z}`,
++            `${node.x},${node.z + 1}`,
++            `${node.x},${node.z - 1}`
++        ];
++
++        return keys.map((key) => factory.nodes[key]).filter(Boolean) as FactoryNodeState[];
++    }
++
++    private getAcceptTarget(node: FactoryNodeState, resource: FactoryResourceType): 'buffer' | 'input' | null {
++        if (node.mode === 'TRANSPORT') {
++            return this.getCapacityLeft(node, 'buffer') > 0 ? 'buffer' : null;
++        }
++
++        if (node.mode === 'SINK') {
++            return ['MINERALS', 'WOOD', 'STONE', 'GEMS'].includes(resource) ? 'buffer' : null;
++        }
++
++        if (node.mode !== 'PROCESSOR') return null;
++
++        if ([BuildingType.WASH_PLANT, BuildingType.RECYCLING_PLANT].includes(node.buildingType)) {
++            return resource === 'ORE' && this.getCapacityLeft(node, 'input') > 0 ? 'input' : null;
++        }
++
++        if (node.buildingType === BuildingType.ORE_FOUNDRY) {
++            return (resource === 'CONCENTRATE' || resource === 'STONE') && this.getCapacityLeft(node, 'input') > 0 ? 'input' : null;
++        }
++
++        if (node.buildingType === BuildingType.GEM_REFINERY) {
++            return resource === 'CONCENTRATE' && this.getCapacityLeft(node, 'input') > 0 ? 'input' : null;
++        }
++
++        return null;
++    }
++
++    private getTransferBudget(node: FactoryNodeState): number {
++        if (node.buildingType === BuildingType.DISTRIBUTION_HUB) return 6;
++        if (node.buildingType === BuildingType.RAIL_LINE) return 2;
++        return 3;
++    }
++
++    private getCapacityLeft(node: FactoryNodeState, target: 'buffer' | 'input'): number {
++        const cap = node.buildingType === BuildingType.DISTRIBUTION_HUB ? 24 : node.mode === 'TRANSPORT' ? 10 : 20;
++        const active = target === 'input' ? node.inputBuffer : node.buffer;
++        const used = Object.values(active).reduce((sum, value) => sum + (value || 0), 0);
++        return Math.max(0, cap - used);
++    }
++
++    private depositResource(state: GameState, resource: FactoryResourceType, amount: number): void {
++        if (resource === 'MINERALS') state.resources.minerals = Math.min(state.resources.maxCapacity, state.resources.minerals + amount);
++        if (resource === 'WOOD') state.resources.wood = Math.min(state.resources.maxCapacity, state.resources.wood + amount);
++        if (resource === 'STONE') state.resources.stone = Math.min(state.resources.maxCapacity, state.resources.stone + amount);
++        if (resource === 'GEMS') state.resources.gems += amount;
++    }
+ 
+     private updateExploration(state: GameState) {
+         const radius = 3;
+
+diff --git a/engine/sim/systems/ProductionSystem.ts b/engine/sim/systems/ProductionSystem.ts
+--- a/engine/sim/systems/ProductionSystem.ts
++++ b/engine/sim/systems/ProductionSystem.ts
+@@
+-import { GameState, BuildingType, SfxType } from '../../../types';
++import { BuildingType, FactoryNodeState, FactoryResourceType, FactoryState, GameState, SfxType } from '../../../types';
+@@
+ export class ProductionSystem extends BaseSimSystem {
+@@
+     private lastUpdate = 0;
+     private readonly INTERVAL = 1.0; // Seconds
++    private readonly FACTORY_OUTPUT_CAP = 20;
+@@
+         let mineralProd = 0;
+-        let woodProd = 0;
+-        let stoneProd = 0;
+-        let gemProd = 0;
++        let woodProd = 0;
++        let stoneProd = 0;
++        let gemProd = 0;
+@@
+         let totalIncome = 0;
++        const factory = this.getFactoryState(state);
+@@
+-                if (currentDef.productionType === 'MINERALS') {
+-                    mineralProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05;
+-                } else if (currentDef.productionType === 'WOOD') {
+-                    woodProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05 * productionMult;
+-                } else if (currentDef.productionType === 'STONE') {
+-                    stoneProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05 * productionMult;
+-                } else if (currentDef.productionType === 'GEMS') {
+-                    gemProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05;
++                if (tile.buildingType === BuildingType.MINING_HEADFRAME) {
++                    const node = this.getFactoryNode(factory, tile.x, tile.z, tile.buildingType, 'SOURCE', state.tickCount);
++                    this.pushOutput(node, 'ORE', (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05);
++                } else if (tile.buildingType === BuildingType.SAWMILL) {
++                    const node = this.getFactoryNode(factory, tile.x, tile.z, tile.buildingType, 'SOURCE', state.tickCount);
++                    if (productionMult > 0) {
++                        this.pushOutput(node, 'WOOD', (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05);
++                    }
++                } else if (tile.buildingType === BuildingType.STONE_QUARRY) {
++                    const node = this.getFactoryNode(factory, tile.x, tile.z, tile.buildingType, 'SOURCE', state.tickCount);
++                    if (productionMult > 0) {
++                        this.pushOutput(node, 'STONE', (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.05);
++                    }
++                } else if (tile.buildingType === BuildingType.WASH_PLANT || tile.buildingType === BuildingType.RECYCLING_PLANT) {
++                    const node = this.getFactoryNode(factory, tile.x, tile.z, tile.buildingType, 'PROCESSOR', state.tickCount);
++                    const ore = this.pullInput(node, 'ORE', Math.max(0.5, (currentDef.production || 0) * 0.03 * utilityEfficiency));
++                    if (ore > 0) {
++                        this.pushOutput(node, 'CONCENTRATE', ore * 0.85);
++                    } else {
++                        node.stalledTicks += 1;
++                    }
++                } else if (tile.buildingType === BuildingType.ORE_FOUNDRY) {
++                    const node = this.getFactoryNode(factory, tile.x, tile.z, tile.buildingType, 'PROCESSOR', state.tickCount);
++                    const concentrateAvailable = node.inputBuffer.CONCENTRATE || 0;
++                    const stoneAvailable = node.inputBuffer.STONE || 0;
++                    const batch = Math.min(concentrateAvailable, stoneAvailable * 3, Math.max(0.5, (currentDef.production || 0) * 0.025 * utilityEfficiency));
++                    if (batch > 0) {
++                        this.pullInput(node, 'CONCENTRATE', batch);
++                        this.pullInput(node, 'STONE', batch / 3);
++                        this.pushOutput(node, 'MINERALS', batch * 1.1);
++                    } else {
++                        node.stalledTicks += 1;
++                    }
++                } else if (tile.buildingType === BuildingType.GEM_REFINERY) {
++                    const node = this.getFactoryNode(factory, tile.x, tile.z, tile.buildingType, 'PROCESSOR', state.tickCount);
++                    const concentrate = this.pullInput(node, 'CONCENTRATE', Math.max(0.2, (currentDef.production || 0) * 0.02 * utilityEfficiency));
++                    if (concentrate > 0) {
++                        this.pushOutput(node, 'GEMS', concentrate * 0.25);
++                    } else {
++                        node.stalledTicks += 1;
++                    }
+                 } else if (currentDef.productionType === 'TRUST') {
+                     trustProd += (currentDef.production || 0) * utilityEfficiency * 0.05;
+                 } else if (currentDef.productionType === 'ECO') {
+                     ecoChange -= (currentDef.production || 0) * utilityEfficiency * 0.05;
+                 } else if (currentDef.productionType === 'AGT') {
+                     totalIncome += (currentDef.production || 0) * ecoMult * trustMult * utilityEfficiency;
++                } else if (currentDef.productionType === 'MINERALS') {
++                    mineralProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.02;
++                } else if (currentDef.productionType === 'WOOD') {
++                    woodProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.02 * productionMult;
++                } else if (currentDef.productionType === 'STONE') {
++                    stoneProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.02 * productionMult;
++                } else if (currentDef.productionType === 'GEMS') {
++                    gemProd += (currentDef.production || 0) * modifiers.production * utilityEfficiency * 0.01;
+                 }
+             }
+         }
+@@
+         if (state.logistics.autoSell && state.resources.minerals >= state.logistics.sellThreshold) {
+             this.executeAutoSell(ctx, state, modifiers);
+         }
+     }
++
++    private getFactoryState(state: GameState): FactoryState {
++        if (!state.factory) {
++            state.factory = {
++                nodes: {},
++                throughput: 0,
++                backlog: 0,
++                stalledNodes: 0,
++                lastNetworkTick: 0
++            };
++        }
++
++        return state.factory;
++    }
++
++    private getFactoryNode(
++        factory: FactoryState,
++        x: number,
++        z: number,
++        buildingType: BuildingType,
++        mode: FactoryNodeState['mode'],
++        tickCount: number
++    ): FactoryNodeState {
++        const key = `${x},${z}`;
++        const existing = factory.nodes[key];
++        if (existing) {
++            existing.buildingType = buildingType;
++            existing.mode = mode;
++            return existing;
++        }
++
++        factory.nodes[key] = {
++            key,
++            x,
++            z,
++            buildingType,
++            mode,
++            buffer: {},
++            inputBuffer: {},
++            stalledTicks: 0,
++            lastActiveTick: tickCount
++        };
++
++        return factory.nodes[key];
++    }
++
++    private pushOutput(node: FactoryNodeState, resource: FactoryResourceType, amount: number): void {
++        if (amount <= 0) return;
++        const current = node.buffer[resource] || 0;
++        node.buffer[resource] = Math.min(this.FACTORY_OUTPUT_CAP, current + amount);
++    }
++
++    private pullInput(node: FactoryNodeState, resource: FactoryResourceType, amount: number): number {
++        const current = node.inputBuffer[resource] || 0;
++        const taken = Math.min(current, amount);
++        node.inputBuffer[resource] = current - taken;
++        if (node.inputBuffer[resource]! <= 0.001) {
++            delete node.inputBuffer[resource];
++        }
++        return taken;
++    }
+
+diff --git a/game/AureusWorld.ts b/game/AureusWorld.ts
+--- a/game/AureusWorld.ts
++++ b/game/AureusWorld.ts
+@@
+ export class AureusWorld extends BaseWorld {
+     readonly id = 'aureus-main';
++    private lastUiNotifyTime = 0;
++    private readonly UI_NOTIFY_INTERVAL = 1 / 20;
+@@
+         this.streamMgr = new StreamingManager({
+-            viewRadiusH: 12, // Increased from 6
++            viewRadiusH: 8,
+             viewRadiusV: 2,
+-            maxLoadsPerFrame: 8, // Increased from 4
++            maxLoadsPerFrame: 6,
+             maxUnloadsPerFrame: 16,
+         });
+@@
+         const cameraChunk = {
+-            x: Math.floor(camera.position.x / 16),
++            x: Math.floor(camera.position.x / CHUNK_SIZE),
+             y: 0,
+-            z: Math.floor(camera.position.z / 16),
++            z: Math.floor(camera.position.z / CHUNK_SIZE),
+         };
+@@
+-        // Notify React of any state changes
+-        this.stateManager.notifyIfDirty();
++        if (ctx.time - this.lastUiNotifyTime >= this.UI_NOTIFY_INTERVAL) {
++            this.lastUiNotifyTime = ctx.time;
++            this.stateManager.notifyIfDirty();
++        }
+     }
+
+diff --git a/game/useAureusEngine.ts b/game/useAureusEngine.ts
+--- a/game/useAureusEngine.ts
++++ b/game/useAureusEngine.ts
+@@
+-import { useRef, useEffect, useState, useCallback } from 'react';
++import { startTransition, useRef, useEffect, useState, useCallback } from 'react';
+@@
+-            const stageDelay = (ms: number = 500) => new Promise(r => setTimeout(r, ms));
++            const stageDelay = (ms: number = 16) => new Promise(r => setTimeout(r, ms));
+@@
+-                await stageDelay();
++                await stageDelay(0);
+@@
+-                await stageDelay();
++                await stageDelay(0);
+@@
+-                await stageDelay();
++                await stageDelay(0);
+@@
+-                const unsubscribe = worldInstance.subscribeToState((newState) => {
+-                    setState(newState);
+-                });
++                const unsubscribe = worldInstance.subscribeToState((newState) => {
++                    startTransition(() => setState(newState));
++                });
+@@
+                 const runtimeInstance = new Runtime(worldHost, {
+-                    fixedTickRate: 30, // Reduced from 60 to prevent CPU overload
+-                    maxSimStepsPerFrame: 3, // Reduced from 5
+-                    profilerEnabled: true,
++                    fixedTickRate: 60,
++                    maxSimStepsPerFrame: 2,
++                    profilerEnabled: false,
+                 });
+@@
+-                await stageDelay();
++                await stageDelay(0);
+@@
+-                await stageDelay();
++                await stageDelay(0);
+@@
+-                await stageDelay();
++                await stageDelay(0);
+@@
+-                await stageDelay();
++                await stageDelay(0);
+@@
+-                await stageDelay();
+-                setLoading({ stage: 'Game Engine Running!', percent: 100 });
+-
+-                // Give user a moment to see 100% before transitioning
+-                await new Promise(r => setTimeout(r, 1500));
++                setLoading({ stage: 'Game Engine Running!', percent: 100 });
+ 
+                 setReady(true);
+ 
+diff --git a/components/SupplySidebar.tsx b/components/SupplySidebar.tsx
+--- a/components/SupplySidebar.tsx
++++ b/components/SupplySidebar.tsx
+@@
+-        case BuildingType.RAIL_LINE: return <GitCommit size={18} className=\"rotate-45\" />;
++        case BuildingType.RAIL_LINE: return <Truck size={18} />;
+@@
+-    [BuildingType.RAIL_LINE]: 'BASICS',
++    [BuildingType.RAIL_LINE]: 'PRODUCTION',
+@@
+-            BuildingType.RECYCLING_PLANT, BuildingType.ORE_FOUNDRY, BuildingType.GEM_REFINERY,
+-            BuildingType.RAIL_LINE, BuildingType.TRAIN_STATION, BuildingType.DISTRIBUTION_HUB, BuildingType.POND,
++            BuildingType.RECYCLING_PLANT, BuildingType.RAIL_LINE, BuildingType.ORE_FOUNDRY, BuildingType.GEM_REFINERY,
++            BuildingType.TRAIN_STATION, BuildingType.DISTRIBUTION_HUB, BuildingType.POND,
+
+diff --git a/components/HUD.tsx b/components/HUD.tsx
+--- a/components/HUD.tsx
++++ b/components/HUD.tsx
+@@
+-import { Coins, Pickaxe, Leaf, Heart, Gem, Users, Target, Trees, Database } from 'lucide-react';
++import { Coins, Pickaxe, Leaf, Heart, Gem, Users, Target, Trees, Database, Truck } from 'lucide-react';
+@@
+       <ResourceBlock
+         icon={Gem}
+         val={resources.gems}
+         label=\"Thundergems\"
+         borderClass=\"border-purple-600/80\"
+         iconBgClass=\"bg-purple-500\"
+         textColor=\"text-purple-300\"\n+        isExpanded={activeBlock === 'gems'}\n+        onToggle={(open: boolean) => toggleBlock('gems', open)}\n+      />\n+      <ResourceBlock\n+        icon={Truck}\n+        val={state.factory?.throughput || 0}\n+        label=\"Flow\"\n+        borderClass=\"border-cyan-600/80\"\n+        iconBgClass=\"bg-cyan-500\"\n+        textColor=\"text-cyan-200\"\n         isExpanded={activeBlock === 'gems'}\n-        onToggle={(open: boolean) => toggleBlock('gems', open)}\n+        onToggle={(open: boolean) => toggleBlock('flow', open)}\n       />\n     </div>\n   );\n });\n*** Add File: /workspace/output/aureus-factorio-upgrade-notes.md
+# Aureus Factorio-Style Upgrade Notes
+
+This package is a ready-to-apply proposal for the repo at `Looping69/aureus_-eco-dominion`.
+
+## What It Changes
+
+- Turns the current mostly-global resource economy into a local transport chain.
+- Reuses `RAIL_LINE` as a conveyor-style freight belt to avoid a wider rendering break.
+- Adds processor buffers so production buildings can stall, feed each other, and create downstream outputs.
+- Makes `Storage Depot`, `Stockpile`, and `Train Station` act like sinks that unload belts into the global inventory.
+- Improves startup and simulation flow by:
+  - removing artificial loading delays
+  - restoring a 60 Hz sim target
+  - lowering render-to-React notification pressure
+  - reducing initial streaming pressure
+
+## Intended Loop
+
+1. `Mining Headframe` produces `ORE`.
+2. `Freight Conveyor` moves that `ORE`.
+3. `Wash Plant` or `Recycling Complex` turns `ORE` into `CONCENTRATE`.
+4. `Ore Foundry` turns `CONCENTRATE + STONE` into `MINERALS`.
+5. `Gem Refinery` turns `CONCENTRATE` into `GEMS`.
+6. `Storage Depot`, `Stockpile`, or `Train Station` unload final goods into the colony stockpile.
+
+## Caveats
+
+- I could read the repository, but the GitHub write action was unavailable in-session, so I could not push these changes directly.
+- I was not able to run the project locally in this environment because the repo itself could not be cloned into the container.
+- The patch is designed to be a strong implementation starting point, but it still deserves a real build-and-playtest pass once applied in the repo.
+
+## First Verification Pass After Applying
+
+1. Build a `Mining Headframe`, `Freight Conveyor`, `Wash Plant`, and `Storage Depot`.
+2. Confirm that ore accumulates on the network and minerals only rise once they hit a sink.
+3. Check that removing a conveyor causes stall buildup rather than silent global production.
+4. Watch the HUD flow metric and confirm the game still feels smooth during mid-sized factory layouts.
