@@ -139,6 +139,28 @@ export interface GameCommand {
     issuedAtTick?: number;
 }
 
+export type FactoryResourceType = 'ORE' | 'CONCENTRATE' | 'MINERALS' | 'WOOD' | 'STONE' | 'GEMS';
+
+export interface FactoryNodeState {
+    key: string;
+    x: number;
+    z: number;
+    buildingType: BuildingType;
+    mode: 'SOURCE' | 'PROCESSOR' | 'TRANSPORT' | 'SINK';
+    buffer: Partial<Record<FactoryResourceType, number>>;
+    inputBuffer: Partial<Record<FactoryResourceType, number>>;
+    stalledTicks: number;
+    lastActiveTick: number;
+}
+
+export interface FactoryState {
+    nodes: Record<string, FactoryNodeState>;
+    throughput: number;
+    backlog: number;
+    stalledNodes: number;
+    lastNetworkTick: number;
+}
+
 export interface GameState {
     resources: GameResources;
     chunks: Record<string, Chunk>; // Surface chunks
@@ -157,6 +179,7 @@ export interface GameState {
     spawnX: number;  // World X offset for this game's starting point
     spawnZ: number;  // World Z offset for this game's starting point
     logistics: LogisticsState;
+    factory?: FactoryState;
     activeGoal: Goal | null;
     newsFeed: NewsItem[];
     activeEvents: GlobalEvent[];

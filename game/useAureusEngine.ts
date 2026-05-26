@@ -8,7 +8,7 @@
  * - Provides action methods for UI interaction
  */
 
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { startTransition, useRef, useEffect, useState, useCallback } from 'react';
 
 import { WorldHost, Runtime } from '../engine';
 import { RuntimeQualityGovernor, ThreeRenderAdapter, getRecommendedRenderQuality } from '../engine/render';
@@ -81,34 +81,25 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
         paused = false,
     } = options;
 
-    // Engine instances
     const [world, setWorld] = useState<AureusWorld | null>(null);
     const [runtime, setRuntime] = useState<Runtime | null>(null);
     const [debugHud, setDebugHud] = useState<DebugHud | null>(null);
     const [ready, setReady] = useState(false);
-
-    // Loading progress
     const [loading, setLoading] = useState<LoadingProgress>({ stage: 'Waiting for DOM...', percent: 0 });
-
-    // State subscription - React re-renders when engine state changes
     const [state, setState] = useState<GameState | null>(null);
     const stateRef = useRef<GameState | null>(null);
 
-    // Synchronous state access
     const getStateRef = useCallback(() => stateRef.current, []);
 
-    // Update ref when state changes
     useEffect(() => {
         stateRef.current = state;
     }, [state]);
 
-    // Callback refs - these capture the latest callbacks without triggering re-init
     const callbacksRef = useRef({ onTileClick, onTileRightClick, onAgentClick, onTileHover, onSfx });
     useEffect(() => {
         callbacksRef.current = { onTileClick, onTileRightClick, onAgentClick, onTileHover, onSfx };
     }, [onTileClick, onTileRightClick, onAgentClick, onTileHover, onSfx]);
 
-    // Initialize engine
     useEffect(() => {
         if (!container) {
             setLoading({ stage: 'Waiting for container...', percent: 5 });
@@ -119,11 +110,9 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
         let cancelled = false;
 
         const initializeEngine = async () => {
-            // Helper to add delays between stages for smoother loading experience
-            const stageDelay = (ms: number = 500) => new Promise(r => setTimeout(r, ms));
+            const stageDelay = (ms: number = 16) => new Promise((resolve) => setTimeout(resolve, ms));
 
             try {
-                // Stage 1: Create Render Adapter
                 setLoading({ stage: 'Initializing renderer...', percent: 10 });
                 console.log('[useAureusEngine] Creating render adapter...');
 
@@ -138,21 +127,19 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                 render.init(container);
 
                 if (cancelled) return;
-                await stageDelay();
+                await stageDelay(0);
 
                 setLoading({ stage: 'Creating game world...', percent: 20 });
                 console.log('[useAureusEngine] Creating AureusWorld...');
 
-                // Stage 2: Create World
                 const worldInstance = new AureusWorld(render);
 
                 if (cancelled) return;
-                await stageDelay();
+                await stageDelay(0);
 
                 setLoading({ stage: 'Configuring input system...', percent: 30 });
                 console.log('[useAureusEngine] Configuring world...');
 
-                // Use refs for callbacks to avoid stale closures
                 const config: AureusWorldConfig = {
                     container,
                     onTileClick: (x, z, isTouch) => callbacksRef.current.onTileClick?.(x, z, isTouch),
@@ -171,16 +158,14 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                 }
 
                 if (cancelled) return;
-                await stageDelay();
+                await stageDelay(0);
                 console.log('[useAureusEngine] Proceeding to state subscription...');
 
-                // Subscribe React to state changes
                 const unsubscribe = worldInstance.subscribeToState((newState) => {
-                    setState(newState);
+                    startTransition(() => setState(newState));
                 });
                 console.log('[useAureusEngine] ✓ State subscription set up');
 
-                // DON'T set state yet - wait until engine is fully ready
                 const initialState = worldInstance.getState();
                 console.log('[useAureusEngine] Initial state prepared:', initialState ? 'OK' : 'NULL');
 
@@ -191,17 +176,16 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
 
                 setWorld(worldInstance);
                 console.log('[useAureusEngine] ✓ World set');
-                await stageDelay();
+                await stageDelay(0);
 
                 setLoading({ stage: 'Creating runtime...', percent: 40 });
                 console.log('[useAureusEngine] Creating WorldHost and Runtime...');
 
-                // Stage 4: Create runtime
                 const worldHost = new WorldHost();
                 const runtimeInstance = new Runtime(worldHost, {
-                    fixedTickRate: 30, // Reduced from 60 to prevent CPU overload
-                    maxSimStepsPerFrame: 3, // Reduced from 5
-                    profilerEnabled: true,
+                    fixedTickRate: 60,
+                    maxSimStepsPerFrame: 2,
+                    profilerEnabled: false,
                 });
                 const qualityGovernor = new RuntimeQualityGovernor(runtimeInstance, render);
                 setRuntime(runtimeInstance);
@@ -210,28 +194,20 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                     unsubscribe();
                     return;
                 }
-                await stageDelay();
+                await stageDelay(0);
 
                 setLoading({ stage: 'Initializing debug tools...', percent: 50 });
                 console.log('[useAureusEngine] Creating DebugHud...');
-
-                // Stage 5: Create debug HUD (Disabled to remove black square in top right)
-                /*
-                const debugHudInstance = new DebugHud({ position: 'top-right' });
-                debugHudInstance.init(container, runtimeInstance, () => render.getStats());
-                setDebugHud(debugHudInstance);
-                */
 
                 if (cancelled) {
                     unsubscribe();
                     return;
                 }
-                await stageDelay();
+                await stageDelay(0);
 
                 setLoading({ stage: 'Loading world data...', percent: 60 });
                 console.log('[useAureusEngine] Setting world on host...');
 
-                // Stage 6: Load world (this calls world.init() internally)
                 try {
                     console.log('[useAureusEngine] Calling worldHost.setWorld...');
                     await worldHost.setWorld(worldInstance);
@@ -245,10 +221,9 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                     unsubscribe();
                     return;
                 }
-                await stageDelay();
+                await stageDelay(0);
 
                 setLoading({ stage: 'Starting simulation...', percent: 80 });
-                // Stage 7: Start runtime
                 runtimeInstance.start();
                 qualityGovernor.start();
 
@@ -259,18 +234,11 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                     return;
                 }
 
-                await stageDelay();
+                await stageDelay(0);
                 setLoading({ stage: 'Finalizing...', percent: 90 });
-
-                await stageDelay();
                 setLoading({ stage: 'Game Engine Running!', percent: 100 });
 
-                // Give user a moment to see 100% before transitioning
-                await new Promise(r => setTimeout(r, 1500));
-
                 setReady(true);
-
-                // NOW set state - this triggers the loading screen to hide
                 setState(worldInstance.getState());
 
                 if (import.meta.env.DEV) {
@@ -278,17 +246,6 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                     (window as any).__aureusGetState = () => worldInstance.getState();
                 }
 
-                /* 
-                // AUTO-LOAD: If a save exists, load it automatically
-                const savedGame = localStorage.getItem('aureus_save_v2');
-                if (savedGame) {
-                    console.log('[useAureusEngine] Found saved game, auto-loading...');
-                    worldInstance.loadGame(savedGame);
-                    setState(worldInstance.getState());
-                }
-                */
-
-                // Store cleanup function
                 (window as any).__aureusCleanup = () => {
                     if (import.meta.env.DEV) {
                         delete (window as any).__aureusWorld;
@@ -297,24 +254,21 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
                     unsubscribe();
                     qualityGovernor.stop();
                     runtimeInstance.stop();
-                    // debugHudInstance.dispose();
                     worldInstance.teardown();
                     render.dispose();
                 };
-
             } catch (error) {
                 console.error('[useAureusEngine] ❌ FATAL ERROR:', error);
                 setLoading({
                     stage: 'Error!',
                     percent: 0,
-                    error: error instanceof Error ? error.message : String(error)
+                    error: error instanceof Error ? error.message : String(error),
                 });
             }
         };
 
         initializeEngine();
 
-        // Cleanup
         return () => {
             console.log('[useAureusEngine] Cleaning up...');
             cancelled = true;
@@ -327,13 +281,10 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
 
             setWorld(null);
             setRuntime(null);
-            // setDebugHud(null);
             setState(null);
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [container]); // Only re-run when container changes, not callbacks
+    }, [container]);
 
-    // Sync pause state
     useEffect(() => {
         if (world) {
             world.setGamePaused(paused);
@@ -356,12 +307,12 @@ export function useAureusEngine(options: UseAureusEngineOptions): AureusEngineHa
 
             return {
                 ...worldStats,
-                cpuTime
+                cpuTime,
             };
         }, [world, runtime]),
         dispatch: useCallback((action: any) => {
             world?.dispatch(action);
-        }, [world])
+        }, [world]),
     };
 }
 
