@@ -19,7 +19,7 @@ export class ProductionSystem extends BaseSimSystem {
 
     private lastUpdate = 0;
     private readonly INTERVAL = 1.0; // Seconds
-    private readonly FACTORY_OUTPUT_CAP = 20;
+    private readonly DEFAULT_FACTORY_OUTPUT_CAP = 18;
 
     tick(ctx: FixedContext, state: GameState): void {
         if (ctx.time - this.lastUpdate < this.INTERVAL) return;
@@ -113,9 +113,10 @@ export class ProductionSystem extends BaseSimSystem {
                     }
                 } else if (tile.buildingType === BuildingType.WASH_PLANT || tile.buildingType === BuildingType.RECYCLING_PLANT) {
                     const node = this.getFactoryNode(factory, tile.x, tile.z, tile.buildingType, 'PROCESSOR', state.tickCount);
-                    const ore = this.pullInput(node, 'ORE', Math.max(0.5, (currentDef.production || 0) * 0.03 * utilityEfficiency));
+                    const ore = this.pullInput(node, 'ORE', Math.max(0.75, (currentDef.production || 0) * 0.035 * utilityEfficiency));
                     if (ore > 0) {
-                        this.pushOutput(node, 'CONCENTRATE', ore * 0.85);
+                        node.stalledTicks = Math.max(0, node.stalledTicks - 1);
+                        this.pushOutput(node, 'CONCENTRATE', ore * 0.9);
                     } else {
                         node.stalledTicks += 1;
                     }
@@ -123,19 +124,21 @@ export class ProductionSystem extends BaseSimSystem {
                     const node = this.getFactoryNode(factory, tile.x, tile.z, tile.buildingType, 'PROCESSOR', state.tickCount);
                     const concentrateAvailable = node.inputBuffer.CONCENTRATE || 0;
                     const stoneAvailable = node.inputBuffer.STONE || 0;
-                    const batch = Math.min(concentrateAvailable, stoneAvailable * 3, Math.max(0.5, (currentDef.production || 0) * 0.025 * utilityEfficiency));
+                    const batch = Math.min(concentrateAvailable, stoneAvailable * 4, Math.max(0.75, (currentDef.production || 0) * 0.03 * utilityEfficiency));
                     if (batch > 0) {
+                        node.stalledTicks = Math.max(0, node.stalledTicks - 1);
                         this.pullInput(node, 'CONCENTRATE', batch);
-                        this.pullInput(node, 'STONE', batch / 3);
-                        this.pushOutput(node, 'MINERALS', batch * 1.1);
+                        this.pullInput(node, 'STONE', batch / 4);
+                        this.pushOutput(node, 'MINERALS', batch * 1.15);
                     } else {
                         node.stalledTicks += 1;
                     }
                 } else if (tile.buildingType === BuildingType.GEM_REFINERY) {
                     const node = this.getFactoryNode(factory, tile.x, tile.z, tile.buildingType, 'PROCESSOR', state.tickCount);
-                    const concentrate = this.pullInput(node, 'CONCENTRATE', Math.max(0.2, (currentDef.production || 0) * 0.02 * utilityEfficiency));
+                    const concentrate = this.pullInput(node, 'CONCENTRATE', Math.max(0.25, (currentDef.production || 0) * 0.025 * utilityEfficiency));
                     if (concentrate > 0) {
-                        this.pushOutput(node, 'GEMS', concentrate * 0.25);
+                        node.stalledTicks = Math.max(0, node.stalledTicks - 1);
+                        this.pushOutput(node, 'GEMS', concentrate * 0.3);
                     } else {
                         node.stalledTicks += 1;
                     }
@@ -254,10 +257,17 @@ export class ProductionSystem extends BaseSimSystem {
         return factory.nodes[key];
     }
 
+    private getOutputCap(node: FactoryNodeState): number {
+        if (node.buildingType === BuildingType.MINING_HEADFRAME) return 36;
+        if (node.buildingType === BuildingType.SAWMILL || node.buildingType === BuildingType.STONE_QUARRY) return 28;
+        if (node.buildingType === BuildingType.ORE_FOUNDRY) return 28;
+        return this.DEFAULT_FACTORY_OUTPUT_CAP;
+    }
+
     private pushOutput(node: FactoryNodeState, resource: FactoryResourceType, amount: number): void {
         if (amount <= 0) return;
         const current = node.buffer[resource] || 0;
-        node.buffer[resource] = Math.min(this.FACTORY_OUTPUT_CAP, current + amount);
+        node.buffer[resource] = Math.min(this.getOutputCap(node), current + amount);
     }
 
     private pullInput(node: FactoryNodeState, resource: FactoryResourceType, amount: number): number {

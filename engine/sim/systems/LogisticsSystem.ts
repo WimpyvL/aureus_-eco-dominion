@@ -12,8 +12,8 @@ export class LogisticsSystem extends BaseSimSystem {
     private lastExplorationUpdate = 0;
     private lastWaterUpdate = 0;
     private lastFactoryUpdate = 0;
-    private readonly FACTORY_INTERVAL = 0.25;
-    private readonly MAX_ROUTE_DEPTH = 14;
+    private readonly FACTORY_INTERVAL = 0.2;
+    private readonly MAX_ROUTE_DEPTH = 18;
 
     tick(ctx: FixedContext, state: GameState): void {
         const chunks = state.chunks;
@@ -117,8 +117,8 @@ export class LogisticsSystem extends BaseSimSystem {
 
     private routeFactoryResources(state: GameState, factory: FactoryState): void {
         const pendingInbound: Array<{ to: FactoryNodeState; resource: FactoryResourceType; amount: number; target: 'buffer' | 'input' }> = [];
+        const stalledNodeKeys = new Set<string>();
         let throughput = 0;
-        let stalledNodes = 0;
 
         for (const node of Object.values(factory.nodes)) {
             for (const [resource, rawAmount] of Object.entries(node.buffer) as Array<[FactoryResourceType, number]>) {
@@ -126,13 +126,16 @@ export class LogisticsSystem extends BaseSimSystem {
 
                 const route = this.findRoute(factory, node, resource);
                 if (!route) {
-                    stalledNodes += 1;
+                    stalledNodeKeys.add(node.key);
                     node.stalledTicks += 1;
                     continue;
                 }
 
                 const amount = Math.min(rawAmount, this.getTransferBudget(node), this.getCapacityLeft(route.node, route.target));
-                if (amount <= 0) continue;
+                if (amount <= 0) {
+                    stalledNodeKeys.add(node.key);
+                    continue;
+                }
 
                 node.buffer[resource] = rawAmount - amount;
                 if (node.buffer[resource]! <= 0.001) {
@@ -145,6 +148,8 @@ export class LogisticsSystem extends BaseSimSystem {
                     pendingInbound.push({ to: route.node, resource, amount, target: route.target });
                 }
 
+                node.stalledTicks = Math.max(0, node.stalledTicks - 1);
+                route.node.stalledTicks = Math.max(0, route.node.stalledTicks - 1);
                 node.lastActiveTick = state.tickCount;
                 route.node.lastActiveTick = state.tickCount;
                 throughput += amount;
@@ -157,7 +162,7 @@ export class LogisticsSystem extends BaseSimSystem {
         }
 
         factory.throughput = throughput / this.FACTORY_INTERVAL;
-        factory.stalledNodes = stalledNodes;
+        factory.stalledNodes = stalledNodeKeys.size;
         factory.backlog = Object.values(factory.nodes).reduce((sum, node) => {
             const out = Object.values(node.buffer).reduce((acc, value) => acc + (value || 0), 0);
             const input = Object.values(node.inputBuffer).reduce((acc, value) => acc + (value || 0), 0);
@@ -232,13 +237,17 @@ export class LogisticsSystem extends BaseSimSystem {
     }
 
     private getTransferBudget(node: FactoryNodeState): number {
-        if (node.buildingType === BuildingType.DISTRIBUTION_HUB) return 6;
-        if (node.buildingType === BuildingType.RAIL_LINE) return 2;
-        return 3;
+        if (node.buildingType === BuildingType.DISTRIBUTION_HUB) return 10;
+        if (node.buildingType === BuildingType.RAIL_LINE) return 4;
+        return 4;
     }
 
     private getCapacityLeft(node: FactoryNodeState, target: 'buffer' | 'input'): number {
-        const cap = node.buildingType === BuildingType.DISTRIBUTION_HUB ? 24 : node.mode === 'TRANSPORT' ? 10 : 20;
+        if (node.mode === 'SINK') {
+            return Number.MAX_SAFE_INTEGER;
+        }
+
+        const cap = node.buildingType === BuildingType.DISTRIBUTION_HUB ? 40 : node.mode === 'TRANSPORT' ? 16 : node.mode === 'SOURCE' ? 24 : 18;
         const active = target === 'input' ? node.inputBuffer : node.buffer;
         const used = Object.values(active).reduce((sum, value) => sum + (value || 0), 0);
         return Math.max(0, cap - used);

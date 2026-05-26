@@ -5,11 +5,11 @@
 */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Coins, Pickaxe, Leaf, Heart, Gem, Users, Target, Trees, Database } from 'lucide-react';
+import { Coins, Pickaxe, Leaf, Heart, Gem, Users, Target, Trees, Database, Truck, Package } from 'lucide-react';
 import { GameState, Era } from '../types';
 import { ERAS } from '../engine/data/VoxelConstants';
 
-const ResourceBlock = React.memo(({ icon: Icon, val, label, borderClass, iconBgClass, sub, textColor = "text-white", isExpanded, onToggle }: any) => {
+const ResourceBlock = React.memo(({ icon: Icon, val, label, borderClass, iconBgClass, sub, meta, textColor = "text-white", isExpanded, onToggle }: any) => {
   const [popup, setPopup] = useState<{ id: number; text: string; isPositive: boolean } | null>(null);
   const [hasNew, setHasNew] = useState(false);
   const prevValRef = useRef(Math.floor(val));
@@ -63,7 +63,7 @@ const ResourceBlock = React.memo(({ icon: Icon, val, label, borderClass, iconBgC
           bg-slate-900 
           border-2 ${borderClass} 
           rounded-[4px] px-2 py-1 sm:px-3 sm:py-2
-          ${isExpanded ? 'min-w-[65px] sm:min-w-[80px]' : 'w-10 h-10 sm:w-12 sm:h-12 justify-center'}
+          ${isExpanded ? 'min-w-[92px] sm:min-w-[112px]' : 'w-10 h-10 sm:w-12 sm:h-12 justify-center'}
           shadow-[4px_4px_0px_0px_rgba(0,0,0,0.4)]
           transition-all duration-200
           hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_0px_rgba(0,0,0,0.3)]
@@ -93,6 +93,11 @@ const ResourceBlock = React.memo(({ icon: Icon, val, label, borderClass, iconBgC
                 </span>
               )}
             </div>
+            {meta && (
+              <span className="text-[7px] sm:text-[8px] text-slate-500 font-mono uppercase tracking-tight">
+                {meta}
+              </span>
+            )}
           </div>
         )}
       </button>
@@ -208,7 +213,6 @@ const EraBlock = ({ currentEra, state, isExpanded, onToggle }: { currentEra: Era
               className="h-full bg-amber-500 transition-all duration-500"
               style={{ width: `${progress}%`, backgroundColor: eraDef.color }}
             />
-            {/* Milestone Markers */}
             {nextDef.milestones?.map((m: any, i: number) => (
               <div
                 key={m.id}
@@ -325,7 +329,7 @@ export const HUD: React.FC<HUDProps> = React.memo(({ resources, financials, popu
       <ResourceBlock
         icon={Pickaxe}
         val={resources.minerals}
-        label="Ore"
+        label="Minerals"
         borderClass="border-slate-500/80"
         iconBgClass="bg-slate-400"
         isExpanded={activeBlock === 'minerals'}
@@ -385,6 +389,28 @@ export const HUD: React.FC<HUDProps> = React.memo(({ resources, financials, popu
         textColor="text-purple-300"
         isExpanded={activeBlock === 'gems'}
         onToggle={(open: boolean) => toggleBlock('gems', open)}
+      />
+      <ResourceBlock
+        icon={Truck}
+        val={state.factory?.throughput || 0}
+        label="Flow"
+        borderClass="border-cyan-600/80"
+        iconBgClass="bg-cyan-500"
+        textColor="text-cyan-200"
+        meta={`${state.factory?.stalledNodes || 0} stalled`}
+        isExpanded={activeBlock === 'flow'}
+        onToggle={(open: boolean) => toggleBlock('flow', open)}
+      />
+      <ResourceBlock
+        icon={Package}
+        val={state.factory?.backlog || 0}
+        label="Backlog"
+        borderClass="border-orange-600/80"
+        iconBgClass="bg-orange-500"
+        textColor="text-orange-200"
+        meta="queued cargo"
+        isExpanded={activeBlock === 'backlog'}
+        onToggle={(open: boolean) => toggleBlock('backlog', open)}
       />
     </div>
   );
