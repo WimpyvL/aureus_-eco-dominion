@@ -329,7 +329,7 @@ export const HUD: React.FC<HUDProps> = React.memo(({ resources, financials, popu
       <ResourceBlock
         icon={Pickaxe}
         val={resources.minerals}
-        label="Minerals"
+        label="Stock"
         borderClass="border-slate-500/80"
         iconBgClass="bg-slate-400"
         isExpanded={activeBlock === 'minerals'}
@@ -383,7 +383,7 @@ export const HUD: React.FC<HUDProps> = React.memo(({ resources, financials, popu
       <ResourceBlock
         icon={Gem}
         val={resources.gems}
-        label="Thundergems"
+        label="Gems"
         borderClass="border-purple-600/80"
         iconBgClass="bg-purple-500"
         textColor="text-purple-300"
@@ -397,7 +397,7 @@ export const HUD: React.FC<HUDProps> = React.memo(({ resources, financials, popu
         borderClass="border-cyan-600/80"
         iconBgClass="bg-cyan-500"
         textColor="text-cyan-200"
-        meta={`${state.factory?.stalledNodes || 0} stalled`}
+        meta={`${state.factory?.stalledNodes || 0} stalled links`}
         isExpanded={activeBlock === 'flow'}
         onToggle={(open: boolean) => toggleBlock('flow', open)}
       />
@@ -408,7 +408,7 @@ export const HUD: React.FC<HUDProps> = React.memo(({ resources, financials, popu
         borderClass="border-orange-600/80"
         iconBgClass="bg-orange-500"
         textColor="text-orange-200"
-        meta="queued cargo"
+        meta="waiting cargo"
         isExpanded={activeBlock === 'backlog'}
         onToggle={(open: boolean) => toggleBlock('backlog', open)}
       />
